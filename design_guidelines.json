@@ -1,0 +1,136 @@
+{
+  "project_name": "AI Cold Calling Machine",
+  "design_philosophy": {
+    "archetype": "Swiss & High-Contrast (Archetype 4)",
+    "core_principles": [
+      "Clarity over decoration",
+      "High data density with breathing room",
+      "Function-first aesthetics",
+      "Immediate status recognition"
+    ],
+    "emotional_tone": "Efficient, Powerful, Trustworthy, Automated"
+  },
+  "typography": {
+    "font_family_heading": "\"Barlow Condensed\", sans-serif",
+    "font_family_body": "\"Inter\", sans-serif",
+    "import_instruction": "Add this to src/index.css: @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');",
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight text-gray-900",
+      "h2": "text-3xl font-semibold tracking-tight text-gray-900",
+      "h3": "text-2xl font-semibold tracking-tight text-gray-900",
+      "h4": "text-xl font-medium tracking-tight text-gray-900",
+      "body_lg": "text-lg font-normal text-gray-700 leading-relaxed",
+      "body_base": "text-base font-normal text-gray-600 leading-relaxed",
+      "body_sm": "text-sm font-medium text-gray-500",
+      "caption": "text-xs font-medium uppercase tracking-wider text-gray-400"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#2563EB",
+        "foreground": "#FFFFFF",
+        "hover": "#1D4ED8",
+        "active": "#1E40AF"
+      },
+      "secondary": {
+        "DEFAULT": "#F3F4F6",
+        "foreground": "#1F2937",
+        "hover": "#E5E7EB"
+      },
+      "background": "#F9FAFB",
+      "surface": "#FFFFFF",
+      "border": "#E5E7EB",
+      "muted": "#9CA3AF",
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "destructive": "#EF4444",
+      "info": "#3B82F6"
+    },
+    "usage": {
+      "primary_action": "bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all",
+      "secondary_action": "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900 shadow-sm",
+      "surface_card": "bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow duration-200",
+      "status_badge_success": "bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+      "status_badge_warning": "bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+      "status_badge_error": "bg-red-50 text-red-700 border border-red-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+      "status_badge_neutral": "bg-gray-100 text-gray-600 border border-gray-200 rounded-full px-2.5 py-0.5 text-xs font-medium"
+    }
+  },
+  "layout": {
+    "grid_system": "grid grid-cols-1 md:grid-cols-12 gap-6",
+    "spacing": {
+      "section_padding": "p-6 md:p-8",
+      "card_padding": "p-6",
+      "element_gap": "gap-4"
+    },
+    "containers": {
+      "dashboard_main": "col-span-12 lg:col-span-9 space-y-6",
+      "dashboard_sidebar": "col-span-12 lg:col-span-3 space-y-6",
+      "full_width": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+    }
+  },
+  "components": {
+    "cards": {
+      "base": "bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden",
+      "header": "px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between",
+      "body": "p-6"
+    },
+    "buttons": {
+      "base": "inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+      "sizes": {
+        "sm": "h-8 px-3 text-xs",
+        "default": "h-10 px-4 py-2",
+        "lg": "h-12 px-8 text-lg"
+      }
+    },
+    "inputs": {
+      "base": "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": "shadow-sm hover:shadow-md transition-shadow duration-200",
+    "borders": "border border-gray-200",
+    "radius": "rounded-xl",
+    "micro_interactions": "active:scale-[0.98] transition-transform duration-100"
+  },
+  "specific_pages": {
+    "dashboard": {
+      "layout": "Bento Grid (Mode B - High Density)",
+      "key_elements": [
+        "Live Call Status (Top Priority - Large Card)",
+        "Campaign Performance Metrics (Row 2 - 3 cols)",
+        "Recent Activity Feed (Sidebar or Bottom Row)"
+      ]
+    },
+    "campaign_management": {
+      "layout": "List / Table View with Filters",
+      "actions": "Prominent 'Create Campaign' button (Top Right)"
+    },
+    "contact_list": {
+      "layout": "Data Table (Shadcn Table)",
+      "features": "Bulk Actions, Search, Filter by Status"
+    }
+  },
+  "assets": {
+    "icons": "Lucide React (already installed)",
+    "charts": "Recharts (already installed)",
+    "logo_placeholder": "Use a simple geometric shape (e.g., a blue square with rounded corners) + Text 'ColdCall.ai'"
+  },
+  "universal_guidelines": [
+    "Use 'Barlow Condensed' for all headings (h1-h3) to give a strong, professional look.",
+    "Use 'Inter' for body text for maximum readability.",
+    "Avoid gradients for backgrounds; use solid colors or very subtle patterns.",
+    "Ensure high contrast for text (WCAG AA).",
+    "Use consistent spacing (multiples of 4px).",
+    "All interactive elements must have hover and active states.",
+    "Use Skeleton loaders for data fetching states.",
+    "Do not use generic 'Lorem Ipsum' - use realistic sales data (e.g., 'Tech Corp', 'John Doe', '$5,000 Deal')."
+  ],
+  "image_urls": {
+    "note": "Since external image search failed, use these placeholder strategies:",
+    "user_avatars": "Use UI Avatars API: https://ui-avatars.com/api/?name=User+Name&background=random",
+    "company_logos": "Use UI Avatars API with initials: https://ui-avatars.com/api/?name=Company+Name&rounded=true&background=random",
+    "empty_states": "Use Lucide Icons with large size and gray color (e.g., <PhoneOff className='w-16 h-16 text-gray-300' />)"
+  }
+}

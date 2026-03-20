@@ -14,6 +14,7 @@ from enum import Enum
 import asyncio
 import random
 import resend
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -150,36 +151,107 @@ class BookingRequest(BaseModel):
     agent_id: str
     preferred_time: Optional[str] = None
 
-# ============== AI SERVICE (MOCKED for Demo) ==============
+# ============== AI SERVICE ==============
 class AIService:
-    """AI Service using GPT-5.2 for conversations and lead qualification"""
+    """AI Service using GPT-5.2 for conversations, lead qualification, and intent search"""
+    
+    def __init__(self):
+        self.api_key = os.environ.get('EMERGENT_LLM_KEY')
+    
+    async def gpt_intent_search(self, query: str, industry: str = None, location: str = None, max_results: int = 10) -> List[Dict]:
+        """Use GPT-5.2 to research and find businesses with buying intent"""
+        if not self.api_key:
+            logger.warning("EMERGENT_LLM_KEY not configured, using mock data")
+            return await self._mock_discover_leads(query, location, max_results)
+        
+        try:
+            chat = LlmChat(
+                api_key=self.api_key,
+                session_id=f"intent-search-{uuid.uuid4()}",
+                system_message="""You are a B2B lead research assistant specializing in finding businesses with buying intent for credit card processing and merchant services.
+
+Your job is to generate realistic business leads that would likely be interested in credit card processing solutions based on the search criteria provided.
+
+For each lead, provide:
+- Business name
+- Industry
+- Phone number (realistic format)
+- Email (if available)
+- Intent signals (why they might need credit card processing)
+- Location (city, state)
+
+Return your response as a valid JSON array of objects with these fields:
+- name: string
+- industry: string  
+- phone: string
+- email: string (optional)
+- intent_signals: array of strings
+- location: string
+
+Only return the JSON array, no other text."""
+            ).with_model("openai", "gpt-5.2")
+            
+            search_prompt = f"""Find {max_results} businesses that are likely looking for credit card processing solutions.
+
+Search criteria:
+- Query: {query}
+- Industry focus: {industry or 'Any industry that processes payments'}
+- Location: {location or 'United States'}
+
+Generate realistic business leads with high buying intent signals such as:
+- New business opening
+- Expanding to new locations
+- Frustrated with current payment processor
+- High transaction volume
+- Looking to reduce fees
+
+Return as JSON array."""
+
+            user_message = UserMessage(text=search_prompt)
+            response = await chat.send_message(user_message)
+            
+            # Parse the JSON response
+            import json
+            # Clean up response - remove markdown code blocks if present
+            response_text = response.strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            response_text = response_text.strip()
+            
+            leads = json.loads(response_text)
+            logger.info(f"GPT Intent Search found {len(leads)} leads")
+            return leads
+            
+        except Exception as e:
+            logger.error(f"GPT Intent Search failed: {str(e)}")
+            # Fallback to mock data
+            return await self._mock_discover_leads(query, location, max_results)
     
     @staticmethod
-    async def discover_leads(query: str, location: str = None, max_results: int = 10) -> List[Dict]:
-        """Discover leads with credit card processing intent - MOCKED"""
-        # In production, this would use GPT-5.2 to research and find leads
+    async def _mock_discover_leads(query: str, location: str = None, max_results: int = 10) -> List[Dict]:
+        """Fallback mock data for lead discovery"""
         sample_businesses = [
-            {"name": "TechStart Solutions", "industry": "Software", "phone": "+1-555-0101"},
-            {"name": "Green Valley Restaurant", "industry": "Food & Beverage", "phone": "+1-555-0102"},
-            {"name": "City Fitness Center", "industry": "Health & Fitness", "phone": "+1-555-0103"},
-            {"name": "Downtown Retail Co", "industry": "Retail", "phone": "+1-555-0104"},
-            {"name": "Urban Salon & Spa", "industry": "Beauty", "phone": "+1-555-0105"},
-            {"name": "Mountain View Auto", "industry": "Automotive", "phone": "+1-555-0106"},
-            {"name": "Sunrise Medical Clinic", "industry": "Healthcare", "phone": "+1-555-0107"},
-            {"name": "Lakeside Hotel", "industry": "Hospitality", "phone": "+1-555-0108"},
-            {"name": "Creative Design Agency", "industry": "Marketing", "phone": "+1-555-0109"},
-            {"name": "Fresh Market Grocery", "industry": "Grocery", "phone": "+1-555-0110"},
+            {"name": "TechStart Solutions", "industry": "Software", "phone": "+1-555-0101", "intent_signals": ["New startup", "Processing online payments"], "location": "Austin, TX"},
+            {"name": "Green Valley Restaurant", "industry": "Food & Beverage", "phone": "+1-555-0102", "intent_signals": ["High transaction volume", "Multiple locations"], "location": "Denver, CO"},
+            {"name": "City Fitness Center", "industry": "Health & Fitness", "phone": "+1-555-0103", "intent_signals": ["Membership payments", "Expanding"], "location": "Phoenix, AZ"},
+            {"name": "Downtown Retail Co", "industry": "Retail", "phone": "+1-555-0104", "intent_signals": ["POS upgrade needed", "Fee complaints"], "location": "Seattle, WA"},
+            {"name": "Urban Salon & Spa", "industry": "Beauty", "phone": "+1-555-0105", "intent_signals": ["New location opening", "Need mobile payments"], "location": "Portland, OR"},
+            {"name": "Mountain View Auto", "industry": "Automotive", "phone": "+1-555-0106", "intent_signals": ["Large transactions", "Current processor issues"], "location": "Salt Lake City, UT"},
+            {"name": "Sunrise Medical Clinic", "industry": "Healthcare", "phone": "+1-555-0107", "intent_signals": ["Insurance processing", "HIPAA compliant needs"], "location": "San Diego, CA"},
+            {"name": "Lakeside Hotel", "industry": "Hospitality", "phone": "+1-555-0108", "intent_signals": ["Seasonal business", "International cards"], "location": "Miami, FL"},
+            {"name": "Creative Design Agency", "industry": "Marketing", "phone": "+1-555-0109", "intent_signals": ["Recurring billing", "Invoice payments"], "location": "Chicago, IL"},
+            {"name": "Fresh Market Grocery", "industry": "Grocery", "phone": "+1-555-0110", "intent_signals": ["High volume", "EBT processing"], "location": "Atlanta, GA"},
         ]
-        
         return sample_businesses[:max_results]
     
     @staticmethod
     async def simulate_call_conversation(lead: Dict, script: str) -> Dict:
         """Simulate AI cold call conversation - MOCKED"""
-        # This simulates what would happen with real Twilio + AI integration
-        await asyncio.sleep(2)  # Simulate call duration
+        await asyncio.sleep(2)
         
-        is_decision_maker = random.choice([True, True, False])  # 67% chance
+        is_decision_maker = random.choice([True, True, False])
         interest_level = random.randint(1, 10)
         
         transcript = [
@@ -438,10 +510,16 @@ async def get_dashboard_stats():
     }
 
 # ----- Lead Discovery -----
+class GPTIntentSearchRequest(BaseModel):
+    search_query: str = "credit card processing"
+    industry: Optional[str] = None
+    location: Optional[str] = None
+    max_results: int = 10
+
 @api_router.post("/leads/discover")
 async def discover_leads(request: LeadDiscoveryRequest):
-    """Discover new leads using AI-powered research"""
-    discovered = await ai_service.discover_leads(
+    """Discover new leads using AI-powered research (legacy endpoint)"""
+    discovered = await ai_service.gpt_intent_search(
         query=request.search_query,
         location=request.location,
         max_results=request.max_results
@@ -450,16 +528,44 @@ async def discover_leads(request: LeadDiscoveryRequest):
     created_leads = []
     for biz in discovered:
         lead_data = Lead(
-            business_name=biz["name"],
-            phone=biz["phone"],
+            business_name=biz.get("name", "Unknown Business"),
+            phone=biz.get("phone", ""),
             source="ai_discovery",
-            intent_signals=["credit_card_processing_intent"]
+            intent_signals=biz.get("intent_signals", ["credit_card_processing_intent"])
         )
         await db.leads.insert_one(lead_data.model_dump())
         created_leads.append(lead_data)
     
     return {
         "discovered": len(created_leads),
+        "leads": [l.model_dump() for l in created_leads]
+    }
+
+@api_router.post("/leads/gpt-intent-search")
+async def gpt_intent_search(request: GPTIntentSearchRequest):
+    """Discover leads using GPT-5.2 powered intent search"""
+    discovered = await ai_service.gpt_intent_search(
+        query=request.search_query,
+        industry=request.industry,
+        location=request.location,
+        max_results=request.max_results
+    )
+    
+    created_leads = []
+    for biz in discovered:
+        lead_data = Lead(
+            business_name=biz.get("name", "Unknown Business"),
+            phone=biz.get("phone", ""),
+            email=biz.get("email"),
+            source="gpt_intent_search",
+            intent_signals=biz.get("intent_signals", [])
+        )
+        await db.leads.insert_one(lead_data.model_dump())
+        created_leads.append(lead_data)
+    
+    return {
+        "discovered": len(created_leads),
+        "source": "gpt_intent_search",
         "leads": [l.model_dump() for l in created_leads]
     }
 

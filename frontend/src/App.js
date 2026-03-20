@@ -425,10 +425,25 @@ const LeadDiscovery = () => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("credit card processing");
+  const [searchQuery, setSearchQuery] = useState("Toast alternative");
+  const [industry, setIndustry] = useState("");
+  const [location, setLocation] = useState("");
   const [campaigns, setCampaigns] = useState([]);
   const [selectedLead, setSelectedLead] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState("");
+  const [viewMode, setViewMode] = useState("table");
+
+  const intentKeywords = [
+    "Toast alternative",
+    "Square alternative",
+    "Stripe alternative",
+    "Clover alternative",
+    "best POS system",
+    "credit card processing",
+    "payment processing",
+    "merchant services",
+    "reduce processing fees"
+  ];
 
   const fetchLeads = async () => {
     try {
@@ -458,11 +473,13 @@ const LeadDiscovery = () => {
   const discoverLeads = async () => {
     setDiscovering(true);
     try {
-      const response = await axios.post(`${API}/leads/discover`, {
+      const response = await axios.post(`${API}/leads/gpt-intent-search`, {
         search_query: searchQuery,
+        industry: industry || null,
+        location: location || null,
         max_results: 10
       });
-      toast.success(`Discovered ${response.data.discovered} new leads!`);
+      toast.success(`Discovered ${response.data.discovered} high-intent leads!`);
       fetchLeads();
     } catch (error) {
       toast.error("Failed to discover leads");
@@ -503,29 +520,74 @@ const LeadDiscovery = () => {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Lead Discovery
           </h1>
-          <p className="text-gray-500 mt-1">Find businesses with credit card processing intent</p>
+          <p className="text-gray-500 mt-1">Find businesses actively searching for payment solutions</p>
         </div>
       </div>
 
+      {/* Intent Keywords Quick Select */}
+      <Card className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-sm font-medium text-cyan-800 mb-3">High-Intent Keywords (People in Buying Mode)</p>
+          <div className="flex flex-wrap gap-2">
+            {intentKeywords.map((keyword) => (
+              <button
+                key={keyword}
+                onClick={() => setSearchQuery(keyword)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  searchQuery === keyword
+                    ? 'bg-cyan-600 text-white'
+                    : 'bg-white text-cyan-700 border border-cyan-300 hover:bg-cyan-100'
+                }`}
+              >
+                {keyword}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Search Form */}
       <Card className="bg-white border border-gray-200 shadow-sm">
         <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
               <Label htmlFor="search">Search Query</Label>
               <Input
                 id="search"
                 data-testid="lead-search-input"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="e.g., credit card processing, merchant services"
+                placeholder="e.g., Toast alternative"
                 className="mt-1"
               />
             </div>
-            <div className="flex-1">
-              <Label>Select Campaign for Calling</Label>
+            <div>
+              <Label htmlFor="industry">Industry (Optional)</Label>
+              <Input
+                id="industry"
+                data-testid="lead-industry-input"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                placeholder="e.g., Restaurant, Retail"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location">Location (Optional)</Label>
+              <Input
+                id="location"
+                data-testid="lead-location-input"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g., Texas, New York"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Campaign for Calling</Label>
               <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
                 <SelectTrigger data-testid="campaign-select" className="mt-1">
-                  <SelectValue placeholder="Select a campaign" />
+                  <SelectValue placeholder="Select campaign" />
                 </SelectTrigger>
                 <SelectContent>
                   {campaigns.map(c => (
@@ -534,35 +596,41 @@ const LeadDiscovery = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end">
-              <Button 
-                data-testid="discover-btn"
-                onClick={discoverLeads} 
-                disabled={discovering}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {discovering ? (
-                  <>
-                    <Clock className="w-4 h-4 mr-2 animate-spin" />
-                    Discovering...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4 mr-2" />
-                    Discover Leads
-                  </>
-                )}
-              </Button>
-            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button 
+              data-testid="discover-btn"
+              onClick={discoverLeads} 
+              disabled={discovering}
+              className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white"
+            >
+              {discovering ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  AI Searching...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 mr-2" />
+                  Discover High-Intent Leads
+                </>
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
+      {/* Leads Table */}
       <Card className="bg-white border border-gray-200 shadow-sm">
         <CardHeader className="border-b border-gray-100 bg-gray-50/50">
-          <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            Leads ({leads.length})
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              Discovered Leads ({leads.length})
+            </CardTitle>
+            <div className="text-sm text-gray-500">
+              {leads.filter(l => l.source === 'gpt_intent_search').length} from GPT Intent Search
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -572,86 +640,88 @@ const LeadDiscovery = () => {
           ) : leads.length === 0 ? (
             <div className="p-12 text-center">
               <Building2 className="w-16 h-16 text-gray-300 mx-auto" />
-              <p className="text-gray-500 mt-4">No leads found. Click "Discover Leads" to find new prospects.</p>
+              <p className="text-gray-500 mt-4">No leads found. Click "Discover High-Intent Leads" to find prospects in buying mode.</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Business</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leads.map((lead) => (
-                  <TableRow key={lead.id} data-testid={`lead-row-${lead.id}`}>
-                    <TableCell>
-                      <div className="font-medium text-gray-900">{lead.business_name}</div>
-                      <div className="text-sm text-gray-500">{lead.phone}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm text-gray-600">{lead.contact_name || '-'}</div>
-                      <div className="text-sm text-gray-500">{lead.email || '-'}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="capitalize">{lead.source.replace('_', ' ')}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={lead.status} />
-                    </TableCell>
-                    <TableCell>
-                      {lead.qualification_score !== null ? (
-                        <span className={`font-semibold ${lead.qualification_score >= 60 ? 'text-emerald-600' : 'text-gray-600'}`}>
-                          {lead.qualification_score}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
+            <div className="divide-y divide-gray-100">
+              {leads.map((lead) => (
+                <div key={lead.id} className="p-4 hover:bg-gray-50 transition-colors" data-testid={`lead-row-${lead.id}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-semibold text-gray-900">{lead.business_name}</h3>
+                        <StatusBadge status={lead.status} />
+                        {lead.source === 'gpt_intent_search' && (
+                          <Badge className="bg-cyan-100 text-cyan-700 border-0">AI Found</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                        <span>{lead.phone}</span>
+                        {lead.email && <span>{lead.email}</span>}
+                      </div>
+                      {/* Intent Signals */}
+                      {lead.intent_signals && lead.intent_signals.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {lead.intent_signals.slice(0, 3).map((signal, idx) => (
+                            <span 
+                              key={idx} 
+                              className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200"
+                            >
+                              {signal.length > 40 ? signal.substring(0, 40) + '...' : signal}
+                            </span>
+                          ))}
+                          {lead.intent_signals.length > 3 && (
+                            <span className="text-xs text-gray-400">+{lead.intent_signals.length - 3} more</span>
+                          )}
+                        </div>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {lead.status === 'new' && (
-                          <Button 
-                            size="sm" 
-                            data-testid={`call-lead-${lead.id}`}
-                            onClick={() => simulateCall(lead.id)}
-                            disabled={!selectedCampaign}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          >
-                            <Phone className="w-3 h-3 mr-1" />
-                            Call
-                          </Button>
-                        )}
-                        {lead.status === 'qualified' && (
-                          <Button 
-                            size="sm" 
-                            data-testid={`book-lead-${lead.id}`}
-                            onClick={() => setSelectedLead(lead)}
-                            className="bg-purple-600 hover:bg-purple-700 text-white"
-                          >
-                            <Calendar className="w-3 h-3 mr-1" />
-                            Book
-                          </Button>
-                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {lead.qualification_score !== null && (
+                        <div className="text-center px-3">
+                          <p className="text-xs text-gray-500">Score</p>
+                          <p className={`text-lg font-bold ${lead.qualification_score >= 60 ? 'text-emerald-600' : 'text-gray-600'}`}>
+                            {lead.qualification_score}
+                          </p>
+                        </div>
+                      )}
+                      {lead.status === 'new' && (
                         <Button 
                           size="sm" 
-                          variant="ghost"
-                          data-testid={`delete-lead-${lead.id}`}
-                          onClick={() => deleteLead(lead.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          data-testid={`call-lead-${lead.id}`}
+                          onClick={() => simulateCall(lead.id)}
+                          disabled={!selectedCampaign}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Phone className="w-3 h-3 mr-1" />
+                          Call
                         </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      )}
+                      {lead.status === 'qualified' && (
+                        <Button 
+                          size="sm" 
+                          data-testid={`book-lead-${lead.id}`}
+                          onClick={() => setSelectedLead(lead)}
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <Calendar className="w-3 h-3 mr-1" />
+                          Book
+                        </Button>
+                      )}
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        data-testid={`delete-lead-${lead.id}`}
+                        onClick={() => deleteLead(lead.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

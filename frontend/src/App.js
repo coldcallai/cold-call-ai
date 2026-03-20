@@ -8,7 +8,8 @@ import {
   History, Search, Plus, Play, Pause, Trash2, ChevronRight,
   PhoneCall, PhoneOff, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
-  ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download
+  ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
+  CreditCard, Package, ShoppingCart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -38,6 +39,7 @@ const Sidebar = () => {
     { path: "/app/campaigns", icon: Target, label: "Campaigns" },
     { path: "/app/agents", icon: Users, label: "Agents" },
     { path: "/app/calls", icon: History, label: "Call History" },
+    { path: "/app/packs", icon: Package, label: "Credit Packs" },
     { path: "/app/settings", icon: Settings, label: "Settings" },
   ];
 
@@ -2059,6 +2061,247 @@ const SettingsPage = () => {
   );
 };
 
+// Credit Packs Page
+const CreditPacks = () => {
+  const [packs, setPacks] = useState({ lead_packs: [], call_packs: [], combo_packs: [] });
+  const [usage, setUsage] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(null);
+  const [activeTab, setActiveTab] = useState("leads");
+
+  const fetchData = async () => {
+    try {
+      const [packsRes, usageRes] = await Promise.all([
+        axios.get(`${API}/packs`),
+        axios.get(`${API}/account/usage`)
+      ]);
+      setPacks(packsRes.data);
+      setUsage(usageRes.data);
+    } catch (error) {
+      toast.error("Failed to load packs");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const purchasePack = async (packId) => {
+    setPurchasing(packId);
+    try {
+      const response = await axios.post(`${API}/packs/purchase?pack_id=${packId}`);
+      toast.success(response.data.message);
+      setUsage(response.data.usage);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to purchase pack");
+    } finally {
+      setPurchasing(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 md:p-8 space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-32 w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-48" />)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 md:p-8 space-y-6" data-testid="credit-packs-page">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          Credit Packs
+        </h1>
+        <p className="text-gray-500 mt-1">Purchase additional leads and calls when you need more</p>
+      </div>
+
+      {/* Current Usage */}
+      <Card className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-cyan-100 text-sm font-medium">Your Current Balance</p>
+              <div className="flex items-center gap-8 mt-3">
+                <div>
+                  <p className="text-4xl font-bold">{usage?.leads_remaining || 0}</p>
+                  <p className="text-cyan-100 text-sm">Leads Remaining</p>
+                </div>
+                <div className="h-12 w-px bg-white/30" />
+                <div>
+                  <p className="text-4xl font-bold">{usage?.calls_remaining || 0}</p>
+                  <p className="text-cyan-100 text-sm">Calls Remaining</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-cyan-100 text-sm">Total Used</p>
+              <p className="text-lg">{usage?.leads_used || 0} leads • {usage?.calls_used || 0} calls</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pack Categories */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsTrigger value="leads" className="flex items-center gap-2">
+            <Search className="w-4 h-4" />
+            Lead Packs
+          </TabsTrigger>
+          <TabsTrigger value="calls" className="flex items-center gap-2">
+            <Phone className="w-4 h-4" />
+            Call Packs
+          </TabsTrigger>
+          <TabsTrigger value="combo" className="flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            Combo Packs
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="leads" className="mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {packs.lead_packs.map((pack) => (
+              <Card key={pack.id} className="bg-white border border-gray-200 hover:border-cyan-300 hover:shadow-md transition-all">
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-6 h-6 text-cyan-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900">{pack.name}</h3>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">${pack.price}</p>
+                  <p className="text-sm text-gray-500 mt-1">${(pack.price / pack.quantity).toFixed(2)}/lead</p>
+                  <Button
+                    className="w-full mt-4 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white"
+                    onClick={() => purchasePack(pack.id)}
+                    disabled={purchasing === pack.id}
+                  >
+                    {purchasing === pack.id ? (
+                      <Clock className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Buy Now
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="calls" className="mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {packs.call_packs.map((pack) => (
+              <Card key={pack.id} className="bg-white border border-gray-200 hover:border-violet-300 hover:shadow-md transition-all">
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <Phone className="w-6 h-6 text-violet-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900">{pack.name}</h3>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">${pack.price}</p>
+                  <p className="text-sm text-gray-500 mt-1">${(pack.price / pack.quantity).toFixed(2)}/call</p>
+                  <Button
+                    className="w-full mt-4 bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white"
+                    onClick={() => purchasePack(pack.id)}
+                    disabled={purchasing === pack.id}
+                  >
+                    {purchasing === pack.id ? (
+                      <Clock className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Buy Now
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="combo" className="mt-6">
+          <p className="text-sm text-gray-600 mb-4">Best value! Get both leads and calls at a discounted rate.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {packs.combo_packs.map((pack) => (
+              <Card key={pack.id} className="bg-white border border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all relative overflow-hidden">
+                {pack.id === "combo_500" && (
+                  <div className="absolute top-0 right-0 bg-emerald-500 text-white text-xs font-medium px-2 py-1 rounded-bl">
+                    Popular
+                  </div>
+                )}
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <Package className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 text-sm">{pack.name}</h3>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">${pack.price}</p>
+                  <p className="text-sm text-gray-500 mt-1">Save {Math.round((1 - pack.price / (pack.leads * 0.75 + pack.calls * 0.5)) * 100)}%</p>
+                  <Button
+                    className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white"
+                    onClick={() => purchasePack(pack.id)}
+                    disabled={purchasing === pack.id}
+                  >
+                    {purchasing === pack.id ? (
+                      <Clock className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Buy Now
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Purchase History */}
+      {usage?.purchases && usage.purchases.length > 0 && (
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              Purchase History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {usage.purchases.slice(-10).reverse().map((purchase, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                      purchase.pack_type === 'leads' ? 'bg-cyan-100' :
+                      purchase.pack_type === 'calls' ? 'bg-violet-100' : 'bg-emerald-100'
+                    }`}>
+                      {purchase.pack_type === 'leads' ? <Search className="w-4 h-4 text-cyan-600" /> :
+                       purchase.pack_type === 'calls' ? <Phone className="w-4 h-4 text-violet-600" /> :
+                       <Package className="w-4 h-4 text-emerald-600" />}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{purchase.pack_name}</p>
+                      <p className="text-xs text-gray-500">{new Date(purchase.purchased_at).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <p className="font-semibold text-gray-900">${purchase.price}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};
+
 // Main App Component
 function App() {
   return (
@@ -2079,6 +2322,7 @@ function App() {
                   <Route path="/campaigns" element={<Campaigns />} />
                   <Route path="/agents" element={<Agents />} />
                   <Route path="/calls" element={<CallHistory />} />
+                  <Route path="/packs" element={<CreditPacks />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
               </main>

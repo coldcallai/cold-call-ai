@@ -141,6 +141,55 @@ class LeadDiscoveryRequest(BaseModel):
     industry: Optional[str] = None
     max_results: int = 10
 
+# ============== CREDIT PACKS ==============
+class PackType(str, Enum):
+    LEADS = "leads"
+    CALLS = "calls"
+    COMBO = "combo"  # leads + calls
+
+LEAD_PACKS = [
+    {"id": "leads_100", "name": "100 Leads", "quantity": 100, "price": 75, "type": "leads"},
+    {"id": "leads_250", "name": "250 Leads", "quantity": 250, "price": 150, "type": "leads"},
+    {"id": "leads_500", "name": "500 Leads", "quantity": 500, "price": 250, "type": "leads"},
+    {"id": "leads_1000", "name": "1,000 Leads", "quantity": 1000, "price": 450, "type": "leads"},
+    {"id": "leads_2000", "name": "2,000 Leads", "quantity": 2000, "price": 800, "type": "leads"},
+]
+
+CALL_PACKS = [
+    {"id": "calls_100", "name": "100 AI Calls", "quantity": 100, "price": 50, "type": "calls"},
+    {"id": "calls_250", "name": "250 AI Calls", "quantity": 250, "price": 100, "type": "calls"},
+    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 175, "type": "calls"},
+    {"id": "calls_1000", "name": "1,000 AI Calls", "quantity": 1000, "price": 300, "type": "calls"},
+    {"id": "calls_2000", "name": "2,000 AI Calls", "quantity": 2000, "price": 500, "type": "calls"},
+]
+
+COMBO_PACKS = [
+    {"id": "combo_100", "name": "100 Leads + 100 Calls", "leads": 100, "calls": 100, "price": 100, "type": "combo"},
+    {"id": "combo_250", "name": "250 Leads + 250 Calls", "leads": 250, "calls": 250, "price": 200, "type": "combo"},
+    {"id": "combo_500", "name": "500 Leads + 500 Calls", "leads": 500, "calls": 500, "price": 350, "type": "combo"},
+    {"id": "combo_1000", "name": "1,000 Leads + 1,000 Calls", "leads": 1000, "calls": 1000, "price": 600, "type": "combo"},
+    {"id": "combo_2000", "name": "2,000 Leads + 2,000 Calls", "leads": 2000, "calls": 2000, "price": 1000, "type": "combo"},
+]
+
+class PackPurchase(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    pack_id: str
+    pack_type: str
+    quantity: int
+    price: float
+    purchased_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class AccountUsage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    leads_remaining: int = 0
+    calls_remaining: int = 0
+    leads_used: int = 0
+    calls_used: int = 0
+    purchases: List[Dict] = []
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    industry: Optional[str] = None
+    max_results: int = 10
+
 class QualificationResult(BaseModel):
     is_qualified: bool
     is_decision_maker: bool
@@ -1126,6 +1175,107 @@ async def update_settings(updates: Dict[str, Any]):
     await db.settings.update_one({}, {"$set": updates}, upsert=True)
     settings = await db.settings.find_one({}, {"_id": 0})
     return settings
+
+# ----- Credit Packs -----
+@api_router.get("/packs")
+async def get_available_packs():
+    """Get all available credit packs"""
+    return {
+        "lead_packs": LEAD_PACKS,
+        "call_packs": CALL_PACKS,
+        "combo_packs": COMBO_PACKS
+    }
+
+@api_router.get("/account/usage")
+async def get_account_usage():
+    """Get current account usage and remaining credits"""
+    usage = await db.account_usage.find_one({}, {"_id": 0})
+    if not usage:
+        # Initialize account usage
+        default_usage = AccountUsage().model_dump()
+        await db.account_usage.insert_one(default_usage)
+        return default_usage
+    return usage
+
+@api_router.post("/packs/purchase")
+async def purchase_pack(pack_id: str):
+    """Purchase a credit pack"""
+    # Find the pack
+    all_packs = LEAD_PACKS + CALL_PACKS + COMBO_PACKS
+    pack = next((p for p in all_packs if p["id"] == pack_id), None)
+    
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+    
+    # Get or create account usage
+    usage = await db.account_usage.find_one({})
+    if not usage:
+        usage = AccountUsage().model_dump()
+        await db.account_usage.insert_one(usage)
+        usage = await db.account_usage.find_one({})
+    
+    # Create purchase record
+    purchase = {
+        "id": str(uuid.uuid4()),
+        "pack_id": pack_id,
+        "pack_name": pack["name"],
+        "pack_type": pack["type"],
+        "price": pack["price"],
+        "purchased_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Update credits based on pack type
+    update_query = {
+        "$push": {"purchases": purchase},
+        "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+    }
+    
+    if pack["type"] == "leads":
+        update_query["$inc"] = {"leads_remaining": pack["quantity"]}
+    elif pack["type"] == "calls":
+        update_query["$inc"] = {"calls_remaining": pack["quantity"]}
+    elif pack["type"] == "combo":
+        update_query["$inc"] = {"leads_remaining": pack["leads"], "calls_remaining": pack["calls"]}
+    
+    await db.account_usage.update_one({}, update_query)
+    
+    updated_usage = await db.account_usage.find_one({}, {"_id": 0})
+    
+    return {
+        "message": f"Successfully purchased {pack['name']}",
+        "purchase": purchase,
+        "usage": updated_usage
+    }
+
+@api_router.post("/account/use-credits")
+async def use_credits(credit_type: str, amount: int = 1):
+    """Deduct credits from account (called internally when discovering leads or making calls)"""
+    if credit_type not in ["leads", "calls"]:
+        raise HTTPException(status_code=400, detail="Invalid credit type")
+    
+    usage = await db.account_usage.find_one({})
+    if not usage:
+        raise HTTPException(status_code=400, detail="No account usage found")
+    
+    field = f"{credit_type}_remaining"
+    used_field = f"{credit_type}_used"
+    
+    if usage.get(field, 0) < amount:
+        raise HTTPException(
+            status_code=402, 
+            detail=f"Insufficient {credit_type} credits. You have {usage.get(field, 0)} remaining."
+        )
+    
+    await db.account_usage.update_one(
+        {},
+        {
+            "$inc": {field: -amount, used_field: amount},
+            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    updated_usage = await db.account_usage.find_one({}, {"_id": 0})
+    return updated_usage
 
 # Include router
 app.include_router(api_router)

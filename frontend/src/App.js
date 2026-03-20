@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import LandingPage from "@/LandingPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -32,12 +33,12 @@ const Sidebar = () => {
   const location = useLocation();
   
   const navItems = [
-    { path: "/", icon: Filter, label: "Funnel" },
-    { path: "/leads", icon: Search, label: "Lead Discovery" },
-    { path: "/campaigns", icon: Target, label: "Campaigns" },
-    { path: "/agents", icon: Users, label: "Agents" },
-    { path: "/calls", icon: History, label: "Call History" },
-    { path: "/settings", icon: Settings, label: "Settings" },
+    { path: "/app", icon: Filter, label: "Funnel" },
+    { path: "/app/leads", icon: Search, label: "Lead Discovery" },
+    { path: "/app/campaigns", icon: Target, label: "Campaigns" },
+    { path: "/app/agents", icon: Users, label: "Agents" },
+    { path: "/app/calls", icon: History, label: "Call History" },
+    { path: "/app/settings", icon: Settings, label: "Settings" },
   ];
 
   return (
@@ -59,7 +60,8 @@ const Sidebar = () => {
       <nav className="flex-1 p-4">
         <ul className="space-y-1">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || 
+              (item.path === "/app" && location.pathname === "/app/");
             const Icon = item.icon;
             return (
               <li key={item.path}>
@@ -1871,21 +1873,29 @@ function App() {
   return (
     <div className="App min-h-screen bg-gray-50">
       <BrowserRouter>
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1 min-h-screen">
-            <Routes>
-              <Route path="/" element={<FunnelPage />} />
-              <Route path="/leads" element={<LeadDiscovery />} />
-              <Route path="/campaigns" element={<Campaigns />} />
-              <Route path="/agents" element={<Agents />} />
-              <Route path="/calls" element={<CallHistory />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
-          </main>
-        </div>
+        <Routes>
+          {/* Public Landing Page */}
+          <Route path="/" element={<LandingPage />} />
+          
+          {/* Dashboard App Routes */}
+          <Route path="/app/*" element={
+            <div className="flex">
+              <Sidebar />
+              <main className="flex-1 min-h-screen">
+                <Routes>
+                  <Route path="/" element={<FunnelPage />} />
+                  <Route path="/leads" element={<LeadDiscovery />} />
+                  <Route path="/campaigns" element={<Campaigns />} />
+                  <Route path="/agents" element={<Agents />} />
+                  <Route path="/calls" element={<CallHistory />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </main>
+            </div>
+          } />
+        </Routes>
+        <Toaster position="top-right" richColors />
       </BrowserRouter>
-      <Toaster position="top-right" richColors />
     </div>
   );
 }

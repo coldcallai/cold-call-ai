@@ -164,55 +164,73 @@ class AIService:
             logger.warning("EMERGENT_LLM_KEY not configured, using mock data")
             return await self._mock_discover_leads(query, location, max_results)
         
+        # High-intent keywords that indicate buying mode
+        intent_keywords = [
+            "Toast alternative", "Clover alternative", "Square alternative", "Stripe alternative",
+            "best POS system", "credit card processing for contractors", "payment processing",
+            "merchant services", "switch payment processor", "POS system for restaurants",
+            "credit card machine", "payment terminal", "reduce processing fees"
+        ]
+        
         try:
             chat = LlmChat(
                 api_key=self.api_key,
                 session_id=f"intent-search-{uuid.uuid4()}",
-                system_message="""You are a B2B lead research assistant specializing in finding businesses with buying intent for credit card processing and merchant services.
+                system_message="""You are a B2B lead research assistant specializing in finding businesses actively searching for payment processing solutions.
 
-Your job is to generate realistic business leads that would likely be interested in credit card processing solutions based on the search criteria provided.
+Your job is to generate realistic business leads that are IN BUYING MODE - meaning they are actively searching for:
+- Alternatives to Toast, Square, Stripe, Clover
+- Best POS systems for their industry
+- Credit card processing solutions
+- Ways to reduce payment processing fees
+- New merchant services providers
+
+These are HIGH-INTENT leads - people who are ready to switch or sign up NOW.
 
 For each lead, provide:
-- Business name
+- Business name (realistic)
 - Industry
-- Phone number (realistic format)
-- Email (if available)
-- Intent signals (why they might need credit card processing)
+- Phone number (realistic US format)
+- Email (realistic business email)
+- Intent signals (SPECIFIC search terms or actions showing buying intent)
 - Location (city, state)
+- Pain point (why they're looking to switch)
 
 Return your response as a valid JSON array of objects with these fields:
 - name: string
 - industry: string  
 - phone: string
-- email: string (optional)
-- intent_signals: array of strings
+- email: string
+- intent_signals: array of strings (include actual search terms like "Stripe alternative", "best POS for restaurants")
 - location: string
+- pain_point: string
 
 Only return the JSON array, no other text."""
             ).with_model("openai", "gpt-5.2")
             
-            search_prompt = f"""Find {max_results} businesses that are likely looking for credit card processing solutions.
+            search_prompt = f"""Find {max_results} businesses that are ACTIVELY IN BUYING MODE for payment processing solutions.
 
 Search criteria:
-- Query: {query}
-- Industry focus: {industry or 'Any industry that processes payments'}
+- Primary query: {query}
+- Industry focus: {industry or 'Any industry that processes card payments'}
 - Location: {location or 'United States'}
 
-Generate realistic business leads with high buying intent signals such as:
-- New business opening
-- Expanding to new locations
-- Frustrated with current payment processor
-- High transaction volume
-- Looking to reduce fees
+Target businesses showing these high-intent signals:
+{chr(10).join(f'- Searching for "{kw}"' for kw in intent_keywords)}
 
-Return as JSON array."""
+These leads should be people who:
+1. Are actively comparing payment processors
+2. Searching for alternatives to major providers (Toast, Square, Stripe, Clover)
+3. Looking to switch due to high fees, poor service, or missing features
+4. New businesses setting up payment processing for the first time
+
+Return as JSON array with realistic business details and specific intent signals."""
 
             user_message = UserMessage(text=search_prompt)
             response = await chat.send_message(user_message)
             
             # Parse the JSON response
             import json
-            # Clean up response - remove markdown code blocks if present
             response_text = response.strip()
             if response_text.startswith("```"):
                 response_text = response_text.split("```")[1]
@@ -221,12 +239,11 @@ Return as JSON array."""
             response_text = response_text.strip()
             
             leads = json.loads(response_text)
-            logger.info(f"GPT Intent Search found {len(leads)} leads")
+            logger.info(f"GPT Intent Search found {len(leads)} high-intent leads")
             return leads
             
         except Exception as e:
             logger.error(f"GPT Intent Search failed: {str(e)}")
-            # Fallback to mock data
             return await self._mock_discover_leads(query, location, max_results)
     
     @staticmethod

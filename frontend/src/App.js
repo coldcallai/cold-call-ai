@@ -8,7 +8,7 @@ import {
   History, Search, Plus, Play, Pause, Trash2, ChevronRight,
   PhoneCall, PhoneOff, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
-  ArrowRight, Zap, UserCheck, CalendarCheck
+  ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -425,13 +425,14 @@ const LeadDiscovery = () => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("Toast alternative");
   const [industry, setIndustry] = useState("");
   const [location, setLocation] = useState("");
   const [campaigns, setCampaigns] = useState([]);
   const [selectedLead, setSelectedLead] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState("");
-  const [viewMode, setViewMode] = useState("table");
+  const [activeTab, setActiveTab] = useState("discover");
 
   const intentKeywords = [
     "Toast alternative",
@@ -488,6 +489,40 @@ const LeadDiscovery = () => {
     }
   };
 
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await axios.post(`${API}/leads/upload-csv`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success(response.data.message);
+      if (response.data.errors > 0) {
+        toast.warning(`${response.data.errors} rows had errors`);
+      }
+      fetchLeads();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to upload CSV");
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const exportLeads = async () => {
+    try {
+      window.open(`${API}/leads/export-csv`, '_blank');
+      toast.success("Downloading leads CSV...");
+    } catch (error) {
+      toast.error("Failed to export leads");
+    }
+  };
+
   const simulateCall = async (leadId) => {
     if (!selectedCampaign) {
       toast.error("Please select a campaign first");
@@ -522,103 +557,189 @@ const LeadDiscovery = () => {
           </h1>
           <p className="text-gray-500 mt-1">Find businesses actively searching for payment solutions</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={exportLeads}
+            disabled={leads.length === 0}
+            className="border-gray-300"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
-      {/* Intent Keywords Quick Select */}
-      <Card className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 shadow-sm">
-        <CardContent className="p-4">
-          <p className="text-sm font-medium text-cyan-800 mb-3">High-Intent Keywords (People in Buying Mode)</p>
-          <div className="flex flex-wrap gap-2">
-            {intentKeywords.map((keyword) => (
-              <button
-                key={keyword}
-                onClick={() => setSearchQuery(keyword)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  searchQuery === keyword
-                    ? 'bg-cyan-600 text-white'
-                    : 'bg-white text-cyan-700 border border-cyan-300 hover:bg-cyan-100'
-                }`}
-              >
-                {keyword}
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabs for Discover / Upload */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="discover" className="flex items-center gap-2">
+            <Zap className="w-4 h-4" />
+            AI Discovery
+          </TabsTrigger>
+          <TabsTrigger value="upload" className="flex items-center gap-2">
+            <Upload className="w-4 h-4" />
+            Upload CSV
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Search Form */}
-      <Card className="bg-white border border-gray-200 shadow-sm">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="search">Search Query</Label>
-              <Input
-                id="search"
-                data-testid="lead-search-input"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="e.g., Toast alternative"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="industry">Industry (Optional)</Label>
-              <Input
-                id="industry"
-                data-testid="lead-industry-input"
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-                placeholder="e.g., Restaurant, Retail"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="location">Location (Optional)</Label>
-              <Input
-                id="location"
-                data-testid="lead-location-input"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g., Texas, New York"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label>Campaign for Calling</Label>
-              <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
-                <SelectTrigger data-testid="campaign-select" className="mt-1">
-                  <SelectValue placeholder="Select campaign" />
-                </SelectTrigger>
-                <SelectContent>
-                  {campaigns.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button 
-              data-testid="discover-btn"
-              onClick={discoverLeads} 
-              disabled={discovering}
-              className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white"
-            >
-              {discovering ? (
-                <>
-                  <Clock className="w-4 h-4 mr-2 animate-spin" />
-                  AI Searching...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 mr-2" />
-                  Discover High-Intent Leads
-                </>
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <TabsContent value="discover" className="space-y-4 mt-4">
+          {/* Intent Keywords Quick Select */}
+          <Card className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-sm font-medium text-cyan-800 mb-3">High-Intent Keywords (People in Buying Mode)</p>
+              <div className="flex flex-wrap gap-2">
+                {intentKeywords.map((keyword) => (
+                  <button
+                    key={keyword}
+                    onClick={() => setSearchQuery(keyword)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      searchQuery === keyword
+                        ? 'bg-cyan-600 text-white'
+                        : 'bg-white text-cyan-700 border border-cyan-300 hover:bg-cyan-100'
+                    }`}
+                  >
+                    {keyword}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Search Form */}
+          <Card className="bg-white border border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <Label htmlFor="search">Search Query</Label>
+                  <Input
+                    id="search"
+                    data-testid="lead-search-input"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="e.g., Toast alternative"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="industry">Industry (Optional)</Label>
+                  <Input
+                    id="industry"
+                    data-testid="lead-industry-input"
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                    placeholder="e.g., Restaurant, Retail"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="location">Location (Optional)</Label>
+                  <Input
+                    id="location"
+                    data-testid="lead-location-input"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g., Texas, New York"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Campaign for Calling</Label>
+                  <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
+                    <SelectTrigger data-testid="campaign-select" className="mt-1">
+                      <SelectValue placeholder="Select campaign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {campaigns.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button 
+                  data-testid="discover-btn"
+                  onClick={discoverLeads} 
+                  disabled={discovering}
+                  className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white"
+                >
+                  {discovering ? (
+                    <>
+                      <Clock className="w-4 h-4 mr-2 animate-spin" />
+                      AI Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 mr-2" />
+                      Discover High-Intent Leads
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="upload" className="mt-4">
+          <Card className="bg-white border border-gray-200 shadow-sm">
+            <CardHeader>
+              <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Upload Your Lead List
+              </CardTitle>
+              <CardDescription>
+                Import leads from a CSV file. We'll call them for you.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-cyan-400 transition-colors">
+                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 mb-2">Drag and drop your CSV file, or click to browse</p>
+                <p className="text-sm text-gray-400 mb-4">Required columns: business_name, phone</p>
+                <p className="text-sm text-gray-400 mb-4">Optional: email, contact_name</p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="csv-upload"
+                  disabled={uploading}
+                />
+                <label htmlFor="csv-upload">
+                  <Button 
+                    asChild 
+                    disabled={uploading}
+                    className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white cursor-pointer"
+                  >
+                    <span>
+                      {uploading ? (
+                        <>
+                          <Clock className="w-4 h-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Choose CSV File
+                        </>
+                      )}
+                    </span>
+                  </Button>
+                </label>
+              </div>
+              
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 mb-2">CSV Template</p>
+                <code className="text-xs text-gray-600 block bg-white p-3 rounded border">
+                  business_name,phone,email,contact_name<br/>
+                  "Joe's Pizza","+1-555-0123","joe@joespizza.com","Joe Smith"<br/>
+                  "Main St Retail","+1-555-0124","info@mainst.com","Sarah Johnson"
+                </code>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Leads Table */}
       <Card className="bg-white border border-gray-200 shadow-sm">

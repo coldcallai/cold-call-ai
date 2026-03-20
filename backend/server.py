@@ -1,5 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File
+from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -14,6 +14,8 @@ from enum import Enum
 import asyncio
 import random
 import resend
+import csv
+import io
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
@@ -632,6 +634,96 @@ async def delete_lead(lead_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
     return {"message": "Lead deleted"}
+
+# ----- CSV Upload & Export -----
+@api_router.post("/leads/upload-csv")
+async def upload_leads_csv(file: UploadFile = File(...)):
+    """Upload leads from CSV file (Bring Your Own List)"""
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+    
+    try:
+        content = await file.read()
+        decoded = content.decode('utf-8')
+        reader = csv.DictReader(io.StringIO(decoded))
+        
+        created_leads = []
+        errors = []
+        
+        for idx, row in enumerate(reader):
+            try:
+                # Map common column names
+                business_name = row.get('business_name') or row.get('company') or row.get('name') or row.get('Business Name') or row.get('Company')
+                phone = row.get('phone') or row.get('Phone') or row.get('phone_number') or row.get('Phone Number')
+                email = row.get('email') or row.get('Email') or row.get('email_address')
+                contact_name = row.get('contact_name') or row.get('contact') or row.get('Contact') or row.get('Contact Name')
+                
+                if not business_name or not phone:
+                    errors.append(f"Row {idx + 1}: Missing business_name or phone")
+                    continue
+                
+                lead_data = Lead(
+                    business_name=business_name,
+                    phone=phone,
+                    email=email,
+                    contact_name=contact_name,
+                    source="csv_upload",
+                    intent_signals=["Uploaded from CSV"]
+                )
+                await db.leads.insert_one(lead_data.model_dump())
+                created_leads.append(lead_data)
+                
+            except Exception as e:
+                errors.append(f"Row {idx + 1}: {str(e)}")
+        
+        return {
+            "uploaded": len(created_leads),
+            "errors": len(errors),
+            "error_details": errors[:10] if errors else [],
+            "message": f"Successfully uploaded {len(created_leads)} leads"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
+
+@api_router.get("/leads/export-csv")
+async def export_leads_csv(status: Optional[LeadStatus] = None):
+    """Export leads to CSV (Discovery Only mode)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
+    
+    if not leads:
+        raise HTTPException(status_code=404, detail="No leads to export")
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    fieldnames = ['business_name', 'contact_name', 'phone', 'email', 'status', 'source', 'intent_signals', 'qualification_score', 'created_at']
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    
+    for lead in leads:
+        writer.writerow({
+            'business_name': lead.get('business_name', ''),
+            'contact_name': lead.get('contact_name', ''),
+            'phone': lead.get('phone', ''),
+            'email': lead.get('email', ''),
+            'status': lead.get('status', ''),
+            'source': lead.get('source', ''),
+            'intent_signals': '; '.join(lead.get('intent_signals', [])),
+            'qualification_score': lead.get('qualification_score', ''),
+            'created_at': lead.get('created_at', '')
+        })
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+    )
 
 # ----- Agents CRUD -----
 @api_router.get("/agents", response_model=List[Agent])

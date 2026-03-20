@@ -148,27 +148,27 @@ class PackType(str, Enum):
     COMBO = "combo"  # leads + calls
 
 LEAD_PACKS = [
-    {"id": "leads_100", "name": "100 Leads", "quantity": 100, "price": 75, "type": "leads"},
-    {"id": "leads_250", "name": "250 Leads", "quantity": 250, "price": 150, "type": "leads"},
-    {"id": "leads_500", "name": "500 Leads", "quantity": 500, "price": 250, "type": "leads"},
-    {"id": "leads_1000", "name": "1,000 Leads", "quantity": 1000, "price": 450, "type": "leads"},
-    {"id": "leads_2000", "name": "2,000 Leads", "quantity": 2000, "price": 800, "type": "leads"},
+    {"id": "leads_100", "name": "100 Leads", "quantity": 100, "price": 20, "type": "leads"},
+    {"id": "leads_250", "name": "250 Leads", "quantity": 250, "price": 45, "type": "leads"},
+    {"id": "leads_500", "name": "500 Leads", "quantity": 500, "price": 75, "type": "leads"},
+    {"id": "leads_1000", "name": "1,000 Leads", "quantity": 1000, "price": 120, "type": "leads"},
+    {"id": "leads_2000", "name": "2,000 Leads", "quantity": 2000, "price": 200, "type": "leads"},
 ]
 
 CALL_PACKS = [
-    {"id": "calls_100", "name": "100 AI Calls", "quantity": 100, "price": 50, "type": "calls"},
-    {"id": "calls_250", "name": "250 AI Calls", "quantity": 250, "price": 100, "type": "calls"},
-    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 175, "type": "calls"},
-    {"id": "calls_1000", "name": "1,000 AI Calls", "quantity": 1000, "price": 300, "type": "calls"},
-    {"id": "calls_2000", "name": "2,000 AI Calls", "quantity": 2000, "price": 500, "type": "calls"},
+    {"id": "calls_100", "name": "100 AI Calls", "quantity": 100, "price": 35, "type": "calls"},
+    {"id": "calls_250", "name": "250 AI Calls", "quantity": 250, "price": 75, "type": "calls"},
+    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 125, "type": "calls"},
+    {"id": "calls_1000", "name": "1,000 AI Calls", "quantity": 1000, "price": 200, "type": "calls"},
+    {"id": "calls_2000", "name": "2,000 AI Calls", "quantity": 2000, "price": 350, "type": "calls"},
 ]
 
 COMBO_PACKS = [
-    {"id": "combo_100", "name": "100 Leads + 100 Calls", "leads": 100, "calls": 100, "price": 100, "type": "combo"},
-    {"id": "combo_250", "name": "250 Leads + 250 Calls", "leads": 250, "calls": 250, "price": 200, "type": "combo"},
-    {"id": "combo_500", "name": "500 Leads + 500 Calls", "leads": 500, "calls": 500, "price": 350, "type": "combo"},
-    {"id": "combo_1000", "name": "1,000 Leads + 1,000 Calls", "leads": 1000, "calls": 1000, "price": 600, "type": "combo"},
-    {"id": "combo_2000", "name": "2,000 Leads + 2,000 Calls", "leads": 2000, "calls": 2000, "price": 1000, "type": "combo"},
+    {"id": "combo_100", "name": "100 Leads + 100 Calls", "leads": 100, "calls": 100, "price": 45, "type": "combo"},
+    {"id": "combo_250", "name": "250 Leads + 250 Calls", "leads": 250, "calls": 250, "price": 99, "type": "combo"},
+    {"id": "combo_500", "name": "500 Leads + 500 Calls", "leads": 500, "calls": 500, "price": 165, "type": "combo"},
+    {"id": "combo_1000", "name": "1,000 Leads + 1,000 Calls", "leads": 1000, "calls": 1000, "price": 275, "type": "combo"},
+    {"id": "combo_2000", "name": "2,000 Leads + 2,000 Calls", "leads": 2000, "calls": 2000, "price": 475, "type": "combo"},
 ]
 
 class PackPurchase(BaseModel):

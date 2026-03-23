@@ -137,12 +137,14 @@ A vertical-agnostic B2B SaaS platform that:
 - **Usage Dashboard with credit consumption trends**
 - **Usage analytics API with daily averages and suggestions**
 - **Low-balance warnings and upgrade suggestions**
+- **Automatic credit deduction on lead discovery and AI calls**
+- **Real-time sidebar credit balance updates**
+- **402 Payment Required errors for insufficient credits**
 
 ## Prioritized Backlog
 
 ### P0 - Critical
 - [ ] Stripe Integration - Real checkout sessions for subscriptions and packs
-- [ ] Credit deduction on usage (when discovering leads or making calls)
 
 ### P1 - High Priority
 - [ ] Twilio Integration - Move from mocked to real outbound calls
@@ -150,8 +152,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [ ] Subscription tier enforcement - Limit features by plan
 
 ### P2 - Medium Priority
-- [ ] Low-balance warnings in UI
-- [ ] Usage analytics dashboard
+- [ ] Low-balance email notifications
 - [ ] Auto-suggest plan upgrades based on top-up purchases
 
 ### P3 - Future

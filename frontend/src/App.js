@@ -476,6 +476,7 @@ const FunnelPage = () => {
 
 // Lead Discovery Page
 const LeadDiscovery = () => {
+  const { refreshUser } = useAuth();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
@@ -528,16 +529,29 @@ const LeadDiscovery = () => {
   const discoverLeads = async () => {
     setDiscovering(true);
     try {
+      const token = localStorage.getItem('session_token');
       const response = await axios.post(`${API}/leads/gpt-intent-search`, {
         search_query: searchQuery,
         industry: industry || null,
         location: location || null,
         max_results: 10
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success(`Discovered ${response.data.discovered} high-intent leads!`);
+      
+      const { discovered, credits_used, credits_remaining } = response.data;
+      toast.success(
+        `Discovered ${discovered} high-intent leads! (${credits_used} credits used, ${credits_remaining} remaining)`
+      );
       fetchLeads();
+      // Refresh user data to update sidebar credits
+      refreshUser();
     } catch (error) {
-      toast.error("Failed to discover leads");
+      if (error.response?.status === 402) {
+        toast.error(error.response.data.detail || "Insufficient credits. Please purchase more leads.");
+      } else {
+        toast.error("Failed to discover leads");
+      }
     } finally {
       setDiscovering(false);
     }
@@ -584,11 +598,24 @@ const LeadDiscovery = () => {
     }
     
     try {
-      await axios.post(`${API}/calls/simulate?lead_id=${leadId}&campaign_id=${selectedCampaign}`);
-      toast.success("Call started! Check call history for results.");
+      const token = localStorage.getItem('session_token');
+      const response = await axios.post(
+        `${API}/calls/simulate?lead_id=${leadId}&campaign_id=${selectedCampaign}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const { credits_remaining } = response.data;
+      toast.success(`Call started! (${credits_remaining} call credits remaining)`);
       setTimeout(fetchLeads, 3000);
+      // Refresh user data to update sidebar credits
+      refreshUser();
     } catch (error) {
-      toast.error("Failed to start call");
+      if (error.response?.status === 402) {
+        toast.error(error.response.data.detail || "Insufficient call credits. Please purchase more.");
+      } else {
+        toast.error("Failed to start call");
+      }
     }
   };
 

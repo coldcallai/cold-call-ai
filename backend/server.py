@@ -982,8 +982,22 @@ async def discover_leads(request: LeadDiscoveryRequest):
     }
 
 @api_router.post("/leads/gpt-intent-search")
-async def gpt_intent_search(request: GPTIntentSearchRequest):
-    """Discover leads using GPT-5.2 powered intent search"""
+async def gpt_intent_search(
+    request: GPTIntentSearchRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Discover leads using GPT-5.2 powered intent search (deducts lead credits)"""
+    user_id = current_user["user_id"]
+    leads_requested = request.max_results
+    leads_remaining = current_user.get("lead_credits_remaining", 0)
+    
+    # Check if user has enough credits
+    if leads_remaining < leads_requested:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient lead credits. You have {leads_remaining} credits but requested {leads_requested} leads. Please purchase more credits."
+        )
+    
     discovered = await ai_service.gpt_intent_search(
         query=request.search_query,
         industry=request.industry,
@@ -1003,10 +1017,33 @@ async def gpt_intent_search(request: GPTIntentSearchRequest):
         await db.leads.insert_one(lead_data.model_dump())
         created_leads.append(lead_data)
     
+    leads_discovered = len(created_leads)
+    
+    # Deduct credits for leads actually discovered
+    if leads_discovered > 0:
+        new_balance = leads_remaining - leads_discovered
+        await db.users.update_one(
+            {"user_id": user_id},
+            {
+                "$inc": {"lead_credits_remaining": -leads_discovered},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+        
+        # Log usage event for analytics
+        await log_usage_event(
+            user_id=user_id,
+            event_type="lead_discovery",
+            amount=leads_discovered,
+            credits_after=new_balance
+        )
+    
     return {
-        "discovered": len(created_leads),
+        "discovered": leads_discovered,
         "source": "gpt_intent_search",
-        "leads": [lead.model_dump() for lead in created_leads]
+        "leads": [lead.model_dump() for lead in created_leads],
+        "credits_used": leads_discovered,
+        "credits_remaining": leads_remaining - leads_discovered
     }
 
 # ----- Leads CRUD -----
@@ -1267,8 +1304,23 @@ async def get_call(call_id: str):
     return call
 
 @api_router.post("/calls/simulate")
-async def simulate_call(lead_id: str, campaign_id: str, background_tasks: BackgroundTasks):
-    """Simulate an AI cold call (MOCKED - real calls require Twilio credentials)"""
+async def simulate_call(
+    lead_id: str, 
+    campaign_id: str, 
+    background_tasks: BackgroundTasks,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Simulate an AI cold call (MOCKED - real calls require Twilio credentials). Deducts 1 call credit."""
+    user_id = current_user["user_id"]
+    calls_remaining = current_user.get("call_credits_remaining", 0)
+    
+    # Check if user has call credits
+    if calls_remaining < 1:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient call credits. You have {calls_remaining} credits. Please purchase more credits to make calls."
+        )
+    
     # Get lead and campaign
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
@@ -1277,6 +1329,24 @@ async def simulate_call(lead_id: str, campaign_id: str, background_tasks: Backgr
     campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Deduct 1 call credit
+    new_balance = calls_remaining - 1
+    await db.users.update_one(
+        {"user_id": user_id},
+        {
+            "$inc": {"call_credits_remaining": -1},
+            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    # Log usage event for analytics
+    await log_usage_event(
+        user_id=user_id,
+        event_type="call_made",
+        amount=1,
+        credits_after=new_balance
+    )
     
     # Create call record
     call = Call(
@@ -1290,7 +1360,13 @@ async def simulate_call(lead_id: str, campaign_id: str, background_tasks: Backgr
     # Simulate the call in background
     background_tasks.add_task(process_simulated_call, call.id, lead, campaign)
     
-    return {"message": "Call started", "call_id": call.id, "status": "in_progress"}
+    return {
+        "message": "Call started", 
+        "call_id": call.id, 
+        "status": "in_progress",
+        "credits_used": 1,
+        "credits_remaining": new_balance
+    }
 
 async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict):
     """Process simulated call in background"""

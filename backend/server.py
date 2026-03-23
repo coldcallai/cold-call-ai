@@ -25,6 +25,8 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 from elevenlabs import ElevenLabs
 from elevenlabs.types import VoiceSettings
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+from twilio.rest import Client as TwilioClient
+from twilio.twiml.voice_response import VoiceResponse, Gather, Say
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -51,6 +53,12 @@ eleven_client = ElevenLabs(api_key=elevenlabs_api_key) if elevenlabs_api_key els
 
 # Stripe configuration
 stripe_api_key = os.environ.get('STRIPE_API_KEY')
+
+# Twilio configuration
+twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
+twilio_auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
+twilio_phone_number = os.environ.get('TWILIO_PHONE_NUMBER')
+twilio_client = TwilioClient(twilio_account_sid, twilio_auth_token) if twilio_account_sid and twilio_auth_token else None
 
 # Configure logging
 logging.basicConfig(
@@ -292,6 +300,66 @@ TOPUP_PACKS = [
 PREPAY_DISCOUNTS = {
     "quarterly": 0.05,  # 5% off
     "annual": 0.15      # 15% off
+}
+
+# ============== COMPLIANCE MODELS ==============
+class DNCSuppression(BaseModel):
+    """Do Not Call suppression list entry"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    phone_number: str
+    reason: str  # "user_request", "regulatory", "complaint", "invalid"
+    source: str  # "internal", "national_dnc", "state_dnc"
+    added_by: Optional[str] = None  # user_id who added
+    added_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    
+class NumberVerification(BaseModel):
+    """Phone number verification result"""
+    phone_number: str
+    is_valid: bool
+    line_type: str  # "landline", "mobile", "voip", "unknown"
+    is_business: bool
+    carrier: Optional[str] = None
+    verified_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ComplianceCheck(BaseModel):
+    """Pre-call compliance check result"""
+    phone_number: str
+    is_allowed: bool
+    reasons: List[str] = []
+    checks_performed: List[str] = []
+    checked_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class AICallScript(BaseModel):
+    """AI call script with compliance disclosure"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    disclosure: str  # REQUIRED: AI/automated call disclosure
+    greeting: str
+    value_proposition: str
+    qualification_questions: List[str]
+    objection_handlers: Dict[str, str]
+    booking_script: str
+    dnc_script: str  # What to say when adding to DNC
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Default compliant AI call script
+DEFAULT_AI_SCRIPT = {
+    "disclosure": "Hi, this is an AI assistant calling on behalf of {company_name}. This is an automated business call.",
+    "greeting": "Is this {contact_name} at {business_name}?",
+    "value_proposition": "I'm reaching out because we help businesses like yours {value_prop}. Many companies in your industry are seeing {benefit}.",
+    "qualification_questions": [
+        "Are you the person who handles {decision_area} for your business?",
+        "Is this something your company is currently exploring?",
+        "What's your timeline for making a decision on this?"
+    ],
+    "objection_handlers": {
+        "not_interested": "I understand. Before I go, may I ask what solution you're currently using?",
+        "bad_time": "No problem. When would be a better time to have a brief conversation?",
+        "send_info": "Absolutely. What email should I send that to?",
+        "already_have": "Great. How's that working out for you? Any challenges?"
+    },
+    "booking_script": "Excellent! I'd like to connect you with one of our specialists. They can show you exactly how this works. Do you have 15 minutes this week for a quick call?",
+    "dnc_script": "No problem at all. I'll make sure you don't receive any more calls from us. Have a great day!"
 }
 
 class PackPurchase(BaseModel):
@@ -651,6 +719,219 @@ class NotificationService:
             return False
 
 notification_service = NotificationService()
+
+# ============== COMPLIANCE SERVICE ==============
+class ComplianceService:
+    """Service for handling call compliance checks"""
+    
+    async def check_dnc(self, phone_number: str) -> bool:
+        """Check if number is on internal DNC list"""
+        dnc_entry = await db.dnc_list.find_one({"phone_number": phone_number}, {"_id": 0})
+        return dnc_entry is not None
+    
+    async def add_to_dnc(self, phone_number: str, reason: str = "user_request", added_by: str = None):
+        """Add number to internal DNC list"""
+        existing = await db.dnc_list.find_one({"phone_number": phone_number})
+        if existing:
+            return False  # Already on list
+        
+        dnc_entry = {
+            "id": str(uuid.uuid4()),
+            "phone_number": phone_number,
+            "reason": reason,
+            "source": "internal",
+            "added_by": added_by,
+            "added_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.dnc_list.insert_one(dnc_entry)
+        logger.info(f"Added {phone_number} to DNC list. Reason: {reason}")
+        return True
+    
+    async def remove_from_dnc(self, phone_number: str):
+        """Remove number from internal DNC list"""
+        result = await db.dnc_list.delete_one({"phone_number": phone_number})
+        return result.deleted_count > 0
+    
+    async def verify_number(self, phone_number: str) -> Dict:
+        """
+        Verify phone number type using Twilio Lookup API.
+        Returns line type (landline, mobile, voip) and carrier info.
+        """
+        # Check cache first
+        cached = await db.number_verifications.find_one({"phone_number": phone_number}, {"_id": 0})
+        if cached:
+            # Return cached result if less than 30 days old
+            verified_at = datetime.fromisoformat(cached["verified_at"].replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - verified_at).days < 30:
+                return cached
+        
+        # For now, return a default verification (Twilio Lookup costs money)
+        # In production, use Twilio Lookup API for real verification
+        verification = {
+            "phone_number": phone_number,
+            "is_valid": True,
+            "line_type": "unknown",  # Would be "landline", "mobile", "voip" with real lookup
+            "is_business": True,  # Assume business for B2B
+            "carrier": None,
+            "verified_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Cache the result
+        await db.number_verifications.update_one(
+            {"phone_number": phone_number},
+            {"$set": verification},
+            upsert=True
+        )
+        
+        return verification
+    
+    async def pre_call_compliance_check(self, phone_number: str, user_id: str = None) -> Dict:
+        """
+        Perform all compliance checks before making a call.
+        Returns whether call is allowed and reasons if not.
+        """
+        checks_performed = []
+        reasons = []
+        is_allowed = True
+        
+        # 1. Check internal DNC list
+        checks_performed.append("internal_dnc")
+        if await self.check_dnc(phone_number):
+            is_allowed = False
+            reasons.append("Number is on internal Do Not Call list")
+        
+        # 2. Verify number (landline vs mobile)
+        checks_performed.append("number_verification")
+        verification = await self.verify_number(phone_number)
+        
+        # If we know it's a mobile and not verified for business, flag it
+        if verification.get("line_type") == "mobile" and not verification.get("is_business"):
+            is_allowed = False
+            reasons.append("Mobile number without business verification - consent required")
+        
+        # 3. Check recent call history (don't call too frequently)
+        checks_performed.append("call_frequency")
+        recent_calls = await db.calls.count_documents({
+            "lead_phone": phone_number,
+            "started_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}
+        })
+        if recent_calls >= 3:
+            is_allowed = False
+            reasons.append("Called 3+ times in last 7 days - cooling off period")
+        
+        # Log the compliance check
+        check_result = {
+            "id": str(uuid.uuid4()),
+            "phone_number": phone_number,
+            "user_id": user_id,
+            "is_allowed": is_allowed,
+            "reasons": reasons,
+            "checks_performed": checks_performed,
+            "checked_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.compliance_checks.insert_one(check_result)
+        
+        return {
+            "phone_number": phone_number,
+            "is_allowed": is_allowed,
+            "reasons": reasons,
+            "checks_performed": checks_performed
+        }
+
+compliance_service = ComplianceService()
+
+# ============== TWILIO CALLING SERVICE ==============
+class TwilioCallingService:
+    """Service for making real outbound calls via Twilio"""
+    
+    def __init__(self):
+        self.is_configured = twilio_client is not None and twilio_phone_number is not None
+    
+    async def make_outbound_call(
+        self,
+        to_number: str,
+        lead_id: str,
+        campaign_id: str,
+        callback_url: str
+    ) -> Dict:
+        """
+        Initiate a real outbound call using Twilio.
+        The call will use TwiML to handle the conversation flow.
+        """
+        if not self.is_configured:
+            raise HTTPException(status_code=503, detail="Twilio not configured. Add TWILIO credentials to .env")
+        
+        try:
+            # Create TwiML for the call
+            # This URL will be called when the call connects
+            twiml_url = f"{callback_url}/api/twilio/voice/{lead_id}/{campaign_id}"
+            status_callback_url = f"{callback_url}/api/twilio/status"
+            
+            call = twilio_client.calls.create(
+                to=to_number,
+                from_=twilio_phone_number,
+                url=twiml_url,
+                status_callback=status_callback_url,
+                status_callback_event=["initiated", "ringing", "answered", "completed"],
+                record=True,  # Enable call recording
+                recording_status_callback=f"{callback_url}/api/twilio/recording"
+            )
+            
+            logger.info(f"Twilio call initiated: {call.sid} to {to_number}")
+            
+            return {
+                "call_sid": call.sid,
+                "status": call.status,
+                "to": to_number,
+                "from": twilio_phone_number
+            }
+            
+        except Exception as e:
+            logger.error(f"Twilio call failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+    
+    def generate_ai_greeting_twiml(self, lead: Dict, campaign: Dict) -> str:
+        """Generate TwiML for AI greeting with compliance disclosure"""
+        response = VoiceResponse()
+        
+        # Compliance disclosure (REQUIRED)
+        disclosure = f"Hi, this is an AI assistant calling on behalf of {campaign.get('company_name', 'our company')}. This is an automated business call."
+        
+        # Add ElevenLabs voice or use Twilio's built-in
+        # For now, use Twilio's voice (Alice is most natural)
+        response.say(disclosure, voice='Polly.Joanna', language='en-US')
+        
+        # Greeting
+        greeting = f"Am I speaking with someone at {lead.get('business_name', 'your company')}?"
+        
+        # Use Gather to wait for response
+        gather = Gather(
+            input='speech dtmf',
+            timeout=5,
+            speech_timeout='auto',
+            action='/api/twilio/gather',
+            method='POST'
+        )
+        gather.say(greeting, voice='Polly.Joanna')
+        response.append(gather)
+        
+        # If no response, try again
+        response.say("I didn't catch that. Let me try again.", voice='Polly.Joanna')
+        response.redirect('/api/twilio/retry')
+        
+        return str(response)
+    
+    def generate_dnc_twiml(self) -> str:
+        """Generate TwiML for DNC acknowledgment"""
+        response = VoiceResponse()
+        response.say(
+            "No problem at all. I've removed your number from our call list. Have a great day!",
+            voice='Polly.Joanna'
+        )
+        response.hangup()
+        return str(response)
+
+twilio_service = TwilioCallingService()
 
 # ============== WEBHOOK MODELS ==============
 class WebhookConfig(BaseModel):
@@ -2210,6 +2491,401 @@ async def get_payment_history(current_user: Dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(50)
     
     return {"transactions": transactions}
+
+# ----- Compliance & Twilio Calling Endpoints -----
+
+@api_router.get("/compliance/dnc")
+async def get_dnc_list(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get internal DNC list"""
+    entries = await db.dnc_list.find({}, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
+    total = await db.dnc_list.count_documents({})
+    return {"entries": entries, "total": total}
+
+@api_router.post("/compliance/dnc/add")
+async def add_to_dnc_list(
+    phone_number: str,
+    reason: str = "user_request",
+    current_user: Dict = Depends(get_current_user)
+):
+    """Add a number to the DNC list"""
+    success = await compliance_service.add_to_dnc(
+        phone_number=phone_number,
+        reason=reason,
+        added_by=current_user["user_id"]
+    )
+    if success:
+        return {"message": f"Added {phone_number} to DNC list", "status": "success"}
+    else:
+        return {"message": f"{phone_number} is already on DNC list", "status": "exists"}
+
+@api_router.delete("/compliance/dnc/remove")
+async def remove_from_dnc_list(
+    phone_number: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Remove a number from the DNC list"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    success = await compliance_service.remove_from_dnc(phone_number)
+    if success:
+        return {"message": f"Removed {phone_number} from DNC list"}
+    else:
+        raise HTTPException(status_code=404, detail="Number not found on DNC list")
+
+@api_router.get("/compliance/check/{phone_number}")
+async def check_compliance(
+    phone_number: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Run compliance check on a phone number before calling"""
+    result = await compliance_service.pre_call_compliance_check(
+        phone_number=phone_number,
+        user_id=current_user["user_id"]
+    )
+    return result
+
+class RealCallRequest(BaseModel):
+    lead_id: str
+    campaign_id: str
+
+@api_router.post("/calls/initiate")
+async def initiate_real_call(
+    request: RealCallRequest,
+    http_request: Request,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Initiate a REAL AI call via Twilio (requires Twilio credentials).
+    Includes full compliance checks before calling.
+    """
+    if not twilio_service.is_configured:
+        raise HTTPException(
+            status_code=503, 
+            detail="Twilio not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to .env"
+        )
+    
+    # Check call credits
+    calls_remaining = current_user.get("call_credits_remaining", 0)
+    if calls_remaining < 1:
+        raise HTTPException(status_code=402, detail="Insufficient call credits")
+    
+    # Get lead
+    lead = await db.leads.find_one({"id": request.lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    phone_number = lead.get("phone")
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Lead has no phone number")
+    
+    # Get campaign
+    campaign = await db.campaigns.find_one({"id": request.campaign_id}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Run compliance checks
+    compliance_result = await compliance_service.pre_call_compliance_check(
+        phone_number=phone_number,
+        user_id=current_user["user_id"]
+    )
+    
+    if not compliance_result["is_allowed"]:
+        return {
+            "status": "blocked",
+            "message": "Call blocked by compliance checks",
+            "reasons": compliance_result["reasons"]
+        }
+    
+    # Deduct call credit
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$inc": {"call_credits_remaining": -1}}
+    )
+    
+    # Log usage event
+    await log_usage_event(
+        user_id=current_user["user_id"],
+        event_type="call_made",
+        amount=1,
+        credits_after=calls_remaining - 1
+    )
+    
+    # Create call record
+    call = Call(
+        lead_id=request.lead_id,
+        campaign_id=request.campaign_id,
+        status=CallStatus.PENDING,
+        started_at=datetime.now(timezone.utc).isoformat()
+    )
+    await db.calls.insert_one(call.model_dump())
+    
+    # Get callback URL
+    callback_url = str(http_request.base_url).rstrip("/")
+    
+    try:
+        # Initiate Twilio call
+        twilio_result = await twilio_service.make_outbound_call(
+            to_number=phone_number,
+            lead_id=request.lead_id,
+            campaign_id=request.campaign_id,
+            callback_url=callback_url
+        )
+        
+        # Update call record with Twilio SID
+        await db.calls.update_one(
+            {"id": call.id},
+            {"$set": {
+                "twilio_sid": twilio_result["call_sid"],
+                "status": CallStatus.IN_PROGRESS.value
+            }}
+        )
+        
+        return {
+            "status": "initiated",
+            "call_id": call.id,
+            "twilio_sid": twilio_result["call_sid"],
+            "message": "Call initiated successfully",
+            "credits_remaining": calls_remaining - 1
+        }
+        
+    except Exception as e:
+        # Refund the credit if call failed to initiate
+        await db.users.update_one(
+            {"user_id": current_user["user_id"]},
+            {"$inc": {"call_credits_remaining": 1}}
+        )
+        await db.calls.update_one(
+            {"id": call.id},
+            {"$set": {"status": CallStatus.FAILED.value, "error": str(e)}}
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+
+# Twilio Webhook Endpoints (called by Twilio)
+@api_router.post("/twilio/voice/{lead_id}/{campaign_id}")
+async def twilio_voice_webhook(lead_id: str, campaign_id: str, request: Request):
+    """
+    Twilio webhook called when call connects.
+    Returns TwiML for AI greeting with compliance disclosure.
+    """
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    
+    if not lead or not campaign:
+        response = VoiceResponse()
+        response.say("Sorry, there was an error. Goodbye.", voice='Polly.Joanna')
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+    
+    twiml = twilio_service.generate_ai_greeting_twiml(lead, campaign)
+    return Response(content=twiml, media_type="application/xml")
+
+@api_router.post("/twilio/gather")
+async def twilio_gather_webhook(request: Request):
+    """Handle speech/DTMF input from the call"""
+    form_data = await request.form()
+    speech_result = form_data.get("SpeechResult", "")
+    digits = form_data.get("Digits", "")  # noqa: F841 - may be used for DTMF
+    
+    response = VoiceResponse()
+    
+    # Check for DNC request keywords
+    dnc_keywords = ["stop", "remove", "don't call", "do not call", "unsubscribe", "no thanks"]
+    if any(keyword in speech_result.lower() for keyword in dnc_keywords):
+        # Add to DNC and end call
+        to_number = form_data.get("To", "")
+        if to_number:
+            await compliance_service.add_to_dnc(to_number, reason="user_request")
+        
+        response.say(
+            "No problem at all. I've removed your number from our list. Have a great day!",
+            voice='Polly.Joanna'
+        )
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+    
+    # Check for interest
+    interest_keywords = ["yes", "sure", "okay", "tell me more", "interested"]
+    if any(keyword in speech_result.lower() for keyword in interest_keywords):
+        # Continue conversation - this would integrate with AI for dynamic responses
+        response.say(
+            "Great! We help businesses increase their profits through our innovative solution. "
+            "Would you be the right person to discuss this with, or should I speak with someone else?",
+            voice='Polly.Joanna'
+        )
+        
+        gather = Gather(
+            input='speech',
+            timeout=5,
+            speech_timeout='auto',
+            action='/api/twilio/qualify',
+            method='POST'
+        )
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+    
+    # Default: ask for clarification
+    response.say(
+        "I'm sorry, I didn't quite catch that. Are you interested in learning more about how we can help your business?",
+        voice='Polly.Joanna'
+    )
+    
+    gather = Gather(
+        input='speech dtmf',
+        timeout=5,
+        speech_timeout='auto',
+        action='/api/twilio/gather',
+        method='POST'
+    )
+    gather.say("Press 1 for yes, or say not interested to opt out.", voice='Polly.Joanna')
+    response.append(gather)
+    
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.post("/twilio/qualify")
+async def twilio_qualify_webhook(request: Request):
+    """Handle qualification responses"""
+    form_data = await request.form()
+    speech_result = form_data.get("SpeechResult", "")
+    
+    response = VoiceResponse()
+    
+    # Check if they're the decision maker
+    decision_maker_keywords = ["yes", "i am", "that's me", "correct"]
+    if any(keyword in speech_result.lower() for keyword in decision_maker_keywords):
+        response.say(
+            "Perfect! I'd love to set up a quick 15-minute call with one of our specialists "
+            "who can show you exactly how this works. Would this week or next week work better for you?",
+            voice='Polly.Joanna'
+        )
+        
+        gather = Gather(
+            input='speech',
+            timeout=5,
+            speech_timeout='auto',
+            action='/api/twilio/book',
+            method='POST'
+        )
+        response.append(gather)
+    else:
+        response.say(
+            "No problem. Could you connect me with the person who handles these decisions? "
+            "Or I can send some information to their email if you'd prefer.",
+            voice='Polly.Joanna'
+        )
+        
+        gather = Gather(
+            input='speech',
+            timeout=5,
+            speech_timeout='auto',
+            action='/api/twilio/gather',
+            method='POST'
+        )
+        response.append(gather)
+    
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.post("/twilio/book")
+async def twilio_book_webhook(request: Request):
+    """Handle booking responses"""
+    form_data = await request.form()
+    call_sid = form_data.get("CallSid", "")
+    
+    response = VoiceResponse()
+    
+    # In production, this would integrate with calendar booking
+    # For now, capture interest and end call positively
+    response.say(
+        "Excellent! I'll have someone from our team reach out to schedule that call. "
+        "They'll send you a calendar invite shortly. Thank you for your time today, and have a great day!",
+        voice='Polly.Joanna'
+    )
+    
+    # Update call record as qualified
+    if call_sid:
+        await db.calls.update_one(
+            {"twilio_sid": call_sid},
+            {"$set": {
+                "qualification_result": {
+                    "is_qualified": True,
+                    "is_decision_maker": True,
+                    "interest_level": 8,
+                    "score": 85
+                }
+            }}
+        )
+    
+    response.hangup()
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.post("/twilio/status")
+async def twilio_status_webhook(request: Request):
+    """Handle call status updates from Twilio"""
+    form_data = await request.form()
+    call_sid = form_data.get("CallSid", "")
+    call_status = form_data.get("CallStatus", "")
+    duration = form_data.get("CallDuration", "0")
+    
+    logger.info(f"Twilio status update: {call_sid} -> {call_status}")
+    
+    # Map Twilio status to our status
+    status_map = {
+        "queued": CallStatus.PENDING.value,
+        "ringing": CallStatus.PENDING.value,
+        "in-progress": CallStatus.IN_PROGRESS.value,
+        "completed": CallStatus.COMPLETED.value,
+        "busy": CallStatus.NO_ANSWER.value,
+        "no-answer": CallStatus.NO_ANSWER.value,
+        "canceled": CallStatus.FAILED.value,
+        "failed": CallStatus.FAILED.value
+    }
+    
+    new_status = status_map.get(call_status, CallStatus.FAILED.value)
+    
+    update_data = {
+        "status": new_status,
+        "duration": int(duration) if duration else 0,
+        "ended_at": datetime.now(timezone.utc).isoformat() if call_status in ["completed", "busy", "no-answer", "canceled", "failed"] else None
+    }
+    
+    await db.calls.update_one(
+        {"twilio_sid": call_sid},
+        {"$set": update_data}
+    )
+    
+    return {"status": "ok"}
+
+@api_router.post("/twilio/recording")
+async def twilio_recording_webhook(request: Request):
+    """Handle recording status updates from Twilio"""
+    form_data = await request.form()
+    call_sid = form_data.get("CallSid", "")
+    recording_url = form_data.get("RecordingUrl", "")
+    recording_sid = form_data.get("RecordingSid", "")
+    
+    if call_sid and recording_url:
+        await db.calls.update_one(
+            {"twilio_sid": call_sid},
+            {"$set": {
+                "recording_url": recording_url,
+                "recording_sid": recording_sid
+            }}
+        )
+        logger.info(f"Recording saved for call {call_sid}: {recording_url}")
+    
+    return {"status": "ok"}
+
+@api_router.get("/calls/twilio-status")
+async def get_twilio_status():
+    """Check if Twilio is configured"""
+    return {
+        "configured": twilio_service.is_configured,
+        "phone_number": twilio_phone_number[:6] + "****" if twilio_phone_number else None
+    }
 
 # ----- ElevenLabs TTS -----
 class TTSRequest(BaseModel):

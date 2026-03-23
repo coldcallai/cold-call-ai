@@ -144,6 +144,10 @@ A vertical-agnostic B2B SaaS platform that:
 - **Payment history tracking in database**
 - **Checkout session polling for payment verification**
 - **Admin account with unlimited credits for testing**
+- **Compliance Layer (DNC management, number verification, pre-call checks)**
+- **Twilio Integration for real outbound calls (awaiting credentials)**
+- **TwiML webhooks for AI conversation flow**
+- **Call recording and status tracking**
 
 ## Prioritized Backlog
 

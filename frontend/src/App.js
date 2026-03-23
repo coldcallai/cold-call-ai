@@ -9,7 +9,7 @@ import {
   PhoneCall, PhoneOff, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
   ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
-  CreditCard, Package, ShoppingCart, LogOut
+  CreditCard, Package, ShoppingCart, LogOut, BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import LandingPage from "@/LandingPage";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import LoginPage from "@/pages/LoginPage";
 import AuthCallback from "@/pages/AuthCallback";
+import UsageDashboard from "@/pages/UsageDashboard";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -39,6 +40,7 @@ const Sidebar = () => {
   
   const navItems = [
     { path: "/app", icon: Filter, label: "Funnel" },
+    { path: "/app/usage", icon: BarChart3, label: "Usage" },
     { path: "/app/leads", icon: Search, label: "Lead Discovery" },
     { path: "/app/campaigns", icon: Target, label: "Campaigns" },
     { path: "/app/agents", icon: Users, label: "Agents" },
@@ -2399,6 +2401,7 @@ const AppRouter = () => {
             <main className="flex-1 min-h-screen">
               <Routes>
                 <Route path="/" element={<FunnelPage />} />
+                <Route path="/usage" element={<UsageDashboard />} />
                 <Route path="/leads" element={<LeadDiscovery />} />
                 <Route path="/campaigns" element={<Campaigns />} />
                 <Route path="/agents" element={<Agents />} />

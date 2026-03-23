@@ -1650,6 +1650,149 @@ async def use_credits(credit_type: str, amount: int = 1, current_user: Dict = De
         "call_credits_remaining": updated_user.get("call_credits_remaining", 0)
     }
 
+# ----- Usage Analytics -----
+class UsageEvent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    event_type: str  # "lead_discovery", "call_made", "lead_purchased", "call_purchased"
+    amount: int
+    credits_after: int
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+async def log_usage_event(user_id: str, event_type: str, amount: int, credits_after: int):
+    """Log a usage event for analytics"""
+    event = UsageEvent(
+        user_id=user_id,
+        event_type=event_type,
+        amount=amount,
+        credits_after=credits_after
+    )
+    await db.usage_events.insert_one(event.model_dump())
+
+@api_router.get("/analytics/usage")
+async def get_usage_analytics(current_user: Dict = Depends(get_current_user)):
+    """Get usage analytics for the current user"""
+    user_id = current_user["user_id"]
+    
+    # Get usage events for the last 30 days
+    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    
+    events = await db.usage_events.find(
+        {"user_id": user_id, "created_at": {"$gte": thirty_days_ago}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    
+    # Calculate daily usage
+    daily_usage = {}
+    for event in events:
+        date = event["created_at"][:10]  # Extract YYYY-MM-DD
+        if date not in daily_usage:
+            daily_usage[date] = {"leads": 0, "calls": 0}
+        
+        if event["event_type"] == "lead_discovery":
+            daily_usage[date]["leads"] += event["amount"]
+        elif event["event_type"] == "call_made":
+            daily_usage[date]["calls"] += event["amount"]
+    
+    # Convert to sorted list for charts
+    usage_trend = []
+    for date in sorted(daily_usage.keys()):
+        usage_trend.append({
+            "date": date,
+            "leads": daily_usage[date]["leads"],
+            "calls": daily_usage[date]["calls"]
+        })
+    
+    # Calculate totals
+    total_leads_used = sum(e["amount"] for e in events if e["event_type"] == "lead_discovery")
+    total_calls_made = sum(e["amount"] for e in events if e["event_type"] == "call_made")
+    
+    # Get recent activity (last 10 events)
+    recent_activity = events[:10]
+    
+    # Upgrade suggestions based on usage patterns
+    suggestions = []
+    avg_daily_leads = total_leads_used / 30 if total_leads_used > 0 else 0
+    avg_daily_calls = total_calls_made / 30 if total_calls_made > 0 else 0
+    
+    current_tier = current_user.get("subscription_tier")
+    
+    if current_tier == "starter":
+        if avg_daily_leads > 8 or avg_daily_calls > 8:
+            suggestions.append({
+                "type": "upgrade",
+                "title": "Consider Professional Plan",
+                "description": f"You're averaging {avg_daily_leads:.0f} leads/day. Professional plan gives you 1,000 leads/month for just $200 more!",
+                "action": "upgrade_professional"
+            })
+    elif current_tier == "professional":
+        if avg_daily_leads > 30 or avg_daily_calls > 30:
+            suggestions.append({
+                "type": "upgrade",
+                "title": "Unlock Unlimited Potential",
+                "description": "Heavy user alert! Unlimited plan gives you 5,000 leads + unlimited calls for max ROI.",
+                "action": "upgrade_unlimited"
+            })
+    
+    # Low balance warnings
+    if current_user.get("lead_credits_remaining", 0) < 50:
+        suggestions.append({
+            "type": "warning",
+            "title": "Low Lead Credits",
+            "description": f"Only {current_user.get('lead_credits_remaining', 0)} lead credits remaining. Add a top-up to avoid interruption.",
+            "action": "buy_leads"
+        })
+    
+    if current_user.get("call_credits_remaining", 0) < 25:
+        suggestions.append({
+            "type": "warning",
+            "title": "Low Call Credits",
+            "description": f"Only {current_user.get('call_credits_remaining', 0)} call credits remaining. Add more to keep calling.",
+            "action": "buy_calls"
+        })
+    
+    return {
+        "current_balance": {
+            "lead_credits": current_user.get("lead_credits_remaining", 0),
+            "call_credits": current_user.get("call_credits_remaining", 0)
+        },
+        "subscription_tier": current_tier,
+        "period_totals": {
+            "leads_used": total_leads_used,
+            "calls_made": total_calls_made,
+            "period": "last_30_days"
+        },
+        "daily_averages": {
+            "leads": round(avg_daily_leads, 1),
+            "calls": round(avg_daily_calls, 1)
+        },
+        "usage_trend": usage_trend,
+        "recent_activity": recent_activity,
+        "suggestions": suggestions
+    }
+
+@api_router.post("/analytics/track")
+async def track_usage(
+    event_type: str,
+    amount: int = 1,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Track a usage event (internal use)"""
+    if event_type not in ["lead_discovery", "call_made", "lead_purchased", "call_purchased"]:
+        raise HTTPException(status_code=400, detail="Invalid event type")
+    
+    credits_field = "lead_credits_remaining" if "lead" in event_type else "call_credits_remaining"
+    credits_after = current_user.get(credits_field, 0)
+    
+    await log_usage_event(
+        user_id=current_user["user_id"],
+        event_type=event_type,
+        amount=amount,
+        credits_after=credits_after
+    )
+    
+    return {"status": "tracked"}
+
 # ----- ElevenLabs TTS -----
 class TTSRequest(BaseModel):
     text: str

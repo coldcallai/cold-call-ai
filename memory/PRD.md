@@ -111,6 +111,7 @@ A vertical-agnostic B2B SaaS platform that:
 - Calls: `/api/calls/simulate`, `/api/calls`
 - TTS: `/api/tts/generate`, `/api/tts/voices`
 - Packs: `/api/packs`, `/api/account/usage`, `/api/packs/purchase`
+- Analytics: `/api/analytics/usage`, `/api/analytics/track`
 
 ## What's Been Implemented (December 2025)
 
@@ -133,6 +134,9 @@ A vertical-agnostic B2B SaaS platform that:
 - ElevenLabs TTS integration for AI voice
 - User credits tracking per account
 - Protected routes in frontend
+- **Usage Dashboard with credit consumption trends**
+- **Usage analytics API with daily averages and suggestions**
+- **Low-balance warnings and upgrade suggestions**
 
 ## Prioritized Backlog
 

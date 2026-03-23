@@ -1566,6 +1566,14 @@ async def delete_campaign(campaign_id: str):
     return {"message": "Campaign deleted"}
 
 # ----- Calls -----
+@api_router.get("/calls/twilio-status")
+async def get_twilio_status():
+    """Check if Twilio is configured"""
+    return {
+        "configured": twilio_service.is_configured,
+        "phone_number": twilio_phone_number[:6] + "****" if twilio_phone_number else None
+    }
+
 @api_router.get("/calls", response_model=List[Call])
 async def get_calls(
     status: Optional[CallStatus] = None,
@@ -2878,14 +2886,6 @@ async def twilio_recording_webhook(request: Request):
         logger.info(f"Recording saved for call {call_sid}: {recording_url}")
     
     return {"status": "ok"}
-
-@api_router.get("/calls/twilio-status")
-async def get_twilio_status():
-    """Check if Twilio is configured"""
-    return {
-        "configured": twilio_service.is_configured,
-        "phone_number": twilio_phone_number[:6] + "****" if twilio_phone_number else None
-    }
 
 # ----- ElevenLabs TTS -----
 class TTSRequest(BaseModel):

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File, Depends, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -17,9 +17,13 @@ import random
 import resend
 import csv
 import io
+import httpx
+import base64
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from elevenlabs import ElevenLabs
+from elevenlabs.types import VoiceSettings
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -38,7 +42,11 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Security
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+# ElevenLabs client (for TTS)
+elevenlabs_api_key = os.environ.get('ELEVENLABS_API_KEY')
+eleven_client = ElevenLabs(api_key=elevenlabs_api_key) if elevenlabs_api_key else None
 
 # Configure logging
 logging.basicConfig(
@@ -70,6 +78,64 @@ class CampaignStatus(str, Enum):
     ACTIVE = "active"
     PAUSED = "paused"
     COMPLETED = "completed"
+
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+class SubscriptionTier(str, Enum):
+    STARTER = "starter"
+    PROFESSIONAL = "professional"
+    UNLIMITED = "unlimited"
+    BYL = "byl"  # Bring Your List
+
+# ============== USER MODELS ==============
+class User(BaseModel):
+    user_id: str = Field(default_factory=lambda: f"user_{uuid.uuid4().hex[:12]}")
+    email: str
+    name: str
+    picture: Optional[str] = None
+    role: UserRole = UserRole.USER
+    subscription_tier: Optional[SubscriptionTier] = None
+    subscription_status: str = "inactive"  # active, past_due, canceled, trialing
+    lead_credits_remaining: int = 0
+    call_credits_remaining: int = 0
+    monthly_lead_allowance: int = 0
+    monthly_call_allowance: int = 0
+    team_seat_count: int = 1
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class UserSession(BaseModel):
+    user_id: str
+    session_token: str
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class PasswordUser(BaseModel):
+    user_id: str = Field(default_factory=lambda: f"user_{uuid.uuid4().hex[:12]}")
+    email: str
+    name: str
+    password_hash: str
+    role: UserRole = UserRole.USER
+    subscription_tier: Optional[SubscriptionTier] = None
+    subscription_status: str = "inactive"
+    lead_credits_remaining: int = 0
+    call_credits_remaining: int = 0
+    monthly_lead_allowance: int = 0
+    monthly_call_allowance: int = 0
+    team_seat_count: int = 1
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # ============== MODELS ==============
 class Lead(BaseModel):
@@ -155,35 +221,74 @@ class LeadDiscoveryRequest(BaseModel):
     industry: Optional[str] = None
     max_results: int = 10
 
-# ============== CREDIT PACKS ==============
+# ============== CREDIT PACKS (REVISED PRICING MODEL) ==============
 class PackType(str, Enum):
     LEADS = "leads"
     CALLS = "calls"
-    COMBO = "combo"  # leads + calls
+    TOPUP = "topup"  # One-off top-up packs at 20% premium
 
+# Subscription Plans
+SUBSCRIPTION_PLANS = {
+    "starter": {
+        "name": "Starter",
+        "price": 199,
+        "leads_per_month": 250,
+        "calls_per_month": 250,
+        "features": ["CSV export", "GPT-powered search", "Intent signals included"],
+        "users": 1
+    },
+    "professional": {
+        "name": "Professional",
+        "price": 399,
+        "leads_per_month": 1000,
+        "calls_per_month": 1000,
+        "features": ["Auto calendar booking", "API access", "Call transcripts", "Email notifications"],
+        "users": 5
+    },
+    "unlimited": {
+        "name": "Unlimited",
+        "price": 699,
+        "leads_per_month": 5000,
+        "calls_per_month": -1,  # Unlimited
+        "features": ["Priority support", "5 team seats", "Custom AI scripts", "Dedicated account manager"],
+        "users": 5
+    },
+    "byl": {
+        "name": "Bring Your List",
+        "price": 349,
+        "leads_per_month": 0,  # No leads - they bring their own
+        "calls_per_month": 1500,
+        "features": ["Unlimited CSV uploads", "Custom scripts", "Auto calendar booking", "Call transcripts"],
+        "users": 3
+    }
+}
+
+# Lead Packs (Auto-replenishing subscriptions)
 LEAD_PACKS = [
-    {"id": "leads_100", "name": "100 Leads", "quantity": 100, "price": 20, "type": "leads"},
-    {"id": "leads_250", "name": "250 Leads", "quantity": 250, "price": 45, "type": "leads"},
-    {"id": "leads_500", "name": "500 Leads", "quantity": 500, "price": 75, "type": "leads"},
-    {"id": "leads_1000", "name": "1,000 Leads", "quantity": 1000, "price": 120, "type": "leads"},
-    {"id": "leads_2000", "name": "2,000 Leads", "quantity": 2000, "price": 200, "type": "leads"},
+    {"id": "leads_500_sub", "name": "500 Leads/mo", "quantity": 500, "price": 59, "type": "leads", "recurring": True, "per_lead": 0.118},
+    {"id": "leads_1500_sub", "name": "1,500 Leads/mo", "quantity": 1500, "price": 149, "type": "leads", "recurring": True, "per_lead": 0.099},
+    {"id": "leads_5000_sub", "name": "5,000 Leads/mo", "quantity": 5000, "price": 399, "type": "leads", "recurring": True, "per_lead": 0.079},
 ]
 
+# Call Packs (Overage protection)
 CALL_PACKS = [
-    {"id": "calls_100", "name": "100 AI Calls", "quantity": 100, "price": 35, "type": "calls"},
-    {"id": "calls_250", "name": "250 AI Calls", "quantity": 250, "price": 75, "type": "calls"},
-    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 125, "type": "calls"},
-    {"id": "calls_1000", "name": "1,000 AI Calls", "quantity": 1000, "price": 200, "type": "calls"},
-    {"id": "calls_2000", "name": "2,000 AI Calls", "quantity": 2000, "price": 350, "type": "calls"},
+    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 49, "type": "calls", "per_call": 0.098},
+    {"id": "calls_2000", "name": "2,000 AI Calls", "quantity": 2000, "price": 149, "type": "calls", "per_call": 0.0745},
+    {"id": "calls_5000", "name": "5,000 AI Calls", "quantity": 5000, "price": 299, "type": "calls", "per_call": 0.0598},
 ]
 
-COMBO_PACKS = [
-    {"id": "combo_100", "name": "100 Leads + 100 Calls", "leads": 100, "calls": 100, "price": 45, "type": "combo"},
-    {"id": "combo_250", "name": "250 Leads + 250 Calls", "leads": 250, "calls": 250, "price": 99, "type": "combo"},
-    {"id": "combo_500", "name": "500 Leads + 500 Calls", "leads": 500, "calls": 500, "price": 165, "type": "combo"},
-    {"id": "combo_1000", "name": "1,000 Leads + 1,000 Calls", "leads": 1000, "calls": 1000, "price": 275, "type": "combo"},
-    {"id": "combo_2000", "name": "2,000 Leads + 2,000 Calls", "leads": 2000, "calls": 2000, "price": 475, "type": "combo"},
+# Top-up Packs (20% premium for one-off purchases)
+TOPUP_PACKS = [
+    {"id": "topup_100_leads", "name": "100 Leads Top-up", "quantity": 100, "price": 24, "type": "topup", "credit_type": "leads", "per_unit": 0.24},
+    {"id": "topup_250_leads", "name": "250 Leads Top-up", "quantity": 250, "price": 55, "type": "topup", "credit_type": "leads", "per_unit": 0.22},
+    {"id": "topup_100_calls", "name": "100 Calls Top-up", "quantity": 100, "price": 15, "type": "topup", "credit_type": "calls", "per_unit": 0.15},
 ]
+
+# Annual Prepay Discounts
+PREPAY_DISCOUNTS = {
+    "quarterly": 0.05,  # 5% off
+    "annual": 0.15      # 15% off
+}
 
 class PackPurchase(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -557,15 +662,268 @@ class WebhookConfigCreate(BaseModel):
     event_type: str
     notification_emails: List[str]
 
+# ============== AUTHENTICATION HELPERS ==============
+async def get_session_from_token(session_token: str) -> Optional[Dict]:
+    """Validate session token and return user data"""
+    if not session_token:
+        return None
+    
+    session_doc = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
+    if not session_doc:
+        return None
+    
+    # Check expiry
+    expires_at = session_doc.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        return None
+    
+    # Get user
+    user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
+    return user_doc
+
+async def get_current_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict:
+    """Get current user from session - checks cookies first, then Authorization header"""
+    session_token = None
+    
+    # Check cookie first
+    session_token = request.cookies.get("session_token")
+    
+    # Fall back to Authorization header
+    if not session_token and credentials:
+        session_token = credentials.credentials
+    
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user = await get_session_from_token(session_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    
+    return user
+
+async def get_optional_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[Dict]:
+    """Get current user if authenticated, otherwise return None"""
+    try:
+        return await get_current_user(request, credentials)
+    except HTTPException:
+        return None
+
 # ============== API ROUTES ==============
 
 @api_router.get("/")
 async def root():
     return {"message": "AI Cold Calling Machine API", "status": "running"}
 
+# ============== AUTHENTICATION ROUTES ==============
+
+@api_router.post("/auth/register")
+async def register(user_data: UserCreate):
+    """Register a new user with email/password"""
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Hash password and create user
+    password_hash = pwd_context.hash(user_data.password)
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    
+    user_doc = {
+        "user_id": user_id,
+        "email": user_data.email,
+        "name": user_data.name,
+        "password_hash": password_hash,
+        "role": UserRole.USER.value,
+        "subscription_tier": None,
+        "subscription_status": "inactive",
+        "lead_credits_remaining": 50,  # Free trial credits
+        "call_credits_remaining": 50,
+        "monthly_lead_allowance": 0,
+        "monthly_call_allowance": 0,
+        "team_seat_count": 1,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.insert_one(user_doc)
+    
+    # Create session
+    session_token = f"sess_{uuid.uuid4().hex}"
+    session_doc = {
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.user_sessions.insert_one(session_doc)
+    
+    # Return user without password
+    user_doc.pop("password_hash", None)
+    user_doc.pop("_id", None)
+    
+    return {
+        "user": user_doc,
+        "session_token": session_token
+    }
+
+@api_router.post("/auth/login")
+async def login(user_data: UserLogin, response: Response):
+    """Login with email/password"""
+    user_doc = await db.users.find_one({"email": user_data.email}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Check password
+    if not user_doc.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Please use Google OAuth to login")
+    
+    if not pwd_context.verify(user_data.password, user_doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Create session
+    session_token = f"sess_{uuid.uuid4().hex}"
+    session_doc = {
+        "user_id": user_doc["user_id"],
+        "session_token": session_token,
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.user_sessions.insert_one(session_doc)
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=7 * 24 * 60 * 60,  # 7 days
+        path="/"
+    )
+    
+    # Return user without password
+    user_doc.pop("password_hash", None)
+    
+    return {
+        "user": user_doc,
+        "session_token": session_token
+    }
+
+@api_router.post("/auth/session")
+async def exchange_session_id(request: Request, response: Response):
+    """Exchange Emergent OAuth session_id for our session token"""
+    body = await request.json()
+    session_id = body.get("session_id")
+    
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id required")
+    
+    # Call Emergent Auth to validate session_id and get user data
+    # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    async with httpx.AsyncClient() as client:
+        try:
+            auth_response = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": session_id},
+                timeout=10.0
+            )
+            
+            if auth_response.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid session_id")
+            
+            auth_data = auth_response.json()
+        except httpx.RequestError as e:
+            logger.error(f"Failed to validate session with Emergent Auth: {e}")
+            raise HTTPException(status_code=500, detail="Authentication service unavailable")
+    
+    # Check if user exists, create if not
+    user_doc = await db.users.find_one({"email": auth_data["email"]}, {"_id": 0})
+    
+    if not user_doc:
+        # Create new user from OAuth
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        user_doc = {
+            "user_id": user_id,
+            "email": auth_data["email"],
+            "name": auth_data.get("name", auth_data["email"].split("@")[0]),
+            "picture": auth_data.get("picture"),
+            "role": UserRole.USER.value,
+            "subscription_tier": None,
+            "subscription_status": "inactive",
+            "lead_credits_remaining": 50,  # Free trial credits
+            "call_credits_remaining": 50,
+            "monthly_lead_allowance": 0,
+            "monthly_call_allowance": 0,
+            "team_seat_count": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(user_doc)
+    else:
+        # Update existing user's OAuth data
+        await db.users.update_one(
+            {"email": auth_data["email"]},
+            {"$set": {
+                "name": auth_data.get("name", user_doc.get("name")),
+                "picture": auth_data.get("picture"),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        user_doc = await db.users.find_one({"email": auth_data["email"]}, {"_id": 0})
+    
+    # Create our own session
+    session_token = f"sess_{uuid.uuid4().hex}"
+    session_doc = {
+        "user_id": user_doc["user_id"],
+        "session_token": session_token,
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.user_sessions.insert_one(session_doc)
+    
+    # Set httpOnly cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=7 * 24 * 60 * 60,  # 7 days
+        path="/"
+    )
+    
+    user_doc.pop("password_hash", None)
+    
+    return {
+        "user": user_doc,
+        "session_token": session_token
+    }
+
+@api_router.get("/auth/me")
+async def get_me(current_user: Dict = Depends(get_current_user)):
+    """Get current authenticated user"""
+    current_user.pop("password_hash", None)
+    return current_user
+
+@api_router.post("/auth/logout")
+async def logout(request: Request, response: Response):
+    """Logout and clear session"""
+    session_token = request.cookies.get("session_token")
+    
+    if session_token:
+        await db.user_sessions.delete_one({"session_token": session_token})
+    
+    response.delete_cookie(key="session_token", path="/")
+    
+    return {"message": "Logged out successfully"}
+
 # ----- Dashboard Stats -----
 @api_router.get("/dashboard/stats")
-async def get_dashboard_stats():
+async def get_dashboard_stats(current_user: Dict = Depends(get_optional_user)):
     total_leads = await db.leads.count_documents({})
     qualified_leads = await db.leads.count_documents({"status": LeadStatus.QUALIFIED})
     booked_leads = await db.leads.count_documents({"status": LeadStatus.BOOKED})
@@ -620,7 +978,7 @@ async def discover_leads(request: LeadDiscoveryRequest):
     
     return {
         "discovered": len(created_leads),
-        "leads": [l.model_dump() for l in created_leads]
+        "leads": [lead.model_dump() for lead in created_leads]
     }
 
 @api_router.post("/leads/gpt-intent-search")
@@ -648,7 +1006,7 @@ async def gpt_intent_search(request: GPTIntentSearchRequest):
     return {
         "discovered": len(created_leads),
         "source": "gpt_intent_search",
-        "leads": [l.model_dump() for l in created_leads]
+        "leads": [lead.model_dump() for lead in created_leads]
     }
 
 # ----- Leads CRUD -----
@@ -1193,103 +1551,162 @@ async def update_settings(updates: Dict[str, Any]):
 # ----- Credit Packs -----
 @api_router.get("/packs")
 async def get_available_packs():
-    """Get all available credit packs"""
+    """Get all available credit packs and subscription plans"""
     return {
+        "subscription_plans": SUBSCRIPTION_PLANS,
         "lead_packs": LEAD_PACKS,
         "call_packs": CALL_PACKS,
-        "combo_packs": COMBO_PACKS
+        "topup_packs": TOPUP_PACKS,
+        "prepay_discounts": PREPAY_DISCOUNTS
     }
 
 @api_router.get("/account/usage")
-async def get_account_usage():
-    """Get current account usage and remaining credits"""
-    usage = await db.account_usage.find_one({}, {"_id": 0})
-    if not usage:
-        # Initialize account usage
-        default_usage = AccountUsage().model_dump()
-        await db.account_usage.insert_one(default_usage)
-        return default_usage
-    return usage
+async def get_account_usage(current_user: Dict = Depends(get_current_user)):
+    """Get current user's account usage and remaining credits"""
+    return {
+        "user_id": current_user["user_id"],
+        "subscription_tier": current_user.get("subscription_tier"),
+        "subscription_status": current_user.get("subscription_status", "inactive"),
+        "lead_credits_remaining": current_user.get("lead_credits_remaining", 0),
+        "call_credits_remaining": current_user.get("call_credits_remaining", 0),
+        "monthly_lead_allowance": current_user.get("monthly_lead_allowance", 0),
+        "monthly_call_allowance": current_user.get("monthly_call_allowance", 0)
+    }
 
 @api_router.post("/packs/purchase")
-async def purchase_pack(pack_id: str):
-    """Purchase a credit pack"""
-    # Find the pack
-    all_packs = LEAD_PACKS + CALL_PACKS + COMBO_PACKS
+async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_user)):
+    """Purchase a credit pack (adds to user's balance)"""
+    # Find the pack from all pack types
+    all_packs = LEAD_PACKS + CALL_PACKS + TOPUP_PACKS
     pack = next((p for p in all_packs if p["id"] == pack_id), None)
     
     if not pack:
         raise HTTPException(status_code=404, detail="Pack not found")
     
-    # Get or create account usage
-    usage = await db.account_usage.find_one({})
-    if not usage:
-        usage = AccountUsage().model_dump()
-        await db.account_usage.insert_one(usage)
-        usage = await db.account_usage.find_one({})
-    
     # Create purchase record
     purchase = {
         "id": str(uuid.uuid4()),
+        "user_id": current_user["user_id"],
         "pack_id": pack_id,
         "pack_name": pack["name"],
         "pack_type": pack["type"],
         "price": pack["price"],
+        "quantity": pack["quantity"],
         "purchased_at": datetime.now(timezone.utc).isoformat()
     }
     
-    # Update credits based on pack type
-    update_query = {
-        "$push": {"purchases": purchase},
-        "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
-    }
+    await db.purchases.insert_one(purchase)
+    
+    # Update user credits based on pack type
+    update_query = {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
     
     if pack["type"] == "leads":
-        update_query["$inc"] = {"leads_remaining": pack["quantity"]}
+        update_query["$inc"] = {"lead_credits_remaining": pack["quantity"]}
     elif pack["type"] == "calls":
-        update_query["$inc"] = {"calls_remaining": pack["quantity"]}
-    elif pack["type"] == "combo":
-        update_query["$inc"] = {"leads_remaining": pack["leads"], "calls_remaining": pack["calls"]}
+        update_query["$inc"] = {"call_credits_remaining": pack["quantity"]}
+    elif pack["type"] == "topup":
+        credit_type = pack.get("credit_type", "leads")
+        if credit_type == "leads":
+            update_query["$inc"] = {"lead_credits_remaining": pack["quantity"]}
+        else:
+            update_query["$inc"] = {"call_credits_remaining": pack["quantity"]}
     
-    await db.account_usage.update_one({}, update_query)
+    await db.users.update_one({"user_id": current_user["user_id"]}, update_query)
     
-    updated_usage = await db.account_usage.find_one({}, {"_id": 0})
+    # Get updated user
+    updated_user = await db.users.find_one({"user_id": current_user["user_id"]}, {"_id": 0, "password_hash": 0})
     
     return {
         "message": f"Successfully purchased {pack['name']}",
         "purchase": purchase,
-        "usage": updated_usage
+        "user": updated_user
     }
 
 @api_router.post("/account/use-credits")
-async def use_credits(credit_type: str, amount: int = 1):
-    """Deduct credits from account (called internally when discovering leads or making calls)"""
+async def use_credits(credit_type: str, amount: int = 1, current_user: Dict = Depends(get_current_user)):
+    """Deduct credits from user account"""
     if credit_type not in ["leads", "calls"]:
         raise HTTPException(status_code=400, detail="Invalid credit type")
     
-    usage = await db.account_usage.find_one({})
-    if not usage:
-        raise HTTPException(status_code=400, detail="No account usage found")
+    field = f"{credit_type.rstrip('s')}_credits_remaining"
     
-    field = f"{credit_type}_remaining"
-    used_field = f"{credit_type}_used"
-    
-    if usage.get(field, 0) < amount:
+    if current_user.get(field, 0) < amount:
         raise HTTPException(
             status_code=402, 
-            detail=f"Insufficient {credit_type} credits. You have {usage.get(field, 0)} remaining."
+            detail=f"Insufficient {credit_type} credits. You have {current_user.get(field, 0)} remaining."
         )
     
-    await db.account_usage.update_one(
-        {},
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
         {
-            "$inc": {field: -amount, used_field: amount},
+            "$inc": {field: -amount},
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
         }
     )
     
-    updated_usage = await db.account_usage.find_one({}, {"_id": 0})
-    return updated_usage
+    updated_user = await db.users.find_one({"user_id": current_user["user_id"]}, {"_id": 0, "password_hash": 0})
+    return {
+        "lead_credits_remaining": updated_user.get("lead_credits_remaining", 0),
+        "call_credits_remaining": updated_user.get("call_credits_remaining", 0)
+    }
+
+# ----- ElevenLabs TTS -----
+class TTSRequest(BaseModel):
+    text: str
+    voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Default to "Rachel" voice
+    stability: float = 0.5
+    similarity_boost: float = 0.75
+
+@api_router.post("/tts/generate")
+async def generate_tts(request: TTSRequest):
+    """Generate text-to-speech audio using ElevenLabs"""
+    if not eleven_client:
+        raise HTTPException(status_code=503, detail="ElevenLabs not configured. Add ELEVENLABS_API_KEY to .env")
+    
+    try:
+        voice_settings = VoiceSettings(
+            stability=request.stability,
+            similarity_boost=request.similarity_boost
+        )
+        
+        audio_generator = eleven_client.text_to_speech.convert(
+            text=request.text,
+            voice_id=request.voice_id,
+            model_id="eleven_multilingual_v2",
+            voice_settings=voice_settings
+        )
+        
+        # Collect audio data
+        audio_data = b""
+        for chunk in audio_generator:
+            audio_data += chunk
+        
+        # Convert to base64 for transfer
+        audio_b64 = base64.b64encode(audio_data).decode()
+        
+        return {
+            "audio_url": f"data:audio/mpeg;base64,{audio_b64}",
+            "text": request.text,
+            "voice_id": request.voice_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating TTS: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating TTS: {str(e)}")
+
+@api_router.get("/tts/voices")
+async def get_available_voices():
+    """Get list of available ElevenLabs voices"""
+    if not eleven_client:
+        raise HTTPException(status_code=503, detail="ElevenLabs not configured")
+    
+    try:
+        voices_response = eleven_client.voices.get_all()
+        voices = [{"voice_id": v.voice_id, "name": v.name} for v in voices_response.voices]
+        return {"voices": voices}
+    except Exception as e:
+        logger.error(f"Error fetching voices: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching voices: {str(e)}")
 
 # Include router
 app.include_router(api_router)

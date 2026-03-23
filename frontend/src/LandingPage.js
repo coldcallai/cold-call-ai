@@ -75,14 +75,15 @@ const LandingPage = () => {
 
   const pricingPlans = [
     {
-      name: "Discovery",
-      price: "299",
+      name: "Starter",
+      price: "199",
       period: "/month",
-      description: "Just the high-intent leads list",
+      description: "Perfect for getting started",
       features: [
-        "500 intent leads/month",
+        "250 leads/month",
+        "250 AI calls/month",
+        "CSV export",
         "GPT-powered search",
-        "Export to CSV",
         "Intent signals included",
         "1 user",
       ],
@@ -90,14 +91,15 @@ const LandingPage = () => {
       popular: false,
     },
     {
-      name: "Full Service",
-      price: "499",
+      name: "Professional",
+      price: "399",
       period: "/month", 
-      description: "Discovery + AI calling + booking",
+      description: "For growing sales teams",
       features: [
-        "500 intent leads/month",
-        "500 AI calls/month",
+        "1,000 leads/month",
+        "1,000 AI calls/month",
         "Auto calendar booking",
+        "API access",
         "Call transcripts",
         "Email notifications",
         "5 users",
@@ -106,13 +108,29 @@ const LandingPage = () => {
       popular: true,
     },
     {
-      name: "Bring Your List",
-      price: "399",
+      name: "Unlimited",
+      price: "699",
       period: "/month",
-      description: "Upload your leads, we call them",
+      description: "Scale without limits",
+      features: [
+        "5,000 leads/month",
+        "Unlimited AI calls",
+        "Priority support",
+        "5 team seats",
+        "Custom AI scripts",
+        "Dedicated account manager",
+      ],
+      cta: "Start Free Trial",
+      popular: false,
+    },
+    {
+      name: "Bring Your List",
+      price: "349",
+      period: "/month",
+      description: "You have the leads, we call them",
       features: [
         "Unlimited CSV uploads",
-        "1,000 AI calls/month",
+        "1,500 AI calls/month",
         "Custom scripts",
         "Auto calendar booking",
         "Call transcripts",
@@ -174,14 +192,16 @@ const LandingPage = () => {
             </div>
 
             <div className="hidden md:flex items-center gap-3">
-              <Link to="/app">
+              <Link to="/login">
                 <Button variant="outline" className="rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent">
                   Log in
                 </Button>
               </Link>
-              <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0">
-                Get a demo
-              </Button>
+              <Link to="/login">
+                <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0">
+                  Get started free
+                </Button>
+              </Link>
             </div>
 
             <button 
@@ -373,11 +393,11 @@ const LandingPage = () => {
             <p className="text-gray-600 text-lg">Start free. Scale as you grow. Cancel anytime.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
             {pricingPlans.map((plan, idx) => (
               <div 
                 key={idx}
-                className={`relative bg-white border rounded-2xl p-8 ${
+                className={`relative bg-white border rounded-2xl p-6 ${
                   plan.popular 
                     ? 'border-teal-500 shadow-lg shadow-teal-500/10' 
                     : 'border-gray-200'
@@ -389,32 +409,34 @@ const LandingPage = () => {
                   </div>
                 )}
                 
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{plan.name}</h3>
-                <p className="text-gray-500 text-sm mb-6">{plan.description}</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
+                <p className="text-gray-500 text-xs mb-4">{plan.description}</p>
                 
-                <div className="mb-6">
-                  <span className="text-4xl font-bold text-gray-900">{plan.price === "Custom" ? "" : "$"}{plan.price}</span>
-                  <span className="text-gray-500">{plan.period}</span>
+                <div className="mb-4">
+                  <span className="text-3xl font-bold text-gray-900">{plan.price === "Custom" ? "" : "$"}{plan.price}</span>
+                  <span className="text-gray-500 text-sm">{plan.period}</span>
                 </div>
 
-                <ul className="space-y-3 mb-8">
+                <ul className="space-y-2 mb-6">
                   {plan.features.map((feature, fidx) => (
-                    <li key={fidx} className="flex items-center gap-3 text-sm">
-                      <CheckCircle className="w-5 h-5 text-teal-500 flex-shrink-0" />
+                    <li key={fidx} className="flex items-center gap-2 text-xs">
+                      <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
                       <span className="text-gray-700">{feature}</span>
                     </li>
                   ))}
                 </ul>
 
-                <Button 
-                  className={`w-full rounded-full py-6 ${
-                    plan.popular 
-                      ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0' 
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
-                  }`}
-                >
-                  {plan.cta}
-                </Button>
+                <Link to="/login">
+                  <Button 
+                    className={`w-full rounded-full py-5 text-sm ${
+                      plan.popular 
+                        ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0' 
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
+                    }`}
+                  >
+                    {plan.cta}
+                  </Button>
+                </Link>
               </div>
             ))}
           </div>

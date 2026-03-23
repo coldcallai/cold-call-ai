@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
 import axios from "axios";
 import { Toaster, toast } from "sonner";
 import { 
@@ -9,7 +9,7 @@ import {
   PhoneCall, PhoneOff, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
   ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
-  CreditCard, Package, ShoppingCart
+  CreditCard, Package, ShoppingCart, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -25,13 +25,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import LandingPage from "@/LandingPage";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import LoginPage from "@/pages/LoginPage";
+import AuthCallback from "@/pages/AuthCallback";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Navigation Sidebar
+// Navigation Sidebar with Auth
 const Sidebar = () => {
   const location = useLocation();
+  const { user, logout } = useAuth();
   
   const navItems = [
     { path: "/app", icon: Filter, label: "Funnel" },
@@ -42,6 +46,11 @@ const Sidebar = () => {
     { path: "/app/packs", icon: Package, label: "Credit Packs" },
     { path: "/app/settings", icon: Settings, label: "Settings" },
   ];
+
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = "/";
+  };
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
@@ -84,6 +93,47 @@ const Sidebar = () => {
           })}
         </ul>
       </nav>
+      
+      {/* User Info & Credits */}
+      {user && (
+        <div className="p-4 border-t border-gray-100">
+          <div className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 rounded-lg p-3 mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-full flex items-center justify-center">
+                {user.picture ? (
+                  <img src={user.picture} alt="" className="w-8 h-8 rounded-full" />
+                ) : (
+                  <User className="w-4 h-4 text-white" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="bg-white/60 rounded-md p-2">
+                <p className="text-lg font-bold text-cyan-600">{user.lead_credits_remaining || 0}</p>
+                <p className="text-[10px] text-gray-500">Lead Credits</p>
+              </div>
+              <div className="bg-white/60 rounded-md p-2">
+                <p className="text-lg font-bold text-teal-600">{user.call_credits_remaining || 0}</p>
+                <p className="text-[10px] text-gray-500">Call Credits</p>
+              </div>
+            </div>
+          </div>
+          
+          <Button 
+            onClick={handleLogout}
+            variant="ghost"
+            className="w-full justify-start text-gray-600 hover:text-red-600 hover:bg-red-50"
+            data-testid="logout-btn"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
+      )}
       
       <div className="p-4 border-t border-gray-100">
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -2302,34 +2352,77 @@ const CreditPacks = () => {
   );
 };
 
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Phone className="w-12 h-12 text-blue-600 animate-pulse mx-auto mb-4" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+};
+
+// App Router - handles OAuth callback detection
+const AppRouter = () => {
+  const location = useLocation();
+
+  // CRITICAL: Check URL fragment for session_id synchronously during render
+  // This prevents race conditions by processing OAuth callback FIRST
+  if (location.hash?.includes('session_id=')) {
+    return <AuthCallback />;
+  }
+
+  return (
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      
+      {/* Protected Dashboard Routes */}
+      <Route path="/app/*" element={
+        <ProtectedRoute>
+          <div className="flex">
+            <Sidebar />
+            <main className="flex-1 min-h-screen">
+              <Routes>
+                <Route path="/" element={<FunnelPage />} />
+                <Route path="/leads" element={<LeadDiscovery />} />
+                <Route path="/campaigns" element={<Campaigns />} />
+                <Route path="/agents" element={<Agents />} />
+                <Route path="/calls" element={<CallHistory />} />
+                <Route path="/packs" element={<CreditPacks />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Routes>
+            </main>
+          </div>
+        </ProtectedRoute>
+      } />
+    </Routes>
+  );
+};
+
 // Main App Component
 function App() {
   return (
     <div className="App min-h-screen bg-gray-50">
       <BrowserRouter>
-        <Routes>
-          {/* Public Landing Page */}
-          <Route path="/" element={<LandingPage />} />
-          
-          {/* Dashboard App Routes */}
-          <Route path="/app/*" element={
-            <div className="flex">
-              <Sidebar />
-              <main className="flex-1 min-h-screen">
-                <Routes>
-                  <Route path="/" element={<FunnelPage />} />
-                  <Route path="/leads" element={<LeadDiscovery />} />
-                  <Route path="/campaigns" element={<Campaigns />} />
-                  <Route path="/agents" element={<Agents />} />
-                  <Route path="/calls" element={<CallHistory />} />
-                  <Route path="/packs" element={<CreditPacks />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                </Routes>
-              </main>
-            </div>
-          } />
-        </Routes>
-        <Toaster position="top-right" richColors />
+        <AuthProvider>
+          <AppRouter />
+          <Toaster position="top-right" richColors />
+        </AuthProvider>
       </BrowserRouter>
     </div>
   );

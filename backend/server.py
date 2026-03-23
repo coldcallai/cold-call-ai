@@ -24,6 +24,7 @@ from jose import JWTError, jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from elevenlabs import ElevenLabs
 from elevenlabs.types import VoiceSettings
+from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -47,6 +48,9 @@ security = HTTPBearer(auto_error=False)
 # ElevenLabs client (for TTS)
 elevenlabs_api_key = os.environ.get('ELEVENLABS_API_KEY')
 eleven_client = ElevenLabs(api_key=elevenlabs_api_key) if elevenlabs_api_key else None
+
+# Stripe configuration
+stripe_api_key = os.environ.get('STRIPE_API_KEY')
 
 # Configure logging
 logging.basicConfig(
@@ -1868,6 +1872,344 @@ async def track_usage(
     )
     
     return {"status": "tracked"}
+
+# ----- Stripe Payment Endpoints -----
+class CheckoutRequest(BaseModel):
+    item_type: str  # "subscription" or "pack"
+    item_id: str    # e.g., "starter", "professional", "leads_500_sub", "calls_500"
+    origin_url: str # Frontend origin for success/cancel URLs
+    billing_cycle: str = "monthly"  # "monthly", "quarterly", "annual"
+
+@api_router.post("/checkout/create-session")
+async def create_checkout_session(
+    request: CheckoutRequest,
+    http_request: Request,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Create a Stripe checkout session for subscriptions or packs"""
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    # Determine what's being purchased and get the amount
+    item_type = request.item_type
+    item_id = request.item_id
+    amount = 0.0
+    item_name = ""
+    credits_to_add = {"leads": 0, "calls": 0}
+    subscription_tier = None
+    
+    if item_type == "subscription":
+        # Get subscription plan
+        if item_id not in SUBSCRIPTION_PLANS:
+            raise HTTPException(status_code=400, detail="Invalid subscription plan")
+        
+        plan = SUBSCRIPTION_PLANS[item_id]
+        amount = float(plan["price"])
+        item_name = f"{plan['name']} Plan"
+        subscription_tier = item_id
+        
+        # Apply prepay discounts
+        if request.billing_cycle == "quarterly":
+            amount = amount * 3 * 0.95  # 5% off
+            item_name += " (Quarterly)"
+        elif request.billing_cycle == "annual":
+            amount = amount * 12 * 0.85  # 15% off
+            item_name += " (Annual)"
+        
+        credits_to_add = {
+            "leads": plan["leads_per_month"],
+            "calls": plan["calls_per_month"] if plan["calls_per_month"] > 0 else 999999
+        }
+    
+    elif item_type == "lead_pack":
+        pack = next((p for p in LEAD_PACKS if p["id"] == item_id), None)
+        if not pack:
+            raise HTTPException(status_code=400, detail="Invalid lead pack")
+        amount = float(pack["price"])
+        item_name = pack["name"]
+        credits_to_add = {"leads": pack["quantity"], "calls": 0}
+    
+    elif item_type == "call_pack":
+        pack = next((p for p in CALL_PACKS if p["id"] == item_id), None)
+        if not pack:
+            raise HTTPException(status_code=400, detail="Invalid call pack")
+        amount = float(pack["price"])
+        item_name = pack["name"]
+        credits_to_add = {"leads": 0, "calls": pack["quantity"]}
+    
+    elif item_type == "topup":
+        pack = next((p for p in TOPUP_PACKS if p["id"] == item_id), None)
+        if not pack:
+            raise HTTPException(status_code=400, detail="Invalid top-up pack")
+        amount = float(pack["price"])
+        item_name = pack["name"]
+        credit_type = pack.get("credit_type", "leads")
+        if credit_type == "leads":
+            credits_to_add = {"leads": pack["quantity"], "calls": 0}
+        else:
+            credits_to_add = {"leads": 0, "calls": pack["quantity"]}
+    
+    else:
+        raise HTTPException(status_code=400, detail="Invalid item type")
+    
+    # Build URLs from frontend origin
+    origin = request.origin_url.rstrip("/")
+    success_url = f"{origin}/app/packs?session_id={{CHECKOUT_SESSION_ID}}&success=true"
+    cancel_url = f"{origin}/app/packs?canceled=true"
+    
+    # Create Stripe checkout
+    host_url = str(http_request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    
+    stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
+    
+    checkout_request = CheckoutSessionRequest(
+        amount=amount,
+        currency="usd",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": current_user["user_id"],
+            "user_email": current_user["email"],
+            "item_type": item_type,
+            "item_id": item_id,
+            "item_name": item_name,
+            "billing_cycle": request.billing_cycle,
+            "leads_to_add": str(credits_to_add["leads"]),
+            "calls_to_add": str(credits_to_add["calls"]),
+            "subscription_tier": subscription_tier or ""
+        }
+    )
+    
+    try:
+        session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
+        
+        # Create payment transaction record
+        transaction = {
+            "id": str(uuid.uuid4()),
+            "session_id": session.session_id,
+            "user_id": current_user["user_id"],
+            "user_email": current_user["email"],
+            "item_type": item_type,
+            "item_id": item_id,
+            "item_name": item_name,
+            "amount": amount,
+            "currency": "usd",
+            "billing_cycle": request.billing_cycle,
+            "leads_to_add": credits_to_add["leads"],
+            "calls_to_add": credits_to_add["calls"],
+            "subscription_tier": subscription_tier,
+            "payment_status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.payment_transactions.insert_one(transaction)
+        
+        return {
+            "checkout_url": session.url,
+            "session_id": session.session_id,
+            "amount": amount,
+            "item_name": item_name
+        }
+        
+    except Exception as e:
+        logger.error(f"Stripe checkout error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
+
+@api_router.get("/checkout/status/{session_id}")
+async def get_checkout_status(
+    session_id: str,
+    http_request: Request,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get the status of a checkout session and fulfill if paid"""
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    # Get the transaction record
+    transaction = await db.payment_transactions.find_one(
+        {"session_id": session_id, "user_id": current_user["user_id"]},
+        {"_id": 0}
+    )
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Check if already processed
+    if transaction.get("payment_status") == "paid":
+        return {
+            "status": "complete",
+            "payment_status": "paid",
+            "message": "Payment already processed",
+            "item_name": transaction.get("item_name"),
+            "amount": transaction.get("amount")
+        }
+    
+    # Query Stripe for current status
+    host_url = str(http_request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
+    
+    try:
+        status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
+        
+        if status.payment_status == "paid":
+            # Fulfill the order - add credits to user
+            update_query = {
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            }
+            inc_query = {}
+            
+            leads_to_add = transaction.get("leads_to_add", 0)
+            calls_to_add = transaction.get("calls_to_add", 0)
+            
+            if leads_to_add > 0:
+                inc_query["lead_credits_remaining"] = leads_to_add
+            if calls_to_add > 0:
+                inc_query["call_credits_remaining"] = calls_to_add
+            
+            if inc_query:
+                update_query["$inc"] = inc_query
+            
+            # Update subscription tier if applicable
+            if transaction.get("subscription_tier"):
+                plan = SUBSCRIPTION_PLANS.get(transaction["subscription_tier"], {})
+                update_query["$set"]["subscription_tier"] = transaction["subscription_tier"]
+                update_query["$set"]["subscription_status"] = "active"
+                update_query["$set"]["monthly_lead_allowance"] = plan.get("leads_per_month", 0)
+                update_query["$set"]["monthly_call_allowance"] = plan.get("calls_per_month", 0)
+            
+            await db.users.update_one({"user_id": current_user["user_id"]}, update_query)
+            
+            # Update transaction status
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {
+                    "payment_status": "paid",
+                    "paid_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            
+            # Log usage event
+            if leads_to_add > 0:
+                await log_usage_event(
+                    user_id=current_user["user_id"],
+                    event_type="lead_purchased",
+                    amount=leads_to_add,
+                    credits_after=current_user.get("lead_credits_remaining", 0) + leads_to_add
+                )
+            if calls_to_add > 0:
+                await log_usage_event(
+                    user_id=current_user["user_id"],
+                    event_type="call_purchased",
+                    amount=calls_to_add,
+                    credits_after=current_user.get("call_credits_remaining", 0) + calls_to_add
+                )
+            
+            return {
+                "status": "complete",
+                "payment_status": "paid",
+                "message": "Payment successful! Credits added to your account.",
+                "item_name": transaction.get("item_name"),
+                "amount": transaction.get("amount"),
+                "leads_added": leads_to_add,
+                "calls_added": calls_to_add
+            }
+        
+        elif status.status == "expired":
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {"payment_status": "expired"}}
+            )
+            return {
+                "status": "expired",
+                "payment_status": "expired",
+                "message": "Payment session expired. Please try again."
+            }
+        
+        else:
+            return {
+                "status": status.status,
+                "payment_status": status.payment_status,
+                "message": "Payment is being processed..."
+            }
+            
+    except Exception as e:
+        logger.error(f"Error checking checkout status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error checking payment status: {str(e)}")
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events"""
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    body = await request.body()
+    signature = request.headers.get("Stripe-Signature")
+    
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
+    
+    try:
+        webhook_response = await stripe_checkout.handle_webhook(body, signature)
+        
+        if webhook_response.payment_status == "paid":
+            # Get transaction and fulfill if not already done
+            transaction = await db.payment_transactions.find_one(
+                {"session_id": webhook_response.session_id},
+                {"_id": 0}
+            )
+            
+            if transaction and transaction.get("payment_status") != "paid":
+                # Fulfill the order
+                user_id = webhook_response.metadata.get("user_id")
+                leads_to_add = int(webhook_response.metadata.get("leads_to_add", 0))
+                calls_to_add = int(webhook_response.metadata.get("calls_to_add", 0))
+                subscription_tier = webhook_response.metadata.get("subscription_tier")
+                
+                update_query = {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+                inc_query = {}
+                
+                if leads_to_add > 0:
+                    inc_query["lead_credits_remaining"] = leads_to_add
+                if calls_to_add > 0:
+                    inc_query["call_credits_remaining"] = calls_to_add
+                
+                if inc_query:
+                    update_query["$inc"] = inc_query
+                
+                if subscription_tier:
+                    plan = SUBSCRIPTION_PLANS.get(subscription_tier, {})
+                    update_query["$set"]["subscription_tier"] = subscription_tier
+                    update_query["$set"]["subscription_status"] = "active"
+                    update_query["$set"]["monthly_lead_allowance"] = plan.get("leads_per_month", 0)
+                    update_query["$set"]["monthly_call_allowance"] = plan.get("calls_per_month", 0)
+                
+                await db.users.update_one({"user_id": user_id}, update_query)
+                
+                await db.payment_transactions.update_one(
+                    {"session_id": webhook_response.session_id},
+                    {"$set": {
+                        "payment_status": "paid",
+                        "paid_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+        
+        return {"status": "success", "event_type": webhook_response.event_type}
+        
+    except Exception as e:
+        logger.error(f"Webhook error: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+@api_router.get("/payments/history")
+async def get_payment_history(current_user: Dict = Depends(get_current_user)):
+    """Get payment history for current user"""
+    transactions = await db.payment_transactions.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    return {"transactions": transactions}
 
 # ----- ElevenLabs TTS -----
 class TTSRequest(BaseModel):

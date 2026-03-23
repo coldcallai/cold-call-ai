@@ -140,11 +140,15 @@ A vertical-agnostic B2B SaaS platform that:
 - **Automatic credit deduction on lead discovery and AI calls**
 - **Real-time sidebar credit balance updates**
 - **402 Payment Required errors for insufficient credits**
+- **Stripe Integration for subscriptions and credit packs**
+- **Payment history tracking in database**
+- **Checkout session polling for payment verification**
+- **Admin account with unlimited credits for testing**
 
 ## Prioritized Backlog
 
 ### P0 - Critical
-- [ ] Stripe Integration - Real checkout sessions for subscriptions and packs
+- [x] ~~Stripe Integration - Real checkout sessions for subscriptions and packs~~ ✅ DONE
 
 ### P1 - High Priority
 - [ ] Twilio Integration - Move from mocked to real outbound calls
@@ -154,6 +158,7 @@ A vertical-agnostic B2B SaaS platform that:
 ### P2 - Medium Priority
 - [ ] Low-balance email notifications
 - [ ] Auto-suggest plan upgrades based on top-up purchases
+- [ ] Stripe recurring subscriptions (currently one-time payments)
 
 ### P3 - Future
 - [ ] Team seat management
@@ -172,6 +177,6 @@ A vertical-agnostic B2B SaaS platform that:
 | OpenAI GPT-5.2 | ✅ Active | Via Emergent LLM Key |
 | Emergent Auth | ✅ Active | Google OAuth |
 | ElevenLabs | ✅ Active | TTS voice generation |
+| Stripe | ✅ Active | Test keys, checkout working |
 | Resend | ⚠️ Requires Key | Email notifications |
-| Stripe | ❌ Not Started | Payment processing |
 | Twilio | ⚠️ Mocked | Real calls require credentials |

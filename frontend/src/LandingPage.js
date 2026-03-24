@@ -282,6 +282,123 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* AI Capabilities Section */}
+      <section className="bg-gradient-to-b from-[#0a0f1a] to-[#0B1628] py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            {/* Left: Text Content */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-full mb-6">
+                <Zap className="w-4 h-4 text-cyan-400" />
+                <span className="text-cyan-400 text-sm font-medium">AI-Powered Outbound</span>
+              </div>
+              
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
+                Scale your outreach to <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">thousands of calls</span> simultaneously
+              </h2>
+              
+              <p className="text-gray-400 text-lg mb-8 leading-relaxed">
+                Our AI voice agents conduct natural, human-like conversations at scale. They handle lead qualification, 
+                appointment scheduling, and follow-ups—without writing a single line of code. When a prospect shows 
+                interest, the AI seamlessly hands off warm leads to your human sales team.
+              </p>
+
+              <div className="space-y-4">
+                {[
+                  { 
+                    icon: "🎯", 
+                    title: "Multi-Turn Conversations", 
+                    desc: "AI navigates complex dialogues, handles objections, and adapts to any response" 
+                  },
+                  { 
+                    icon: "🔗", 
+                    title: "CRM Integration Ready", 
+                    desc: "Connect to HubSpot, Salesforce, or your existing tools via API" 
+                  },
+                  { 
+                    icon: "📞", 
+                    title: "Intelligent Call Routing", 
+                    desc: "Hot leads instantly transferred to available reps with full context" 
+                  },
+                  { 
+                    icon: "⚡", 
+                    title: "No-Code Setup", 
+                    desc: "Launch campaigns in minutes with our intuitive campaign builder" 
+                  },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-4 p-4 bg-white/5 rounded-xl border border-white/10 hover:border-cyan-500/30 transition-colors">
+                    <span className="text-2xl">{item.icon}</span>
+                    <div>
+                      <h4 className="text-white font-semibold mb-1">{item.title}</h4>
+                      <p className="text-gray-400 text-sm">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right: Visual/Stats */}
+            <div className="relative">
+              <div className="bg-gradient-to-br from-cyan-500/20 to-teal-500/20 rounded-3xl p-8 border border-cyan-500/20">
+                {/* Simulated Call Interface */}
+                <div className="bg-[#0B1628] rounded-2xl p-6 mb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-full flex items-center justify-center">
+                      <Phone className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">AI Agent Active</p>
+                      <p className="text-cyan-400 text-sm">Making 847 simultaneous calls</p>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                      <span className="text-green-400 text-sm">Live</span>
+                    </div>
+                  </div>
+                  
+                  {/* Conversation Preview */}
+                  <div className="space-y-3 text-sm">
+                    <div className="flex gap-3">
+                      <span className="text-cyan-400 font-medium min-w-[40px]">AI:</span>
+                      <span className="text-gray-300">"Hi, this is Sarah from ABC Solutions. Am I speaking with the owner?"</span>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="text-amber-400 font-medium min-w-[40px]">Lead:</span>
+                      <span className="text-gray-300">"Yes, this is Mike. What's this about?"</span>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="text-cyan-400 font-medium min-w-[40px]">AI:</span>
+                      <span className="text-gray-300">"Great to connect, Mike! We help businesses like yours reduce payment processing fees by up to 40%..."</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    { value: "1000+", label: "Calls/hour" },
+                    { value: "92%", label: "Answer rate" },
+                    { value: "3.2x", label: "More meetings" },
+                  ].map((stat, idx) => (
+                    <div key={idx} className="text-center p-4 bg-white/5 rounded-xl">
+                      <p className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">
+                        {stat.value}
+                      </p>
+                      <p className="text-gray-400 text-xs mt-1">{stat.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Floating Elements */}
+              <div className="absolute -top-4 -right-4 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg">
+                24/7 Automated
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Stats Section - White */}
       <section className="bg-white py-20 px-6">
         <div className="max-w-7xl mx-auto">

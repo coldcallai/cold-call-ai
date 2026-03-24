@@ -223,6 +223,21 @@ A vertical-agnostic B2B SaaS platform that:
 - **16 subscription tier tests passing**
 - **New endpoint**: GET /api/subscription/features - Returns user's tier limits and usage
 
+### Session 9 (December 2025): Calendly Integration & Auto-Booking
+- **CalendlyService** - Full service class for Calendly API integration (booking links, availability, events)
+- **Personalized booking links** - Auto-generates Calendly links pre-filled with lead name, email, phone
+- **Booking model** - New data model to track meeting bookings with status (pending/confirmed/cancelled/completed)
+- **Booking CRUD endpoints**:
+  - POST /api/bookings - Create booking with personalized link
+  - GET /api/bookings - List user's bookings
+  - GET /api/bookings/{id} - Get specific booking
+  - PUT /api/bookings/{id}/status - Update booking status
+  - DELETE /api/bookings/{id} - Cancel booking (reverts lead to qualified)
+- **Calendly webhook** - POST /api/calendly/webhook handles invitee.created and invitee.canceled events
+- **Agent model enhanced** - Added calendly_api_token, calendly_event_type_uri, booked_meetings fields
+- **Email notifications** - Booking emails now include personalized Calendly link button
+- **Feature gated** - Calendar booking requires Professional plan or higher
+
 ## Prioritized Backlog
 
 ### P0 - Critical
@@ -239,6 +254,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~Subscription tier enforcement - Limit features by plan~~ ✅ DONE (December 2025)
 - [x] ~~Low balance notification system~~ ✅ DONE (December 2025)
 - [x] ~~ICP configuration UI in campaign form~~ ✅ DONE (December 2025)
+- [x] ~~Calendar/Calendly integration for auto-booking~~ ✅ DONE (December 2025)
 - [ ] Improve STT accuracy - Consider Deepgram for lower latency
 
 ### P2 - Medium Priority

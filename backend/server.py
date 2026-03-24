@@ -29,6 +29,7 @@ from elevenlabs.types import VoiceSettings
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 from twilio.rest import Client as TwilioClient
 from twilio.twiml.voice_response import VoiceResponse, Gather, Say, Connect, Stream
+import requests  # For Calendly API calls
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -194,9 +195,12 @@ class Agent(BaseModel):
     email: str
     phone: Optional[str] = None
     calendly_link: str
+    calendly_api_token: Optional[str] = None  # Optional - for API-based auto-booking
+    calendly_event_type_uri: Optional[str] = None  # Cached event type URI for faster booking
     is_active: bool = True
     max_daily_calls: int = 50
     assigned_leads: int = 0
+    booked_meetings: int = 0  # Track meetings booked for this agent
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class AgentCreate(BaseModel):
@@ -204,6 +208,7 @@ class AgentCreate(BaseModel):
     email: str
     phone: Optional[str] = None
     calendly_link: str
+    calendly_api_token: Optional[str] = None  # Optional for advanced integration
     max_daily_calls: int = 50
 
 class Campaign(BaseModel):
@@ -261,6 +266,32 @@ class Call(BaseModel):
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class BookingStatus(str, Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+    NO_SHOW = "no_show"
+
+class Booking(BaseModel):
+    """Track scheduled meetings between leads and agents"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None  # Owner of this booking (for multi-tenancy)
+    lead_id: str
+    agent_id: str
+    campaign_id: Optional[str] = None
+    status: BookingStatus = BookingStatus.PENDING
+    booking_link: str  # The Calendly link used
+    scheduled_time: Optional[str] = None  # ISO format when meeting is scheduled
+    calendly_event_uri: Optional[str] = None  # Calendly event URI for cancellation/updates
+    lead_name: str
+    lead_phone: Optional[str] = None
+    lead_email: Optional[str] = None
+    agent_name: str
+    notes: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class LeadDiscoveryRequest(BaseModel):
     search_query: str = "credit card processing"
@@ -685,13 +716,16 @@ class NotificationService:
             logger.error(f"Failed to send lead qualified notification: {str(e)}")
             return False
     
-    async def send_meeting_booked_notification(self, lead: Dict, agent: Dict, recipients: List[str]):
+    async def send_meeting_booked_notification(self, lead: Dict, agent: Dict, recipients: List[str], booking_link: str = None):
         """Send email notification when a meeting is booked"""
         if not self.is_configured:
             logger.info("Email notifications not configured - skipping meeting booked notification")
             return None
         
         subject = f"📅 Meeting Booked: {lead.get('business_name', 'Unknown')} → {agent.get('name', 'Agent')}"
+        
+        # Use personalized booking link if provided, otherwise use agent's default
+        calendly_link = booking_link or agent.get('calendly_link', '#')
         
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -726,15 +760,21 @@ class NotificationService:
                         <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; color: #1f2937; font-weight: 500;">{agent.get('email', 'N/A')}</td>
                     </tr>
                     <tr>
-                        <td style="padding: 10px 0; color: #6b7280;">Calendly Link:</td>
+                        <td style="padding: 10px 0; color: #6b7280;">Booking Link:</td>
                         <td style="padding: 10px 0; color: #8B5CF6; font-weight: 500;">
-                            <a href="{agent.get('calendly_link', '#')}" style="color: #8B5CF6;">{agent.get('calendly_link', 'N/A')}</a>
+                            <a href="{calendly_link}" style="color: #8B5CF6;">Schedule Meeting</a>
                         </td>
                     </tr>
                 </table>
                 
                 <div style="margin-top: 20px; padding: 15px; background: #f5f3ff; border-radius: 8px; border-left: 4px solid #8B5CF6;">
-                    <p style="margin: 0; color: #5b21b6;">🎉 Great job! The lead has been directed to the agent's Calendly for scheduling.</p>
+                    <p style="margin: 0; color: #5b21b6;">🎉 Great job! A personalized booking link has been generated for this lead.</p>
+                </div>
+                
+                <div style="margin-top: 15px; text-align: center;">
+                    <a href="{calendly_link}" style="display: inline-block; background: #8B5CF6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+                        View Booking Link
+                    </a>
                 </div>
             </div>
             
@@ -822,6 +862,208 @@ class NotificationService:
             return False
 
 notification_service = NotificationService()
+
+# ============== CALENDLY INTEGRATION SERVICE ==============
+class CalendlyService:
+    """
+    Service for Calendly API integration - auto-booking qualified leads.
+    Supports generating booking links, checking availability, and scheduling meetings.
+    """
+    
+    def __init__(self):
+        self.api_token = os.environ.get("CALENDLY_API_TOKEN")
+        self.base_url = "https://api.calendly.com"
+        self.is_configured = bool(self.api_token)
+        
+        if self.is_configured:
+            self.headers = {
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json"
+            }
+            logger.info("Calendly service initialized with API token")
+        else:
+            logger.warning("Calendly API token not configured - using booking links only")
+    
+    async def get_current_user(self) -> Optional[Dict]:
+        """Get the authenticated Calendly user info"""
+        if not self.is_configured:
+            return None
+        
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.base_url}/users/me",
+                headers=self.headers,
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.json().get("resource")
+        except Exception as e:
+            logger.error(f"Failed to get Calendly user: {str(e)}")
+            return None
+    
+    async def get_event_types(self, user_uri: str = None) -> List[Dict]:
+        """Fetch all event types for the user"""
+        if not self.is_configured:
+            return []
+        
+        try:
+            if not user_uri:
+                user = await self.get_current_user()
+                if not user:
+                    return []
+                user_uri = user["uri"]
+            
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.base_url}/event_types",
+                headers=self.headers,
+                params={"user": user_uri, "active": "true"},
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.json().get("collection", [])
+        except Exception as e:
+            logger.error(f"Failed to get event types: {str(e)}")
+            return []
+    
+    async def get_available_times(
+        self, 
+        event_type_uri: str, 
+        start_time: str, 
+        end_time: str
+    ) -> List[Dict]:
+        """Get available time slots for an event type"""
+        if not self.is_configured:
+            return []
+        
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.base_url}/event_type_available_times",
+                headers=self.headers,
+                params={
+                    "event_type": event_type_uri,
+                    "start_time": start_time,
+                    "end_time": end_time
+                },
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.json().get("collection", [])
+        except Exception as e:
+            logger.error(f"Failed to get available times: {str(e)}")
+            return []
+    
+    def generate_booking_link(
+        self, 
+        calendly_link: str, 
+        lead_name: str = None, 
+        lead_email: str = None,
+        lead_phone: str = None
+    ) -> str:
+        """
+        Generate a personalized booking link with pre-filled lead data.
+        Works even without API token (uses standard Calendly link format).
+        """
+        import urllib.parse
+        
+        # Clean the base Calendly link
+        base_link = calendly_link.rstrip("/")
+        
+        # Build query params for pre-filling
+        params = {}
+        if lead_name:
+            params["name"] = lead_name
+        if lead_email:
+            params["email"] = lead_email
+        if lead_phone:
+            # Calendly uses 'a1' for custom questions - phone is commonly first
+            params["a1"] = lead_phone
+        
+        if params:
+            query_string = urllib.parse.urlencode(params)
+            return f"{base_link}?{query_string}"
+        
+        return base_link
+    
+    async def create_single_use_link(
+        self,
+        event_type_uri: str,
+        max_event_count: int = 1
+    ) -> Optional[str]:
+        """Create a single-use scheduling link for a specific lead"""
+        if not self.is_configured:
+            return None
+        
+        try:
+            response = await asyncio.to_thread(
+                requests.post,
+                f"{self.base_url}/scheduling_links",
+                headers=self.headers,
+                json={
+                    "owner": event_type_uri,
+                    "owner_type": "EventType",
+                    "max_event_count": max_event_count
+                },
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.json().get("resource", {}).get("booking_url")
+        except Exception as e:
+            logger.error(f"Failed to create single-use link: {str(e)}")
+            return None
+    
+    async def get_scheduled_events(
+        self,
+        user_uri: str,
+        min_start_time: str,
+        max_start_time: str,
+        status: str = "active"
+    ) -> List[Dict]:
+        """Get scheduled events in a time range"""
+        if not self.is_configured:
+            return []
+        
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.base_url}/scheduled_events",
+                headers=self.headers,
+                params={
+                    "user": user_uri,
+                    "min_start_time": min_start_time,
+                    "max_start_time": max_start_time,
+                    "status": status
+                },
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.json().get("collection", [])
+        except Exception as e:
+            logger.error(f"Failed to get scheduled events: {str(e)}")
+            return []
+    
+    async def cancel_event(self, event_uuid: str, reason: str = "") -> bool:
+        """Cancel a scheduled event"""
+        if not self.is_configured:
+            return False
+        
+        try:
+            response = await asyncio.to_thread(
+                requests.post,
+                f"{self.base_url}/scheduled_events/{event_uuid}/cancellation",
+                headers=self.headers,
+                json={"reason": reason} if reason else {},
+                timeout=10
+            )
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to cancel event: {str(e)}")
+            return False
+
+calendly_service = CalendlyService()
 
 # ============== ICP SCORING SERVICE ==============
 class ICPScoringService:
@@ -3320,11 +3562,26 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_
             {"$set": {"status": CallStatus.FAILED, "ended_at": datetime.now(timezone.utc).isoformat()}}
         )
 
-# ----- Booking -----
+# ----- Booking & Calendly Integration -----
+
+class BookMeetingRequest(BaseModel):
+    lead_id: str
+    agent_id: str
+    campaign_id: Optional[str] = None
+    notes: Optional[str] = None
+
 @api_router.post("/bookings")
-async def book_meeting(request: BookingRequest, background_tasks: BackgroundTasks, current_user: Dict = Depends(get_current_user)):
-    """Book a meeting with an agent for a qualified lead"""
+async def book_meeting(request: BookMeetingRequest, background_tasks: BackgroundTasks, current_user: Dict = Depends(get_current_user)):
+    """Book a meeting with an agent for a qualified lead - generates personalized Calendly link"""
     user_id = current_user["user_id"]
+    
+    # Check feature access - calendar booking requires Professional+
+    features = get_tier_features(current_user)
+    if not features.get("calendar_booking"):
+        raise HTTPException(
+            status_code=403,
+            detail="Calendar booking integration requires Professional plan or higher."
+        )
     
     # Multi-tenancy: Verify lead and agent belong to current user
     lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
@@ -3338,33 +3595,250 @@ async def book_meeting(request: BookingRequest, background_tasks: BackgroundTask
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    # Update lead status (with user_id filter for safety)
+    # Generate personalized booking link with lead data pre-filled
+    personalized_link = calendly_service.generate_booking_link(
+        calendly_link=agent["calendly_link"],
+        lead_name=lead.get("contact_name") or lead.get("business_name"),
+        lead_email=lead.get("email"),
+        lead_phone=lead.get("phone")
+    )
+    
+    # Create booking record
+    booking = Booking(
+        user_id=user_id,
+        lead_id=request.lead_id,
+        agent_id=request.agent_id,
+        campaign_id=request.campaign_id,
+        booking_link=personalized_link,
+        lead_name=lead.get("contact_name") or lead.get("business_name"),
+        lead_phone=lead.get("phone"),
+        lead_email=lead.get("email"),
+        agent_name=agent["name"],
+        notes=request.notes
+    )
+    await db.bookings.insert_one(booking.model_dump())
+    
+    # Update lead status
     await db.leads.update_one(
         {"id": request.lead_id, "user_id": user_id},
         {"$set": {
             "status": LeadStatus.BOOKED,
+            "booked_agent_id": request.agent_id,
+            "booking_id": booking.id,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
     
-    # Increment agent's assigned leads (with user_id filter for safety)
+    # Increment agent's booked meetings
     await db.agents.update_one(
         {"id": request.agent_id, "user_id": user_id},
-        {"$inc": {"assigned_leads": 1}}
+        {"$inc": {"assigned_leads": 1, "booked_meetings": 1}}
     )
     
     # Send meeting booked notification in background
-    background_tasks.add_task(send_meeting_booked_notifications, lead, agent, user_id)
+    background_tasks.add_task(send_meeting_booked_notifications, lead, agent, user_id, personalized_link)
     
     return {
         "message": "Meeting booked successfully",
-        "calendly_link": agent["calendly_link"],
-        "lead": lead["business_name"],
-        "agent": agent["name"]
+        "booking_id": booking.id,
+        "booking_link": personalized_link,
+        "lead": lead.get("business_name"),
+        "agent": agent["name"],
+        "status": "pending"
     }
 
-async def send_meeting_booked_notifications(lead: Dict, agent: Dict, user_id: str):
-    """Send meeting booked notifications"""
+@api_router.get("/bookings")
+async def get_bookings(
+    status: Optional[BookingStatus] = None,
+    agent_id: Optional[str] = None,
+    limit: int = Query(100, le=500),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get all bookings for the current user"""
+    query = {"user_id": current_user["user_id"]}
+    if status:
+        query["status"] = status
+    if agent_id:
+        query["agent_id"] = agent_id
+    
+    bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return bookings
+
+@api_router.get("/bookings/{booking_id}")
+async def get_booking(booking_id: str, current_user: Dict = Depends(get_current_user)):
+    """Get a specific booking"""
+    booking = await db.bookings.find_one(
+        {"id": booking_id, "user_id": current_user["user_id"]},
+        {"_id": 0}
+    )
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return booking
+
+@api_router.put("/bookings/{booking_id}/status")
+async def update_booking_status(
+    booking_id: str,
+    status: BookingStatus,
+    scheduled_time: Optional[str] = None,
+    calendly_event_uri: Optional[str] = None,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Update booking status (e.g., when meeting is confirmed via Calendly webhook)"""
+    update_data = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if scheduled_time:
+        update_data["scheduled_time"] = scheduled_time
+    if calendly_event_uri:
+        update_data["calendly_event_uri"] = calendly_event_uri
+    
+    result = await db.bookings.update_one(
+        {"id": booking_id, "user_id": current_user["user_id"]},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    return booking
+
+@api_router.delete("/bookings/{booking_id}")
+async def cancel_booking(
+    booking_id: str,
+    reason: Optional[str] = None,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Cancel a booking"""
+    booking = await db.bookings.find_one(
+        {"id": booking_id, "user_id": current_user["user_id"]},
+        {"_id": 0}
+    )
+    
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # If there's a Calendly event, try to cancel it
+    if booking.get("calendly_event_uri") and calendly_service.is_configured:
+        event_uuid = booking["calendly_event_uri"].split("/")[-1]
+        await calendly_service.cancel_event(event_uuid, reason or "Cancelled by user")
+    
+    # Update booking status
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "status": BookingStatus.CANCELLED,
+            "notes": f"{booking.get('notes', '')} | Cancelled: {reason}" if reason else booking.get("notes"),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Update lead status back to qualified
+    await db.leads.update_one(
+        {"id": booking["lead_id"], "user_id": current_user["user_id"]},
+        {"$set": {
+            "status": LeadStatus.QUALIFIED,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Booking cancelled", "booking_id": booking_id}
+
+@api_router.post("/calendly/webhook")
+async def calendly_webhook(request: Request):
+    """
+    Webhook endpoint for Calendly events.
+    Handles: invitee.created (meeting scheduled), invitee.canceled (meeting cancelled)
+    """
+    try:
+        event_data = await request.json()
+        event_type = event_data.get("event")
+        payload = event_data.get("payload", {})
+        
+        logger.info(f"Calendly webhook received: {event_type}")
+        
+        if event_type == "invitee.created":
+            # Meeting was scheduled
+            invitee_email = payload.get("invitee", {}).get("email", "").lower()
+            scheduled_time = payload.get("scheduled_event", {}).get("start_time")
+            event_uri = payload.get("scheduled_event", {}).get("uri")
+            
+            # Find booking by lead email
+            if invitee_email:
+                booking = await db.bookings.find_one(
+                    {"lead_email": {"$regex": f"^{invitee_email}$", "$options": "i"}, "status": BookingStatus.PENDING},
+                    {"_id": 0}
+                )
+                
+                if booking:
+                    await db.bookings.update_one(
+                        {"id": booking["id"]},
+                        {"$set": {
+                            "status": BookingStatus.CONFIRMED,
+                            "scheduled_time": scheduled_time,
+                            "calendly_event_uri": event_uri,
+                            "updated_at": datetime.now(timezone.utc).isoformat()
+                        }}
+                    )
+                    logger.info(f"Booking {booking['id']} confirmed for {invitee_email}")
+        
+        elif event_type == "invitee.canceled":
+            # Meeting was cancelled
+            event_uri = payload.get("scheduled_event", {}).get("uri")
+            
+            if event_uri:
+                booking = await db.bookings.find_one({"calendly_event_uri": event_uri}, {"_id": 0})
+                
+                if booking:
+                    await db.bookings.update_one(
+                        {"id": booking["id"]},
+                        {"$set": {
+                            "status": BookingStatus.CANCELLED,
+                            "updated_at": datetime.now(timezone.utc).isoformat()
+                        }}
+                    )
+                    
+                    # Update lead status back to qualified
+                    await db.leads.update_one(
+                        {"id": booking["lead_id"]},
+                        {"$set": {"status": LeadStatus.QUALIFIED}}
+                    )
+                    logger.info(f"Booking {booking['id']} cancelled via Calendly")
+        
+        return {"success": True, "message": "Webhook processed"}
+    
+    except Exception as e:
+        logger.error(f"Calendly webhook error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/calendly/status")
+async def get_calendly_status(current_user: Dict = Depends(get_current_user)):
+    """Check Calendly integration status"""
+    configured = calendly_service.is_configured
+    user_info = None
+    event_types = []
+    
+    if configured:
+        user_info = await calendly_service.get_current_user()
+        if user_info:
+            event_types = await calendly_service.get_event_types(user_info.get("uri"))
+    
+    return {
+        "configured": configured,
+        "user": {
+            "name": user_info.get("name") if user_info else None,
+            "email": user_info.get("email") if user_info else None
+        } if user_info else None,
+        "event_types": [
+            {"name": et.get("name"), "duration": et.get("duration_minutes"), "uri": et.get("uri")}
+            for et in event_types
+        ]
+    }
+
+async def send_meeting_booked_notifications(lead: Dict, agent: Dict, user_id: str, booking_link: str = None):
+    """Send meeting booked notifications with personalized booking link"""
     try:
         # Multi-tenancy: Only get webhooks belonging to this user
         webhooks = await db.webhooks.find(
@@ -3377,7 +3851,8 @@ async def send_meeting_booked_notifications(lead: Dict, agent: Dict, user_id: st
                 await notification_service.send_meeting_booked_notification(
                     lead=lead,
                     agent=agent,
-                    recipients=webhook["notification_emails"]
+                    recipients=webhook["notification_emails"],
+                    booking_link=booking_link
                 )
     except Exception as e:
         logger.error(f"Error sending meeting booked notifications: {str(e)}")

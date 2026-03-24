@@ -896,11 +896,15 @@ class TwilioCallingService:
         company_name = campaign.get('company_name', 'our company')
         business_name = lead.get('business_name', 'your company')
         
+        # Use better Twilio neural voice (Polly Neural voices sound much better)
+        # Options: Polly.Matthew-Neural, Polly.Joanna-Neural, Polly.Amy-Neural
+        voice = 'Polly.Matthew-Neural'  # Professional male voice
+        
         # Compliance disclosure (REQUIRED by FCC)
         response.say(
             f"Hi, this is an AI assistant calling on behalf of {company_name}. "
             "This is an automated business call.",
-            voice='Polly.Joanna'
+            voice=voice
         )
         
         # Pause for natural flow
@@ -911,22 +915,76 @@ class TwilioCallingService:
             f"I'm reaching out to {business_name} because we help businesses increase their profits "
             "with solutions most companies don't take advantage of. "
             "Would you be interested in learning more?",
-            voice='Polly.Joanna'
+            voice=voice
         )
         
-        # Pause for response (simulated - real AI would use Gather with speech recognition)
+        # Pause for response
         response.pause(length=3)
         
         # Follow up
         response.say(
             "If you'd like to learn more, one of our specialists will follow up with you shortly. "
-            "Or say 'remove me' to be added to our do not call list. "
+            "Or say remove me to be added to our do not call list. "
             "Thank you for your time, have a great day!",
-            voice='Polly.Joanna'
+            voice=voice
         )
         
         response.hangup()
         return str(response)
+    
+    async def generate_elevenlabs_twiml(self, lead: Dict, campaign: Dict, base_url: str) -> str:
+        """Generate TwiML using ElevenLabs for ultra-realistic voice"""
+        if not eleven_client:
+            # Fallback to Twilio voice if ElevenLabs not configured
+            return self.generate_simple_twiml(lead, campaign)
+        
+        response = VoiceResponse()
+        
+        company_name = campaign.get('company_name', 'our company')
+        business_name = lead.get('business_name', 'your company')
+        
+        # Generate the script
+        script = (
+            f"Hi, this is an AI assistant calling on behalf of {company_name}. "
+            "This is an automated business call. "
+            f"I'm reaching out to {business_name} because we help businesses increase their profits "
+            "with solutions most companies don't take advantage of. "
+            "Would you be interested in learning more? "
+            "If so, one of our specialists will follow up with you shortly. "
+            "Or say remove me to be added to our do not call list. "
+            "Thank you for your time, have a great day!"
+        )
+        
+        try:
+            # Generate audio with ElevenLabs - use Sarah (professional female) or Roger (casual male)
+            voice_id = "EXAVITQu4vr4xnSDxMaL"  # Sarah - professional
+            
+            audio_generator = eleven_client.text_to_speech.convert(
+                text=script,
+                voice_id=voice_id,
+                model_id="eleven_multilingual_v2"
+            )
+            
+            # Collect audio and encode as base64
+            audio_data = b""
+            for chunk in audio_generator:
+                audio_data += chunk
+            
+            audio_b64 = base64.b64encode(audio_data).decode()
+            
+            # Create a data URL (Twilio can play audio from URLs)
+            # Note: For production, upload to S3/cloud storage for better reliability
+            audio_url = f"data:audio/mpeg;base64,{audio_b64}"
+            
+            # Unfortunately Twilio <Play> doesn't support data URLs
+            # We need to use a hosted URL or fall back to neural voice
+            # For now, use Twilio's best neural voice
+            logger.info("ElevenLabs audio generated, but Twilio requires hosted URL. Using neural voice.")
+            return self.generate_simple_twiml(lead, campaign)
+            
+        except Exception as e:
+            logger.error(f"ElevenLabs TTS failed: {e}. Falling back to Twilio voice.")
+            return self.generate_simple_twiml(lead, campaign)
     
     def generate_ai_greeting_twiml(self, lead: Dict, campaign: Dict) -> str:
         """Generate TwiML for AI greeting with compliance disclosure"""

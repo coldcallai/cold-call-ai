@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File, Depends, Request, Response
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File, Depends, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -19,6 +19,7 @@ import csv
 import io
 import httpx
 import base64
+import json
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -26,7 +27,7 @@ from elevenlabs import ElevenLabs
 from elevenlabs.types import VoiceSettings
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 from twilio.rest import Client as TwilioClient
-from twilio.twiml.voice_response import VoiceResponse, Gather, Say
+from twilio.twiml.voice_response import VoiceResponse, Gather, Say, Connect, Stream
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -938,53 +939,9 @@ class TwilioCallingService:
             # Fallback to Twilio voice if ElevenLabs not configured
             return self.generate_simple_twiml(lead, campaign)
         
-        response = VoiceResponse()
-        
-        company_name = campaign.get('company_name', 'our company')
-        business_name = lead.get('business_name', 'your company')
-        
-        # Generate the script
-        script = (
-            f"Hi, this is an AI assistant calling on behalf of {company_name}. "
-            "This is an automated business call. "
-            f"I'm reaching out to {business_name} because we help businesses increase their profits "
-            "with solutions most companies don't take advantage of. "
-            "Would you be interested in learning more? "
-            "If so, one of our specialists will follow up with you shortly. "
-            "Or say remove me to be added to our do not call list. "
-            "Thank you for your time, have a great day!"
-        )
-        
-        try:
-            # Generate audio with ElevenLabs - use Sarah (professional female) or Roger (casual male)
-            voice_id = "EXAVITQu4vr4xnSDxMaL"  # Sarah - professional
-            
-            audio_generator = eleven_client.text_to_speech.convert(
-                text=script,
-                voice_id=voice_id,
-                model_id="eleven_multilingual_v2"
-            )
-            
-            # Collect audio and encode as base64
-            audio_data = b""
-            for chunk in audio_generator:
-                audio_data += chunk
-            
-            audio_b64 = base64.b64encode(audio_data).decode()
-            
-            # Create a data URL (Twilio can play audio from URLs)
-            # Note: For production, upload to S3/cloud storage for better reliability
-            audio_url = f"data:audio/mpeg;base64,{audio_b64}"
-            
-            # Unfortunately Twilio <Play> doesn't support data URLs
-            # We need to use a hosted URL or fall back to neural voice
-            # For now, use Twilio's best neural voice
-            logger.info("ElevenLabs audio generated, but Twilio requires hosted URL. Using neural voice.")
-            return self.generate_simple_twiml(lead, campaign)
-            
-        except Exception as e:
-            logger.error(f"ElevenLabs TTS failed: {e}. Falling back to Twilio voice.")
-            return self.generate_simple_twiml(lead, campaign)
+        # This method is kept for future use with hosted audio URLs
+        # Currently falls back to neural voice for reliability
+        return self.generate_simple_twiml(lead, campaign)
     
     def generate_ai_greeting_twiml(self, lead: Dict, campaign: Dict) -> str:
         """Generate TwiML for AI greeting with compliance disclosure"""
@@ -2982,6 +2939,352 @@ async def twilio_recording_webhook(request: Request):
         logger.info(f"Recording saved for call {call_sid}: {recording_url}")
     
     return {"status": "ok"}
+
+# ----- Real-Time AI Calling (Synthflow-style) -----
+
+# Store active call contexts for Media Streams
+active_media_streams: Dict[str, Dict] = {}
+
+class RealtimeCallRequest(BaseModel):
+    lead_id: str
+    campaign_id: str
+    mode: str = "realtime"  # "realtime" for AI conversation, "simple" for scripted
+
+@api_router.post("/calls/realtime")
+async def initiate_realtime_call(
+    request: RealtimeCallRequest,
+    http_request: Request,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Initiate a REAL-TIME AI call using Twilio Media Streams.
+    The AI will have a dynamic conversation with the caller.
+    """
+    if not twilio_service.is_configured:
+        raise HTTPException(status_code=503, detail="Twilio not configured")
+    
+    # Check credits
+    if current_user.get("call_credits_remaining", 0) < 1:
+        raise HTTPException(status_code=402, detail="Insufficient call credits")
+    
+    # Get lead and campaign
+    lead = await db.leads.find_one({"id": request.lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    campaign = await db.campaigns.find_one({"id": request.campaign_id}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    phone_number = lead.get("phone")
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Lead has no phone number")
+    
+    # Compliance check
+    compliance = await compliance_service.pre_call_compliance_check(phone_number, current_user["user_id"])
+    if not compliance["is_allowed"]:
+        return {"status": "blocked", "reasons": compliance["reasons"]}
+    
+    # Deduct credit
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$inc": {"call_credits_remaining": -1}}
+    )
+    
+    # Create call record
+    call = Call(
+        lead_id=request.lead_id,
+        campaign_id=request.campaign_id,
+        status=CallStatus.PENDING
+    )
+    await db.calls.insert_one(call.model_dump())
+    
+    # Store context for WebSocket handler
+    active_media_streams[call.id] = {
+        "lead": lead,
+        "campaign": campaign,
+        "user_id": current_user["user_id"]
+    }
+    
+    # Get callback URL (must be wss:// for Media Streams)
+    callback_url = str(http_request.base_url).rstrip("/")
+    ws_url = callback_url.replace("https://", "wss://").replace("http://", "ws://")
+    
+    try:
+        # Create TwiML that connects to Media Streams
+        response = VoiceResponse()
+        
+        # Compliance disclosure first (required)
+        company = campaign.get('company_name', 'our company')
+        response.say(
+            f"Hi, this is an AI assistant calling on behalf of {company}. This is an automated business call.",
+            voice='Polly.Matthew-Neural'
+        )
+        response.pause(length=1)
+        
+        # Connect to Media Stream for real-time conversation
+        connect = Connect()
+        stream = Stream(url=f"{ws_url}/api/media-stream/{call.id}")
+        stream.parameter(name="lead_id", value=request.lead_id)
+        stream.parameter(name="campaign_id", value=request.campaign_id)
+        connect.append(stream)
+        response.append(connect)
+        
+        # Make the call with TwiML
+        twilio_call = twilio_client.calls.create(
+            to=phone_number,
+            from_=twilio_phone_number,
+            twiml=str(response),
+            status_callback=f"{callback_url}/api/twilio/status",
+            status_callback_event=["initiated", "ringing", "answered", "completed"],
+            record=True
+        )
+        
+        await db.calls.update_one(
+            {"id": call.id},
+            {"$set": {"twilio_sid": twilio_call.sid, "status": CallStatus.IN_PROGRESS.value}}
+        )
+        
+        return {
+            "status": "initiated",
+            "call_id": call.id,
+            "twilio_sid": twilio_call.sid,
+            "mode": "realtime",
+            "message": "Real-time AI call initiated"
+        }
+        
+    except Exception as e:
+        # Refund credit
+        await db.users.update_one(
+            {"user_id": current_user["user_id"]},
+            {"$inc": {"call_credits_remaining": 1}}
+        )
+        active_media_streams.pop(call.id, None)
+        raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+
+@app.websocket("/api/media-stream/{call_id}")
+async def media_stream_websocket(websocket: WebSocket, call_id: str):
+    """
+    WebSocket endpoint for Twilio Media Streams.
+    Handles real-time AI conversation.
+    """
+    await websocket.accept()
+    
+    context = active_media_streams.get(call_id)
+    if not context:
+        logger.error(f"No context found for call {call_id}")
+        await websocket.close()
+        return
+    
+    lead = context["lead"]
+    campaign = context["campaign"]
+    stream_sid = None
+    
+    # Conversation state
+    messages = []
+    is_first_response = True
+    audio_buffer = b""
+    
+    logger.info(f"Media stream connected for call {call_id}")
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            event = message.get("event")
+            
+            if event == "connected":
+                logger.info(f"Media stream connected: {message}")
+                
+            elif event == "start":
+                stream_sid = message.get("streamSid")
+                logger.info(f"Media stream started: {stream_sid}")
+                
+                # Send initial AI greeting
+                if is_first_response:
+                    is_first_response = False
+                    business = lead.get('business_name', 'your company')
+                    greeting = f"Am I speaking with someone at {business}? I'm reaching out because we help businesses increase their profits with solutions most companies overlook. Do you have a moment?"
+                    
+                    # Generate and send TTS
+                    await send_tts_to_stream(websocket, stream_sid, greeting)
+                
+            elif event == "media":
+                # Receive audio from caller
+                payload = message["media"]["payload"]
+                audio_chunk = base64.b64decode(payload)
+                audio_buffer += audio_chunk
+                
+                # Process when we have ~2 seconds of audio (for better transcription)
+                if len(audio_buffer) >= 16000:
+                    # In production, use Deepgram or AssemblyAI for real-time transcription
+                    # For now, we'll use a simplified approach
+                    transcript = await transcribe_audio_chunk(audio_buffer)
+                    
+                    if transcript and len(transcript.strip()) > 2:
+                        logger.info(f"Caller: {transcript}")
+                        
+                        # Check for DNC
+                        if any(kw in transcript.lower() for kw in ["stop", "remove", "don't call"]):
+                            await send_tts_to_stream(
+                                websocket, stream_sid,
+                                "No problem. I'll remove you from our list. Have a great day!"
+                            )
+                            phone = lead.get("phone")
+                            if phone:
+                                await compliance_service.add_to_dnc(phone, "user_request")
+                            await asyncio.sleep(3)
+                            break
+                        
+                        # Generate AI response
+                        ai_response = await generate_sales_response(transcript, messages, lead, campaign)
+                        logger.info(f"AI: {ai_response}")
+                        
+                        messages.append({"role": "user", "content": transcript})
+                        messages.append({"role": "assistant", "content": ai_response})
+                        
+                        await send_tts_to_stream(websocket, stream_sid, ai_response)
+                    
+                    audio_buffer = b""
+                
+            elif event == "stop":
+                logger.info(f"Media stream stopped: {call_id}")
+                break
+                
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for call {call_id}")
+    except Exception as e:
+        logger.error(f"Media stream error: {e}")
+    finally:
+        active_media_streams.pop(call_id, None)
+        
+        # Update call record with transcript
+        await db.calls.update_one(
+            {"id": call_id},
+            {"$set": {
+                "transcript": messages,
+                "status": CallStatus.COMPLETED.value,
+                "ended_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+
+async def send_tts_to_stream(websocket: WebSocket, stream_sid: str, text: str):
+    """Generate TTS with ElevenLabs and send to Twilio stream"""
+    try:
+        if not eleven_client:
+            logger.error("ElevenLabs not configured")
+            return
+        
+        # Generate audio
+        audio_gen = eleven_client.text_to_speech.convert(
+            text=text,
+            voice_id="EXAVITQu4vr4xnSDxMaL",  # Sarah - professional
+            model_id="eleven_turbo_v2_5",
+            output_format="ulaw_8000"  # Direct μ-law output for Twilio!
+        )
+        
+        audio_data = b""
+        for chunk in audio_gen:
+            audio_data += chunk
+        
+        # Send in 20ms chunks (160 bytes at 8kHz)
+        chunk_size = 160
+        for i in range(0, len(audio_data), chunk_size):
+            chunk = audio_data[i:i + chunk_size]
+            payload = base64.b64encode(chunk).decode()
+            
+            await websocket.send_text(json.dumps({
+                "event": "media",
+                "streamSid": stream_sid,
+                "media": {"payload": payload}
+            }))
+            await asyncio.sleep(0.02)
+            
+    except Exception as e:
+        logger.error(f"TTS streaming error: {e}")
+
+async def transcribe_audio_chunk(audio_data: bytes) -> str:
+    """Transcribe audio using a speech recognition service"""
+    # For production, use Deepgram or AssemblyAI for real-time
+    # This is a simplified placeholder
+    try:
+        # Convert μ-law to PCM for transcription APIs
+        import audioop
+        pcm_data = audioop.ulaw2lin(audio_data, 2)
+        
+        # Create WAV file
+        import struct
+        sample_rate = 8000
+        wav_header = struct.pack(
+            '<4sI4s4sIHHIIHH4sI',
+            b'RIFF', 36 + len(pcm_data), b'WAVE', b'fmt ', 16,
+            1, 1, sample_rate, sample_rate * 2, 2, 16, b'data', len(pcm_data)
+        )
+        wav_data = wav_header + pcm_data
+        
+        # Use OpenAI Whisper
+        llm_key = os.environ.get('EMERGENT_LLM_KEY')
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {llm_key}"},
+                files={"file": ("audio.wav", wav_data, "audio/wav")},
+                data={"model": "whisper-1"},
+                timeout=10.0
+            )
+            if resp.status_code == 200:
+                return resp.json().get("text", "")
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+    return ""
+
+async def generate_sales_response(user_input: str, history: list, lead: Dict, campaign: Dict) -> str:
+    """Generate AI sales response using GPT"""
+    try:
+        company = campaign.get('company_name', 'our company')
+        business = lead.get('business_name', 'your company')
+        
+        system_prompt = f"""You are an AI sales agent for {company}. Keep responses SHORT (1-2 sentences max) - this is a phone call.
+
+Your goal: Qualify the lead and book a meeting.
+
+Lead: {business}
+
+Guidelines:
+- Be conversational and natural
+- Ask ONE question at a time
+- If they're interested, offer to book a 15-min call
+- If not interested, thank them and end politely
+
+Common responses:
+- "Yes/interested" → Ask about their timeline or decision-making process
+- "Tell me more" → Briefly explain the value proposition  
+- "Not now" → Offer to send info by email
+- "Who is this?" → Re-introduce yourself briefly"""
+
+        chat = LlmChat(
+            api_key=os.environ.get('EMERGENT_LLM_KEY'),
+            model="gpt-5.2",
+            system_message=system_prompt
+        )
+        
+        # Add history
+        full_prompt = ""
+        for msg in history[-6:]:  # Last 3 exchanges
+            full_prompt += f"{msg['role']}: {msg['content']}\n"
+        full_prompt += f"user: {user_input}"
+        
+        response = await chat.chat(full_prompt)
+        
+        # Keep it short
+        if len(response) > 150:
+            response = response[:150].rsplit(' ', 1)[0]
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"GPT response error: {e}")
+        return "I apologize, could you repeat that?"
 
 # ----- ElevenLabs TTS -----
 class TTSRequest(BaseModel):

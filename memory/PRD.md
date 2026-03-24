@@ -237,6 +237,15 @@ A vertical-agnostic B2B SaaS platform that:
 - **Agent model enhanced** - Added calendly_api_token, calendly_event_type_uri, booked_meetings fields
 - **Email notifications** - Booking emails now include personalized Calendly link button
 - **Feature gated** - Calendar booking requires Professional plan or higher
+- **Bookings Dashboard UI** - Full-featured frontend page with:
+  - Stats cards (total, pending, confirmed, completed, cancelled)
+  - Filter by status and agent
+  - Search by lead name/email/phone
+  - Copy/Open booking links
+  - Cancel bookings with confirmation
+  - Calendly connection status indicator
+- **Enhanced BookingDialog** - Shows personalized link preview with pre-filled lead data
+- **New navigation item** - Bookings page added to sidebar
 
 ## Prioritized Backlog
 

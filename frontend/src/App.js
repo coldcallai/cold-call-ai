@@ -9,7 +9,7 @@ import {
   PhoneCall, PhoneOff, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
   ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
-  CreditCard, Package, ShoppingCart, LogOut, BarChart3, X, Edit3, Tags
+  CreditCard, Package, ShoppingCart, LogOut, BarChart3, X, Edit3, Tags, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,6 +29,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import LoginPage from "@/pages/LoginPage";
 import AuthCallback from "@/pages/AuthCallback";
 import UsageDashboard from "@/pages/UsageDashboard";
+import BookingsPage from "@/pages/BookingsPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 
@@ -46,6 +47,7 @@ const Sidebar = () => {
     { path: "/app/leads", icon: Search, label: "Lead Discovery" },
     { path: "/app/campaigns", icon: Target, label: "Campaigns" },
     { path: "/app/agents", icon: Users, label: "Agents" },
+    { path: "/app/bookings", icon: Calendar, label: "Bookings" },
     { path: "/app/calls", icon: History, label: "Call History" },
     { path: "/app/packs", icon: Package, label: "Credit Packs" },
     { path: "/app/settings", icon: Settings, label: "Settings" },
@@ -1280,8 +1282,10 @@ const LeadDiscovery = () => {
 
 // Booking Dialog Component
 const BookingDialog = ({ lead, onClose, onSuccess }) => {
+  const { token } = useAuth();
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
+  const [notes, setNotes] = useState("");
   const [booking, setBooking] = useState(false);
 
   useEffect(() => {
@@ -1292,7 +1296,9 @@ const BookingDialog = ({ lead, onClose, onSuccess }) => {
 
   const fetchAgents = async () => {
     try {
-      const response = await axios.get(`${API}/agents`);
+      const response = await axios.get(`${API}/agents`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setAgents(response.data.filter(a => a.is_active));
     } catch (error) {
       console.error("Failed to fetch agents:", error);
@@ -1309,13 +1315,30 @@ const BookingDialog = ({ lead, onClose, onSuccess }) => {
     try {
       const response = await axios.post(`${API}/bookings`, {
         lead_id: lead.id,
-        agent_id: selectedAgent
+        agent_id: selectedAgent,
+        notes: notes || null
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success("Meeting booked! Opening Calendly...");
-      window.open(response.data.calendly_link, '_blank');
+      
+      // Show success with booking link
+      toast.success(
+        <div>
+          <p className="font-medium">Meeting booked successfully!</p>
+          <p className="text-sm text-gray-600 mt-1">Opening personalized Calendly link...</p>
+        </div>
+      );
+      
+      // Open the personalized booking link
+      window.open(response.data.booking_link, '_blank');
       onSuccess();
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to book meeting");
+      const detail = error.response?.data?.detail || "Failed to book meeting";
+      if (error.response?.status === 403) {
+        toast.error("Calendar booking requires Professional plan or higher");
+      } else {
+        toast.error(detail);
+      }
     } finally {
       setBooking(false);
     }
@@ -1323,15 +1346,17 @@ const BookingDialog = ({ lead, onClose, onSuccess }) => {
 
   if (!lead) return null;
 
+  const selectedAgentData = agents.find(a => a.id === selectedAgent);
+
   return (
     <Dialog open={!!lead} onOpenChange={() => onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Book Meeting for {lead.business_name}
           </DialogTitle>
           <DialogDescription>
-            Select an agent to assign this qualified lead
+            Select an agent to assign this qualified lead. A personalized booking link will be generated with the lead's info pre-filled.
           </DialogDescription>
         </DialogHeader>
         
@@ -1343,29 +1368,56 @@ const BookingDialog = ({ lead, onClose, onSuccess }) => {
                 <SelectValue placeholder="Choose an agent" />
               </SelectTrigger>
               <SelectContent>
-                {agents.map(agent => (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    {agent.name} ({agent.assigned_leads} leads)
-                  </SelectItem>
-                ))}
+                {agents.length === 0 ? (
+                  <div className="p-2 text-sm text-gray-500 text-center">
+                    No agents available. Create an agent first.
+                  </div>
+                ) : (
+                  agents.map(agent => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{agent.name}</span>
+                        <span className="text-gray-500 text-xs">
+                          ({agent.booked_meetings || 0} meetings)
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
           
-          {selectedAgent && agents.find(a => a.id === selectedAgent) && (
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">
-                Will redirect to agent's Calendly:
-              </p>
-              <a 
-                href={agents.find(a => a.id === selectedAgent).calendly_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:underline flex items-center gap-1 mt-1"
-              >
-                {agents.find(a => a.id === selectedAgent).calendly_link}
-                <ExternalLink className="w-3 h-3" />
-              </a>
+          <div>
+            <Label>Notes (optional)</Label>
+            <Input
+              placeholder="Add notes about this lead..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          
+          {selectedAgentData && (
+            <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-100">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Calendar className="w-4 h-4 text-purple-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    Personalized Calendly Link
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    The booking link will include:
+                  </p>
+                  <ul className="text-xs text-gray-500 mt-1 space-y-0.5">
+                    {lead.contact_name && <li>• Name: {lead.contact_name}</li>}
+                    {lead.email && <li>• Email: {lead.email}</li>}
+                    {lead.phone && <li>• Phone: {lead.phone}</li>}
+                  </ul>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1376,9 +1428,19 @@ const BookingDialog = ({ lead, onClose, onSuccess }) => {
             data-testid="confirm-booking-btn"
             onClick={bookMeeting}
             disabled={booking || !selectedAgent}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
+            className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
           >
-            {booking ? "Booking..." : "Book Meeting"}
+            {booking ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Booking...
+              </>
+            ) : (
+              <>
+                <Calendar className="w-4 h-4" />
+                Book Meeting
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -3094,6 +3156,7 @@ const AppRouter = () => {
                   <Route path="/leads" element={<LeadDiscovery />} />
                   <Route path="/campaigns" element={<Campaigns />} />
                   <Route path="/agents" element={<Agents />} />
+                  <Route path="/bookings" element={<BookingsPage />} />
                   <Route path="/calls" element={<CallHistory />} />
                   <Route path="/packs" element={<CreditPacks />} />
                   <Route path="/settings" element={<SettingsPage />} />

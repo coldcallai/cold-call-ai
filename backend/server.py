@@ -1507,6 +1507,7 @@ twilio_service = TwilioCallingService()
 # ============== WEBHOOK MODELS ==============
 class WebhookConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None  # Owner of this webhook (for multi-tenancy)
     name: str
     event_type: str  # "lead_qualified" or "meeting_booked"
     notification_emails: List[str] = []
@@ -1921,17 +1922,21 @@ User's question: {request.message}
 
 # ----- Dashboard Stats -----
 @api_router.get("/dashboard/stats")
-async def get_dashboard_stats(current_user: Dict = Depends(get_optional_user)):
-    total_leads = await db.leads.count_documents({})
-    qualified_leads = await db.leads.count_documents({"status": LeadStatus.QUALIFIED})
-    booked_leads = await db.leads.count_documents({"status": LeadStatus.BOOKED})
-    total_calls = await db.calls.count_documents({})
-    active_campaigns = await db.campaigns.count_documents({"status": CampaignStatus.ACTIVE})
-    total_agents = await db.agents.count_documents({"is_active": True})
+async def get_dashboard_stats(current_user: Dict = Depends(get_current_user)):
+    """Get dashboard stats - filtered by user_id for multi-tenancy"""
+    user_id = current_user["user_id"]
+    user_filter = {"user_id": user_id}
     
-    # Get recent calls
+    total_leads = await db.leads.count_documents(user_filter)
+    qualified_leads = await db.leads.count_documents({"user_id": user_id, "status": LeadStatus.QUALIFIED})
+    booked_leads = await db.leads.count_documents({"user_id": user_id, "status": LeadStatus.BOOKED})
+    total_calls = await db.calls.count_documents(user_filter)
+    active_campaigns = await db.campaigns.count_documents({"user_id": user_id, "status": CampaignStatus.ACTIVE})
+    total_agents = await db.agents.count_documents({"user_id": user_id, "is_active": True})
+    
+    # Get recent calls for this user only
     recent_calls = await db.calls.find(
-        {},
+        user_filter,
         {"_id": 0}
     ).sort("created_at", -1).limit(5).to_list(5)
     
@@ -1993,8 +1998,10 @@ async def preview_lead_examples(
     }
 
 @api_router.post("/leads/discover")
-async def discover_leads(request: LeadDiscoveryRequest):
+async def discover_leads(request: LeadDiscoveryRequest, current_user: Dict = Depends(get_current_user)):
     """Discover new leads using AI-powered research (legacy endpoint)"""
+    user_id = current_user["user_id"]
+    
     discovered = await ai_service.gpt_intent_search(
         query=request.search_query,
         location=request.location,
@@ -2004,6 +2011,7 @@ async def discover_leads(request: LeadDiscoveryRequest):
     created_leads = []
     for biz in discovered:
         lead_data = Lead(
+            user_id=user_id,  # Assign to current user
             business_name=biz.get("name", "Unknown Business"),
             phone=biz.get("phone", ""),
             source="ai_discovery",
@@ -2132,7 +2140,7 @@ async def update_lead(lead_id: str, updates: Dict[str, Any], current_user: Dict 
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
     
-    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return lead
 
 @api_router.delete("/leads/{lead_id}")
@@ -2380,7 +2388,8 @@ async def verify_lead_contact_info(
     Verify both phone and email for a specific lead.
     Updates lead record with verification results.
     """
-    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    # Multi-tenancy: Only access leads belonging to current user
+    lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
@@ -2422,9 +2431,9 @@ async def verify_lead_contact_info(
     
     results["lead_quality_score"] = min(100, int(lead_quality))
     
-    # Update lead with verification data
+    # Update lead with verification data (with user_id filter for safety)
     await db.leads.update_one(
-        {"id": lead_id},
+        {"id": lead_id, "user_id": current_user["user_id"]},
         {"$set": {
             "verification": results,
             "lead_quality_score": results["lead_quality_score"],
@@ -2462,7 +2471,8 @@ async def score_lead_icp(
     
     use_ai=true for more accurate but costs ~$0.002/lead
     """
-    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    # Multi-tenancy: Only access leads belonging to current user
+    lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
@@ -2534,7 +2544,9 @@ async def get_leads_by_icp_score(
     Get leads sorted by ICP score (highest first).
     Filter by minimum score or tier.
     """
-    query = {"icp_score": {"$exists": True, "$gte": min_score}}
+    # Multi-tenancy: Include user_id in all queries
+    user_id = current_user["user_id"]
+    query = {"user_id": user_id, "icp_score": {"$exists": True, "$gte": min_score}}
     
     if tier:
         tier_ranges = {
@@ -2564,13 +2576,15 @@ async def score_campaign_leads(
     Score all leads assigned to a campaign based on campaign's ICP config.
     Updates dial priority for optimal calling order.
     """
-    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    # Multi-tenancy: Verify campaign belongs to current user
+    campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    # Get leads assigned to this campaign (leads with this campaign_id in their assignments)
+    # Get leads assigned to this campaign (also verify user ownership)
+    user_id = current_user["user_id"]
     leads = await db.leads.find(
-        {"$or": [
+        {"user_id": user_id, "$or": [
             {"campaign_id": campaign_id},
             {"assigned_campaigns": campaign_id}
         ]},
@@ -2587,7 +2601,7 @@ async def score_campaign_leads(
     
     # Calculate dial priority combining ICP score and phone verification
     for result in results:
-        lead = await db.leads.find_one({"id": result["lead_id"]}, {"_id": 0})
+        lead = await db.leads.find_one({"id": result["lead_id"], "user_id": user_id}, {"_id": 0})
         if lead:
             phone_priority = lead.get("verification", {}).get("dial_priority", 50)
             icp_score = result["total_score"]
@@ -2596,7 +2610,7 @@ async def score_campaign_leads(
             dial_priority = int(icp_score * 0.6 + phone_priority * 0.4)
             
             await db.leads.update_one(
-                {"id": result["lead_id"]},
+                {"id": result["lead_id"], "user_id": user_id},
                 {"$set": {"dial_priority": dial_priority}}
             )
     
@@ -2639,7 +2653,7 @@ async def update_agent(agent_id: str, updates: Dict[str, Any], current_user: Dic
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
+    agent = await db.agents.find_one({"id": agent_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return agent
 
 @api_router.delete("/agents/{agent_id}")
@@ -2683,7 +2697,7 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_use
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return campaign
 
 @api_router.post("/campaigns/{campaign_id}/start")
@@ -2729,9 +2743,12 @@ async def get_twilio_status():
 async def get_calls(
     status: Optional[CallStatus] = None,
     campaign_id: Optional[str] = None,
-    limit: int = Query(100, le=500)
+    limit: int = Query(100, le=500),
+    current_user: Dict = Depends(get_current_user)
 ):
-    query = {}
+    """Get calls belonging to the current user"""
+    user_id = current_user["user_id"]
+    query = {"user_id": user_id}
     if status:
         query["status"] = status
     if campaign_id:
@@ -2741,8 +2758,9 @@ async def get_calls(
     return calls
 
 @api_router.get("/calls/{call_id}", response_model=Call)
-async def get_call(call_id: str):
-    call = await db.calls.find_one({"id": call_id}, {"_id": 0})
+async def get_call(call_id: str, current_user: Dict = Depends(get_current_user)):
+    """Get a specific call (must belong to current user)"""
+    call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     return call
@@ -2765,12 +2783,12 @@ async def simulate_call(
             detail=f"Insufficient call credits. You have {calls_remaining} credits. Please purchase more credits to make calls."
         )
     
-    # Get lead and campaign
-    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    # Get lead and campaign (with user ownership verification)
+    lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
-    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": user_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -2792,8 +2810,9 @@ async def simulate_call(
         credits_after=new_balance
     )
     
-    # Create call record
+    # Create call record with user_id for multi-tenancy
     call = Call(
+        user_id=user_id,
         lead_id=lead_id,
         campaign_id=campaign_id,
         status=CallStatus.IN_PROGRESS,
@@ -2801,8 +2820,8 @@ async def simulate_call(
     )
     await db.calls.insert_one(call.model_dump())
     
-    # Simulate the call in background
-    background_tasks.add_task(process_simulated_call, call.id, lead, campaign)
+    # Simulate the call in background (pass user_id for proper webhook filtering)
+    background_tasks.add_task(process_simulated_call, call.id, lead, campaign, user_id)
     
     return {
         "message": "Call started", 
@@ -2812,7 +2831,7 @@ async def simulate_call(
         "credits_remaining": new_balance
     }
 
-async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict):
+async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_id: str = None):
     """Process simulated call in background"""
     try:
         # Simulate AI conversation
@@ -2858,8 +2877,13 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict):
         
         # Send notification if lead is qualified
         if qualification.is_qualified:
+            # Multi-tenancy: Filter webhooks by user_id
+            webhook_query = {"event_type": "lead_qualified", "is_active": True}
+            if user_id:
+                webhook_query["user_id"] = user_id
+            
             webhooks = await db.webhooks.find(
-                {"event_type": "lead_qualified", "is_active": True},
+                webhook_query,
                 {"_id": 0}
             ).to_list(100)
             
@@ -2882,36 +2906,39 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict):
 
 # ----- Booking -----
 @api_router.post("/bookings")
-async def book_meeting(request: BookingRequest, background_tasks: BackgroundTasks):
+async def book_meeting(request: BookingRequest, background_tasks: BackgroundTasks, current_user: Dict = Depends(get_current_user)):
     """Book a meeting with an agent for a qualified lead"""
-    lead = await db.leads.find_one({"id": request.lead_id}, {"_id": 0})
+    user_id = current_user["user_id"]
+    
+    # Multi-tenancy: Verify lead and agent belong to current user
+    lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
     if lead.get("status") != LeadStatus.QUALIFIED:
         raise HTTPException(status_code=400, detail="Lead is not qualified for booking")
     
-    agent = await db.agents.find_one({"id": request.agent_id}, {"_id": 0})
+    agent = await db.agents.find_one({"id": request.agent_id, "user_id": user_id}, {"_id": 0})
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    # Update lead status
+    # Update lead status (with user_id filter for safety)
     await db.leads.update_one(
-        {"id": request.lead_id},
+        {"id": request.lead_id, "user_id": user_id},
         {"$set": {
             "status": LeadStatus.BOOKED,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
     
-    # Increment agent's assigned leads
+    # Increment agent's assigned leads (with user_id filter for safety)
     await db.agents.update_one(
-        {"id": request.agent_id},
+        {"id": request.agent_id, "user_id": user_id},
         {"$inc": {"assigned_leads": 1}}
     )
     
     # Send meeting booked notification in background
-    background_tasks.add_task(send_meeting_booked_notifications, lead, agent)
+    background_tasks.add_task(send_meeting_booked_notifications, lead, agent, user_id)
     
     return {
         "message": "Meeting booked successfully",
@@ -2920,11 +2947,12 @@ async def book_meeting(request: BookingRequest, background_tasks: BackgroundTask
         "agent": agent["name"]
     }
 
-async def send_meeting_booked_notifications(lead: Dict, agent: Dict):
+async def send_meeting_booked_notifications(lead: Dict, agent: Dict, user_id: str):
     """Send meeting booked notifications"""
     try:
+        # Multi-tenancy: Only get webhooks belonging to this user
         webhooks = await db.webhooks.find(
-            {"event_type": "meeting_booked", "is_active": True},
+            {"user_id": user_id, "event_type": "meeting_booked", "is_active": True},
             {"_id": 0}
         ).to_list(100)
         
@@ -2940,46 +2968,49 @@ async def send_meeting_booked_notifications(lead: Dict, agent: Dict):
 
 # ----- Webhooks/Notifications -----
 @api_router.get("/webhooks")
-async def get_webhooks():
-    """Get all webhook configurations"""
-    webhooks = await db.webhooks.find({}, {"_id": 0}).to_list(100)
+async def get_webhooks(current_user: Dict = Depends(get_current_user)):
+    """Get webhook configurations for current user"""
+    webhooks = await db.webhooks.find({"user_id": current_user["user_id"]}, {"_id": 0}).to_list(100)
     return webhooks
 
 @api_router.post("/webhooks")
-async def create_webhook(webhook: WebhookConfigCreate):
+async def create_webhook(webhook: WebhookConfigCreate, current_user: Dict = Depends(get_current_user)):
     """Create a new webhook configuration"""
     if webhook.event_type not in ["lead_qualified", "meeting_booked"]:
         raise HTTPException(status_code=400, detail="Invalid event_type. Must be 'lead_qualified' or 'meeting_booked'")
     
-    webhook_obj = WebhookConfig(**webhook.model_dump())
+    webhook_obj = WebhookConfig(**webhook.model_dump(), user_id=current_user["user_id"])
     await db.webhooks.insert_one(webhook_obj.model_dump())
     return webhook_obj
 
 @api_router.put("/webhooks/{webhook_id}")
-async def update_webhook(webhook_id: str, updates: Dict[str, Any]):
+async def update_webhook(webhook_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
     """Update a webhook configuration"""
+    # Multi-tenancy: Only update webhooks belonging to current user
     result = await db.webhooks.update_one(
-        {"id": webhook_id},
+        {"id": webhook_id, "user_id": current_user["user_id"]},
         {"$set": updates}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Webhook not found")
     
-    webhook = await db.webhooks.find_one({"id": webhook_id}, {"_id": 0})
+    webhook = await db.webhooks.find_one({"id": webhook_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return webhook
 
 @api_router.delete("/webhooks/{webhook_id}")
-async def delete_webhook(webhook_id: str):
+async def delete_webhook(webhook_id: str, current_user: Dict = Depends(get_current_user)):
     """Delete a webhook configuration"""
-    result = await db.webhooks.delete_one({"id": webhook_id})
+    # Multi-tenancy: Only delete webhooks belonging to current user
+    result = await db.webhooks.delete_one({"id": webhook_id, "user_id": current_user["user_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Webhook not found")
     return {"message": "Webhook deleted"}
 
 @api_router.post("/webhooks/test/{webhook_id}")
-async def test_webhook(webhook_id: str):
+async def test_webhook(webhook_id: str, current_user: Dict = Depends(get_current_user)):
     """Test a webhook by sending a sample notification"""
-    webhook = await db.webhooks.find_one({"id": webhook_id}, {"_id": 0})
+    # Multi-tenancy: Only test webhooks belonging to current user
+    webhook = await db.webhooks.find_one({"id": webhook_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
     
@@ -3733,8 +3764,10 @@ async def initiate_real_call(
     if calls_remaining < 1:
         raise HTTPException(status_code=402, detail="Insufficient call credits")
     
-    # Get lead
-    lead = await db.leads.find_one({"id": request.lead_id}, {"_id": 0})
+    user_id = current_user["user_id"]
+    
+    # Get lead (with user ownership verification)
+    lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
@@ -3742,15 +3775,15 @@ async def initiate_real_call(
     if not phone_number:
         raise HTTPException(status_code=400, detail="Lead has no phone number")
     
-    # Get campaign
-    campaign = await db.campaigns.find_one({"id": request.campaign_id}, {"_id": 0})
+    # Get campaign (with user ownership verification)
+    campaign = await db.campaigns.find_one({"id": request.campaign_id, "user_id": user_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
     # Run compliance checks
     compliance_result = await compliance_service.pre_call_compliance_check(
         phone_number=phone_number,
-        user_id=current_user["user_id"]
+        user_id=user_id
     )
     
     if not compliance_result["is_allowed"]:
@@ -3762,20 +3795,21 @@ async def initiate_real_call(
     
     # Deduct call credit
     await db.users.update_one(
-        {"user_id": current_user["user_id"]},
+        {"user_id": user_id},
         {"$inc": {"call_credits_remaining": -1}}
     )
     
     # Log usage event
     await log_usage_event(
-        user_id=current_user["user_id"],
+        user_id=user_id,
         event_type="call_made",
         amount=1,
         credits_after=calls_remaining - 1
     )
     
-    # Create call record
+    # Create call record with user_id
     call = Call(
+        user_id=user_id,
         lead_id=request.lead_id,
         campaign_id=request.campaign_id,
         status=CallStatus.PENDING,
@@ -4150,7 +4184,8 @@ async def get_call_amd_status(
     current_user: Dict = Depends(get_current_user)
 ):
     """Get AMD status for a specific call"""
-    call = await db.calls.find_one({"id": call_id}, {"_id": 0})
+    # Multi-tenancy: Only access calls belonging to current user
+    call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
@@ -4209,12 +4244,14 @@ async def initiate_realtime_call(
     if current_user.get("call_credits_remaining", 0) < 1:
         raise HTTPException(status_code=402, detail="Insufficient call credits")
     
-    # Get lead and campaign
-    lead = await db.leads.find_one({"id": request.lead_id}, {"_id": 0})
+    user_id = current_user["user_id"]
+    
+    # Get lead and campaign (with user ownership verification)
+    lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
-    campaign = await db.campaigns.find_one({"id": request.campaign_id}, {"_id": 0})
+    campaign = await db.campaigns.find_one({"id": request.campaign_id, "user_id": user_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -4223,18 +4260,19 @@ async def initiate_realtime_call(
         raise HTTPException(status_code=400, detail="Lead has no phone number")
     
     # Compliance check
-    compliance = await compliance_service.pre_call_compliance_check(phone_number, current_user["user_id"])
+    compliance = await compliance_service.pre_call_compliance_check(phone_number, user_id)
     if not compliance["is_allowed"]:
         return {"status": "blocked", "reasons": compliance["reasons"]}
     
     # Deduct credit
     await db.users.update_one(
-        {"user_id": current_user["user_id"]},
+        {"user_id": user_id},
         {"$inc": {"call_credits_remaining": -1}}
     )
     
-    # Create call record
+    # Create call record with user_id
     call = Call(
+        user_id=user_id,
         lead_id=request.lead_id,
         campaign_id=request.campaign_id,
         status=CallStatus.PENDING
@@ -4245,7 +4283,7 @@ async def initiate_realtime_call(
     active_media_streams[call.id] = {
         "lead": lead,
         "campaign": campaign,
-        "user_id": current_user["user_id"]
+        "user_id": user_id
     }
     
     # Get callback URL (must be wss:// for Media Streams)

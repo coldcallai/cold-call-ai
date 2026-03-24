@@ -160,12 +160,18 @@ class Lead(BaseModel):
     contact_name: Optional[str] = None
     phone: str
     email: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None  # "1-10", "11-50", "51-200", "201-500", "500+"
     source: str = "manual"
     intent_signals: List[str] = []
     status: LeadStatus = LeadStatus.NEW
     qualification_score: Optional[int] = None
     is_decision_maker: Optional[bool] = None
     interest_level: Optional[int] = None
+    # ICP Scoring fields
+    icp_score: Optional[int] = None  # 0-100 overall ICP fit score
+    icp_breakdown: Optional[Dict[str, Any]] = None  # Detailed scoring breakdown
+    dial_priority: Optional[int] = None  # Combined priority for dialing order
     notes: List[str] = []
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -175,6 +181,8 @@ class LeadCreate(BaseModel):
     contact_name: Optional[str] = None
     phone: str
     email: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
     source: str = "manual"
     intent_signals: List[str] = []
 
@@ -214,6 +222,9 @@ class Campaign(BaseModel):
     # AI conversation settings
     response_wait_seconds: int = 4  # Seconds to wait for caller response before AI continues
     company_name: Optional[str] = None  # Company name for personalization
+    # ICP (Ideal Customer Profile) settings
+    icp_config: Optional[Dict[str, Any]] = None  # ICP scoring configuration
+    min_icp_score: int = 0  # Minimum ICP score required to enter dialer queue (0 = no filter)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -227,6 +238,8 @@ class CampaignCreate(BaseModel):
     voicemail_message: Optional[str] = None
     response_wait_seconds: int = 4  # Default 4 seconds
     company_name: Optional[str] = None
+    icp_config: Optional[Dict[str, Any]] = None
+    min_icp_score: int = 0
 
 class Call(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -743,6 +756,253 @@ class NotificationService:
             return False
 
 notification_service = NotificationService()
+
+# ============== ICP SCORING SERVICE ==============
+class ICPScoringService:
+    """
+    Service for scoring leads based on Ideal Customer Profile (ICP).
+    Uses AI to analyze lead data and score fit before entering dialer queue.
+    """
+    
+    def __init__(self):
+        self.api_key = os.environ.get("EMERGENT_LLM_KEY")
+    
+    async def score_lead(self, lead: Dict, icp_config: Dict = None) -> Dict:
+        """
+        Score a lead based on ICP criteria.
+        Returns a score breakdown with total 0-100 score.
+        
+        Scoring categories (each 0-25 points):
+        1. Industry Fit - Does the business industry match target?
+        2. Company Size Fit - Is the company size in the sweet spot?
+        3. Intent Signal Strength - How strong are the buying signals?
+        4. Contact Quality - Is this likely a decision maker?
+        """
+        
+        # Default ICP config if none provided
+        if not icp_config:
+            icp_config = {
+                "target_industries": [],  # Empty = all industries
+                "preferred_company_sizes": ["11-50", "51-200"],  # SMB focus
+                "high_value_signals": ["alternative", "switch", "looking for", "need help"],
+                "decision_maker_titles": ["owner", "manager", "director", "ceo", "president", "founder"]
+            }
+        
+        breakdown = {
+            "industry_fit": 0,
+            "company_size_fit": 0,
+            "intent_strength": 0,
+            "contact_quality": 0
+        }
+        
+        # 1. Industry Fit (0-25)
+        target_industries = icp_config.get("target_industries", [])
+        lead_industry = (lead.get("industry") or "").lower()
+        
+        if not target_industries:  # No filter = full score
+            breakdown["industry_fit"] = 20
+        elif lead_industry:
+            for target in target_industries:
+                if target.lower() in lead_industry or lead_industry in target.lower():
+                    breakdown["industry_fit"] = 25
+                    break
+            if breakdown["industry_fit"] == 0:
+                breakdown["industry_fit"] = 10  # Some points for having industry data
+        
+        # 2. Company Size Fit (0-25)
+        preferred_sizes = icp_config.get("preferred_company_sizes", [])
+        lead_size = lead.get("company_size", "")
+        
+        if not preferred_sizes:  # No preference = medium score
+            breakdown["company_size_fit"] = 15
+        elif lead_size in preferred_sizes:
+            breakdown["company_size_fit"] = 25
+        elif lead_size:
+            breakdown["company_size_fit"] = 10  # Has size data but not preferred
+        
+        # 3. Intent Signal Strength (0-25)
+        intent_signals = lead.get("intent_signals", [])
+        high_value_signals = icp_config.get("high_value_signals", [])
+        
+        if intent_signals:
+            signal_text = " ".join(intent_signals).lower()
+            matches = sum(1 for sig in high_value_signals if sig.lower() in signal_text)
+            
+            # Score based on signal matches
+            if matches >= 3:
+                breakdown["intent_strength"] = 25
+            elif matches >= 2:
+                breakdown["intent_strength"] = 20
+            elif matches >= 1:
+                breakdown["intent_strength"] = 15
+            else:
+                breakdown["intent_strength"] = 10  # Has signals, but not high-value
+        else:
+            breakdown["intent_strength"] = 5  # Minimal score for no signals
+        
+        # 4. Contact Quality (0-25)
+        contact_name = (lead.get("contact_name") or "").lower()
+        business_name = (lead.get("business_name") or "").lower()
+        decision_maker_titles = icp_config.get("decision_maker_titles", [])
+        
+        # Check if contact name suggests decision maker
+        is_likely_dm = False
+        for title in decision_maker_titles:
+            if title.lower() in contact_name:
+                is_likely_dm = True
+                break
+        
+        if is_likely_dm:
+            breakdown["contact_quality"] = 25
+        elif contact_name:
+            breakdown["contact_quality"] = 15  # Has contact name
+        elif business_name:
+            breakdown["contact_quality"] = 10  # Only business name
+        else:
+            breakdown["contact_quality"] = 5
+        
+        # Check for business email (adds bonus)
+        email = lead.get("email", "")
+        if email and "@" in email:
+            domain = email.split("@")[1].lower()
+            personal_domains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com"]
+            if domain not in personal_domains:
+                breakdown["contact_quality"] = min(25, breakdown["contact_quality"] + 5)
+        
+        # Calculate total score
+        total_score = sum(breakdown.values())
+        
+        # Determine tier
+        if total_score >= 80:
+            tier = "A"
+            recommendation = "HIGH PRIORITY - Excellent ICP fit, call immediately"
+        elif total_score >= 60:
+            tier = "B"
+            recommendation = "GOOD FIT - Strong candidate, prioritize for calling"
+        elif total_score >= 40:
+            tier = "C"
+            recommendation = "MODERATE FIT - Acceptable lead, call when bandwidth allows"
+        else:
+            tier = "D"
+            recommendation = "LOW FIT - May not match ICP, consider deprioritizing"
+        
+        return {
+            "total_score": total_score,
+            "tier": tier,
+            "breakdown": breakdown,
+            "recommendation": recommendation,
+            "scored_at": datetime.now(timezone.utc).isoformat()
+        }
+    
+    async def score_lead_with_ai(self, lead: Dict, icp_config: Dict = None) -> Dict:
+        """
+        Use GPT to score lead with more nuanced analysis.
+        More accurate but costs ~$0.002 per lead.
+        """
+        if not self.api_key:
+            # Fallback to rule-based scoring
+            return await self.score_lead(lead, icp_config)
+        
+        try:
+            chat = LlmChat(
+                api_key=self.api_key,
+                session_id=f"icp-score-{uuid.uuid4().hex[:8]}",
+                system_message="""You are an ICP (Ideal Customer Profile) scoring expert for B2B sales.
+                
+Score leads on a 0-100 scale across these categories:
+1. Industry Fit (0-25): Does the business match target industries?
+2. Company Size Fit (0-25): Is the company size appropriate?
+3. Intent Strength (0-25): How strong are the buying signals?
+4. Contact Quality (0-25): Is this likely a decision maker?
+
+Return ONLY a JSON object with this structure:
+{
+    "total_score": <0-100>,
+    "tier": "<A/B/C/D>",
+    "breakdown": {
+        "industry_fit": <0-25>,
+        "company_size_fit": <0-25>,
+        "intent_strength": <0-25>,
+        "contact_quality": <0-25>
+    },
+    "recommendation": "<one sentence recommendation>"
+}"""
+            ).with_model("openai", "gpt-5.2")
+            
+            prompt = f"""Score this lead for ICP fit:
+
+Lead Data:
+- Business: {lead.get('business_name', 'Unknown')}
+- Industry: {lead.get('industry', 'Unknown')}
+- Company Size: {lead.get('company_size', 'Unknown')}
+- Contact: {lead.get('contact_name', 'Unknown')}
+- Email: {lead.get('email', 'Unknown')}
+- Intent Signals: {', '.join(lead.get('intent_signals', [])) or 'None'}
+
+ICP Criteria:
+- Target Industries: {icp_config.get('target_industries', ['Any']) if icp_config else 'Any'}
+- Preferred Size: {icp_config.get('preferred_company_sizes', ['SMB']) if icp_config else 'SMB'}
+- High-Value Signals: {icp_config.get('high_value_signals', ['alternative', 'switch']) if icp_config else 'alternative, switch'}
+
+Return the JSON score."""
+
+            user_message = UserMessage(text=prompt)
+            response = await chat.send_message(user_message)
+            
+            # Parse JSON from response
+            import json
+            # Try to extract JSON from response
+            response_text = response.strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            
+            score_data = json.loads(response_text)
+            score_data["scored_at"] = datetime.now(timezone.utc).isoformat()
+            score_data["scoring_method"] = "ai"
+            
+            return score_data
+            
+        except Exception as e:
+            logger.error(f"AI ICP scoring failed: {e}, falling back to rule-based")
+            result = await self.score_lead(lead, icp_config)
+            result["scoring_method"] = "rule_based_fallback"
+            return result
+    
+    async def batch_score_leads(self, lead_ids: List[str], icp_config: Dict = None, use_ai: bool = False) -> List[Dict]:
+        """Score multiple leads and update their records"""
+        results = []
+        
+        for lead_id in lead_ids:
+            lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+            if not lead:
+                continue
+            
+            if use_ai:
+                score_result = await self.score_lead_with_ai(lead, icp_config)
+            else:
+                score_result = await self.score_lead(lead, icp_config)
+            
+            # Update lead with ICP score
+            await db.leads.update_one(
+                {"id": lead_id},
+                {"$set": {
+                    "icp_score": score_result["total_score"],
+                    "icp_breakdown": score_result["breakdown"],
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            
+            results.append({
+                "lead_id": lead_id,
+                "business_name": lead.get("business_name"),
+                **score_result
+            })
+        
+        return results
+
+icp_service = ICPScoringService()
 
 # ============== COMPLIANCE SERVICE ==============
 class ComplianceService:
@@ -2156,6 +2416,179 @@ async def verify_lead_contact_info(
     )
     
     return results
+
+# ----- ICP Scoring Endpoints -----
+class ICPScoreRequest(BaseModel):
+    lead_id: str
+    use_ai: bool = False  # AI scoring costs ~$0.002/lead but more accurate
+
+class BatchICPScoreRequest(BaseModel):
+    lead_ids: List[str]
+    use_ai: bool = False
+    icp_config: Optional[Dict[str, Any]] = None
+
+@api_router.post("/leads/{lead_id}/icp-score")
+async def score_lead_icp(
+    lead_id: str,
+    use_ai: bool = False,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Score a single lead based on ICP (Ideal Customer Profile).
+    Returns 0-100 score with breakdown by category.
+    
+    Scoring categories:
+    - Industry Fit (0-25)
+    - Company Size Fit (0-25)
+    - Intent Strength (0-25)
+    - Contact Quality (0-25)
+    
+    use_ai=true for more accurate but costs ~$0.002/lead
+    """
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if use_ai:
+        score_result = await icp_service.score_lead_with_ai(lead)
+    else:
+        score_result = await icp_service.score_lead(lead)
+    
+    # Update lead with ICP score
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {
+            "icp_score": score_result["total_score"],
+            "icp_breakdown": score_result["breakdown"],
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "lead_id": lead_id,
+        "business_name": lead.get("business_name"),
+        **score_result
+    }
+
+@api_router.post("/leads/batch-icp-score")
+async def batch_score_leads_icp(
+    request: BatchICPScoreRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Score multiple leads for ICP fit.
+    Returns list of scores with breakdown for each lead.
+    """
+    if len(request.lead_ids) > 100:
+        raise HTTPException(status_code=400, detail="Maximum 100 leads per batch")
+    
+    results = await icp_service.batch_score_leads(
+        request.lead_ids,
+        request.icp_config,
+        request.use_ai
+    )
+    
+    # Summary stats
+    total = len(results)
+    tier_counts = {"A": 0, "B": 0, "C": 0, "D": 0}
+    avg_score = 0
+    
+    for r in results:
+        tier_counts[r.get("tier", "D")] += 1
+        avg_score += r.get("total_score", 0)
+    
+    avg_score = avg_score / total if total > 0 else 0
+    
+    return {
+        "scored_count": total,
+        "average_score": round(avg_score, 1),
+        "tier_distribution": tier_counts,
+        "results": results
+    }
+
+@api_router.get("/leads/by-icp-score")
+async def get_leads_by_icp_score(
+    min_score: int = Query(0, ge=0, le=100),
+    tier: Optional[str] = Query(None, description="A, B, C, or D"),
+    limit: int = Query(50, le=200),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get leads sorted by ICP score (highest first).
+    Filter by minimum score or tier.
+    """
+    query = {"icp_score": {"$exists": True, "$gte": min_score}}
+    
+    if tier:
+        tier_ranges = {
+            "A": {"$gte": 80},
+            "B": {"$gte": 60, "$lt": 80},
+            "C": {"$gte": 40, "$lt": 60},
+            "D": {"$lt": 40}
+        }
+        if tier.upper() in tier_ranges:
+            query["icp_score"] = tier_ranges[tier.upper()]
+    
+    leads = await db.leads.find(query, {"_id": 0}).sort("icp_score", -1).limit(limit).to_list(limit)
+    
+    return {
+        "count": len(leads),
+        "filter": {"min_score": min_score, "tier": tier},
+        "leads": leads
+    }
+
+@api_router.post("/campaigns/{campaign_id}/score-all-leads")
+async def score_campaign_leads(
+    campaign_id: str,
+    use_ai: bool = False,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Score all leads assigned to a campaign based on campaign's ICP config.
+    Updates dial priority for optimal calling order.
+    """
+    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Get leads assigned to this campaign (leads with this campaign_id in their assignments)
+    leads = await db.leads.find(
+        {"$or": [
+            {"campaign_id": campaign_id},
+            {"assigned_campaigns": campaign_id}
+        ]},
+        {"_id": 0, "id": 1}
+    ).to_list(500)
+    
+    if not leads:
+        return {"message": "No leads assigned to this campaign", "scored_count": 0}
+    
+    lead_ids = [lead["id"] for lead in leads]
+    icp_config = campaign.get("icp_config")
+    
+    results = await icp_service.batch_score_leads(lead_ids, icp_config, use_ai)
+    
+    # Calculate dial priority combining ICP score and phone verification
+    for result in results:
+        lead = await db.leads.find_one({"id": result["lead_id"]}, {"_id": 0})
+        if lead:
+            phone_priority = lead.get("verification", {}).get("dial_priority", 50)
+            icp_score = result["total_score"]
+            
+            # Combined priority: 60% ICP + 40% phone quality
+            dial_priority = int(icp_score * 0.6 + phone_priority * 0.4)
+            
+            await db.leads.update_one(
+                {"id": result["lead_id"]},
+                {"$set": {"dial_priority": dial_priority}}
+            )
+    
+    return {
+        "campaign_id": campaign_id,
+        "scored_count": len(results),
+        "message": "Leads scored and dial priority updated",
+        "average_score": sum(r["total_score"] for r in results) / len(results) if results else 0
+    }
 
 # ----- Agents CRUD -----
 @api_router.get("/agents", response_model=List[Agent])

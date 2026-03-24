@@ -185,6 +185,24 @@ A vertical-agnostic B2B SaaS platform that:
   - Custom voicemail messages per campaign with variable substitution
   - Variables: {contact_name}, {business_name}, {company_name}
 - **ROI Impact**: 56% cost reduction on calls (from $15 to $6.55 per 100 calls)
+- **Configurable Response Wait Time** - Agents set how long AI waits for response (1-10 sec, default 4)
+
+### Session 6 (December 24, 2025): ICP Scoring & Homepage AI Section
+- **ICP (Ideal Customer Profile) Scoring** - Score leads 0-100 before dialing
+  - Industry Fit (0-25 pts)
+  - Company Size Fit (0-25 pts)
+  - Intent Signal Strength (0-25 pts)
+  - Contact Quality (0-25 pts)
+- **Tier Classification**: A (80+), B (60-79), C (40-59), D (<40)
+- **Rule-based scoring** (FREE) or **AI-powered scoring** (~$0.002/lead)
+- **Batch scoring** - Score up to 100 leads at once
+- **Dial Priority** - Combined score: 60% ICP + 40% phone verification
+- **Homepage AI Capabilities Section** - Showcases:
+  - Multi-turn conversations
+  - CRM integration ready
+  - Intelligent call routing
+  - No-code setup
+  - Live mockup showing "847 simultaneous calls"
 
 ## Prioritized Backlog
 
@@ -195,6 +213,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~In-App Training Guide & Help Chat~~ ✅ DONE
 - [x] ~~Phone Verification (Twilio Lookup)~~ ✅ DONE
 - [x] ~~AMD + Voicemail Drop~~ ✅ DONE
+- [x] ~~ICP Scoring~~ ✅ DONE
 
 ### P1 - High Priority
 - [ ] Multi-tenant data isolation - Scope leads/campaigns to user accounts

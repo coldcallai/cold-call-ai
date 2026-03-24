@@ -758,6 +758,68 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Failed to send meeting booked notification: {str(e)}")
             return False
+    
+    async def send_low_balance_notification(self, user_email: str, user_name: str, lead_credits: int, call_credits: int):
+        """Send email notification when user has low credit balance"""
+        if not self.is_configured:
+            logger.info("Email notifications not configured - skipping low balance notification")
+            return None
+        
+        subject = "⚠️ Low Credit Balance Alert - ColdCall.ai"
+        
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #F59E0B, #D97706); padding: 20px; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Low Credit Balance Alert</h1>
+            </div>
+            
+            <div style="background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
+                <p style="color: #1f2937; font-size: 16px;">Hi {user_name},</p>
+                
+                <p style="color: #4b5563;">Your ColdCall.ai credit balance is running low. Here's your current status:</p>
+                
+                <div style="display: flex; gap: 20px; margin: 20px 0;">
+                    <div style="flex: 1; background: {'#FEF3C7' if lead_credits <= 20 else '#ECFDF5'}; padding: 15px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 32px; font-weight: bold; color: {'#D97706' if lead_credits <= 20 else '#059669'};">{lead_credits}</div>
+                        <div style="color: #6B7280; font-size: 14px;">Lead Credits</div>
+                    </div>
+                    <div style="flex: 1; background: {'#FEF3C7' if call_credits <= 20 else '#ECFDF5'}; padding: 15px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 32px; font-weight: bold; color: {'#D97706' if call_credits <= 20 else '#059669'};">{call_credits}</div>
+                        <div style="color: #6B7280; font-size: 14px;">Call Credits</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #FEF3C7; border-radius: 8px; border-left: 4px solid #F59E0B;">
+                    <p style="margin: 0; color: #92400E;">
+                        <strong>Don't let your campaigns stop!</strong><br>
+                        Purchase additional credits or upgrade your plan to keep your AI calling machine running smoothly.
+                    </p>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <p style="color: #6b7280; font-size: 14px;">Log in to your dashboard to purchase more credits or upgrade your subscription.</p>
+                </div>
+            </div>
+            
+            <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
+                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by ColdCall.ai - AI Sales Automation</p>
+            </div>
+        </div>
+        """
+        
+        try:
+            params = {
+                "from": self.sender_email,
+                "to": [user_email],
+                "subject": subject,
+                "html": html_content
+            }
+            email = await asyncio.to_thread(resend.Emails.send, params)
+            logger.info(f"Low balance notification sent to {user_email}, email_id: {email.get('id')}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send low balance notification: {str(e)}")
+            return False
 
 notification_service = NotificationService()
 
@@ -1569,6 +1631,253 @@ async def get_optional_user(request: Request, credentials: Optional[HTTPAuthoriz
     except HTTPException:
         return None
 
+# ============== SUBSCRIPTION TIER ENFORCEMENT ==============
+
+# Feature flags by subscription tier
+TIER_FEATURES = {
+    None: {  # Free trial / No subscription
+        "max_leads_per_month": 50,
+        "max_calls_per_month": 50,
+        "max_custom_keywords": 10,
+        "csv_export": False,
+        "csv_upload": False,
+        "api_access": False,
+        "calendar_booking": False,
+        "icp_scoring": False,
+        "ai_icp_scoring": False,
+        "voicemail_drop": False,
+        "custom_scripts": False,
+        "max_campaigns": 1,
+        "max_agents": 1,
+        "max_team_seats": 1,
+    },
+    "starter": {
+        "max_leads_per_month": 250,
+        "max_calls_per_month": 250,
+        "max_custom_keywords": 50,
+        "csv_export": True,
+        "csv_upload": False,
+        "api_access": False,
+        "calendar_booking": False,
+        "icp_scoring": True,
+        "ai_icp_scoring": False,
+        "voicemail_drop": True,
+        "custom_scripts": False,
+        "max_campaigns": 3,
+        "max_agents": 3,
+        "max_team_seats": 1,
+    },
+    "professional": {
+        "max_leads_per_month": 1000,
+        "max_calls_per_month": 1000,
+        "max_custom_keywords": 100,
+        "csv_export": True,
+        "csv_upload": True,
+        "api_access": True,
+        "calendar_booking": True,
+        "icp_scoring": True,
+        "ai_icp_scoring": True,
+        "voicemail_drop": True,
+        "custom_scripts": True,
+        "max_campaigns": 10,
+        "max_agents": 10,
+        "max_team_seats": 5,
+    },
+    "unlimited": {
+        "max_leads_per_month": 5000,
+        "max_calls_per_month": -1,  # Unlimited
+        "max_custom_keywords": 100,
+        "csv_export": True,
+        "csv_upload": True,
+        "api_access": True,
+        "calendar_booking": True,
+        "icp_scoring": True,
+        "ai_icp_scoring": True,
+        "voicemail_drop": True,
+        "custom_scripts": True,
+        "max_campaigns": -1,  # Unlimited
+        "max_agents": -1,  # Unlimited
+        "max_team_seats": 5,
+    },
+    "byl": {  # Bring Your List
+        "max_leads_per_month": 0,  # They bring their own
+        "max_calls_per_month": 1500,
+        "max_custom_keywords": 100,
+        "csv_export": True,
+        "csv_upload": True,  # Unlimited CSV uploads
+        "api_access": True,
+        "calendar_booking": True,
+        "icp_scoring": True,
+        "ai_icp_scoring": True,
+        "voicemail_drop": True,
+        "custom_scripts": True,
+        "max_campaigns": 5,
+        "max_agents": 10,
+        "max_team_seats": 3,
+    },
+}
+
+def get_tier_features(user: Dict) -> Dict:
+    """Get feature flags for user's subscription tier"""
+    tier = user.get("subscription_tier")
+    # Admin users get unlimited features
+    if user.get("role") == "admin":
+        return TIER_FEATURES["unlimited"]
+    return TIER_FEATURES.get(tier, TIER_FEATURES[None])
+
+def check_feature_access(user: Dict, feature: str) -> bool:
+    """Check if user has access to a specific feature"""
+    features = get_tier_features(user)
+    return features.get(feature, False)
+
+async def get_monthly_usage(user_id: str) -> Dict:
+    """Get user's usage for the current billing month"""
+    # Get start of current month
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Count leads created this month
+    leads_this_month = await db.leads.count_documents({
+        "user_id": user_id,
+        "created_at": {"$gte": month_start.isoformat()}
+    })
+    
+    # Count calls made this month
+    calls_this_month = await db.calls.count_documents({
+        "user_id": user_id,
+        "created_at": {"$gte": month_start.isoformat()}
+    })
+    
+    return {
+        "leads_used": leads_this_month,
+        "calls_used": calls_this_month,
+        "month_start": month_start.isoformat()
+    }
+
+async def check_subscription_limit(user: Dict, resource_type: str, count: int = 1) -> Dict:
+    """
+    Check if user can use a resource based on subscription limits.
+    Returns: {"allowed": bool, "reason": str, "limit": int, "used": int}
+    """
+    features = get_tier_features(user)
+    usage = await get_monthly_usage(user["user_id"])
+    
+    if resource_type == "leads":
+        limit = features["max_leads_per_month"]
+        used = usage["leads_used"]
+        
+        # BYL plan has no lead discovery (they upload their own)
+        if user.get("subscription_tier") == "byl":
+            return {
+                "allowed": False,
+                "reason": "Bring Your List plan doesn't include lead discovery. Please upload your own leads via CSV.",
+                "limit": 0,
+                "used": used
+            }
+        
+        if limit != -1 and used + count > limit:
+            return {
+                "allowed": False,
+                "reason": f"Monthly lead limit reached ({used}/{limit}). Upgrade your plan or purchase a lead pack.",
+                "limit": limit,
+                "used": used
+            }
+    
+    elif resource_type == "calls":
+        limit = features["max_calls_per_month"]
+        used = usage["calls_used"]
+        
+        if limit != -1 and used + count > limit:
+            return {
+                "allowed": False,
+                "reason": f"Monthly call limit reached ({used}/{limit}). Upgrade your plan or purchase a call pack.",
+                "limit": limit,
+                "used": used
+            }
+    
+    elif resource_type == "campaigns":
+        limit = features["max_campaigns"]
+        current_count = await db.campaigns.count_documents({"user_id": user["user_id"]})
+        
+        if limit != -1 and current_count >= limit:
+            return {
+                "allowed": False,
+                "reason": f"Campaign limit reached ({current_count}/{limit}). Upgrade your plan to create more campaigns.",
+                "limit": limit,
+                "used": current_count
+            }
+    
+    elif resource_type == "agents":
+        limit = features["max_agents"]
+        current_count = await db.agents.count_documents({"user_id": user["user_id"]})
+        
+        if limit != -1 and current_count >= limit:
+            return {
+                "allowed": False,
+                "reason": f"Agent limit reached ({current_count}/{limit}). Upgrade your plan to add more agents.",
+                "limit": limit,
+                "used": current_count
+            }
+    
+    return {"allowed": True, "reason": None, "limit": -1, "used": 0}
+
+async def check_low_balance_and_notify(user: Dict):
+    """Check if user has low balance and send notification if needed"""
+    lead_credits = user.get("lead_credits_remaining", 0)
+    call_credits = user.get("call_credits_remaining", 0)
+    
+    # Thresholds for low balance warning
+    LOW_LEAD_THRESHOLD = 20
+    LOW_CALL_THRESHOLD = 20
+    
+    notifications = []
+    
+    if lead_credits <= LOW_LEAD_THRESHOLD and lead_credits > 0:
+        notifications.append({
+            "type": "low_lead_credits",
+            "message": f"You have only {lead_credits} lead credits remaining.",
+            "threshold": LOW_LEAD_THRESHOLD
+        })
+    
+    if call_credits <= LOW_CALL_THRESHOLD and call_credits > 0:
+        notifications.append({
+            "type": "low_call_credits",
+            "message": f"You have only {call_credits} call credits remaining.",
+            "threshold": LOW_CALL_THRESHOLD
+        })
+    
+    # Check if we've already notified recently (within 24 hours)
+    if notifications:
+        user_id = user["user_id"]
+        last_notification = await db.low_balance_notifications.find_one(
+            {"user_id": user_id},
+            sort=[("sent_at", -1)]
+        )
+        
+        if last_notification:
+            sent_at = datetime.fromisoformat(last_notification["sent_at"].replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) - sent_at < timedelta(hours=24):
+                return  # Don't spam notifications
+        
+        # Send email notification if Resend is configured
+        if notification_service.is_configured and user.get("email"):
+            try:
+                await notification_service.send_low_balance_notification(
+                    user_email=user["email"],
+                    user_name=user.get("name", "User"),
+                    lead_credits=lead_credits,
+                    call_credits=call_credits
+                )
+                
+                # Record that we sent notification
+                await db.low_balance_notifications.insert_one({
+                    "user_id": user_id,
+                    "notifications": notifications,
+                    "sent_at": datetime.now(timezone.utc).isoformat()
+                })
+            except Exception as e:
+                logger.error(f"Failed to send low balance notification: {e}")
+
 # ============== API ROUTES ==============
 
 @api_router.get("/")
@@ -1764,7 +2073,37 @@ async def exchange_session_id(request: Request, response: Response):
 async def get_me(current_user: Dict = Depends(get_current_user)):
     """Get current authenticated user"""
     current_user.pop("password_hash", None)
+    
+    # Check for low balance and potentially send notification
+    await check_low_balance_and_notify(current_user)
+    
     return current_user
+
+@api_router.get("/subscription/features")
+async def get_subscription_features(current_user: Dict = Depends(get_current_user)):
+    """Get current user's subscription features and limits"""
+    features = get_tier_features(current_user)
+    usage = await get_monthly_usage(current_user["user_id"])
+    
+    tier = current_user.get("subscription_tier") or "free_trial"
+    plan_info = SUBSCRIPTION_PLANS.get(tier, {})
+    
+    return {
+        "tier": tier,
+        "plan_name": plan_info.get("name", "Free Trial"),
+        "features": features,
+        "usage": {
+            "leads_used": usage["leads_used"],
+            "leads_limit": features["max_leads_per_month"],
+            "calls_used": usage["calls_used"],
+            "calls_limit": features["max_calls_per_month"],
+            "month_start": usage["month_start"]
+        },
+        "credits": {
+            "lead_credits": current_user.get("lead_credits_remaining", 0),
+            "call_credits": current_user.get("call_credits_remaining", 0)
+        }
+    }
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
@@ -2035,12 +2374,23 @@ async def gpt_intent_search(
     leads_requested = request.max_results
     leads_remaining = current_user.get("lead_credits_remaining", 0)
     
-    # Validate custom keywords (max 100)
+    # Check subscription tier limits
+    limit_check = await check_subscription_limit(current_user, "leads", leads_requested)
+    if not limit_check["allowed"]:
+        raise HTTPException(status_code=403, detail=limit_check["reason"])
+    
+    # Validate custom keywords based on tier
+    features = get_tier_features(current_user)
+    max_keywords = features.get("max_custom_keywords", 10)
+    
     custom_keywords = None
     if request.custom_keywords:
-        custom_keywords = [kw.strip() for kw in request.custom_keywords[:100] if kw and kw.strip()]
-        if len(custom_keywords) > 100:
-            raise HTTPException(status_code=400, detail="Maximum 100 custom keywords allowed")
+        custom_keywords = [kw.strip() for kw in request.custom_keywords[:max_keywords] if kw and kw.strip()]
+        if len(request.custom_keywords) > max_keywords:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Your plan allows up to {max_keywords} custom keywords. Upgrade to use more."
+            )
     
     # Check if user has enough credits
     if leads_remaining < leads_requested:
@@ -2155,6 +2505,14 @@ async def delete_lead(lead_id: str, current_user: Dict = Depends(get_current_use
 @api_router.post("/leads/upload-csv")
 async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = Depends(get_current_user)):
     """Upload leads from CSV file (Bring Your Own List)"""
+    # Check feature access - CSV upload requires BYL or Professional+
+    features = get_tier_features(current_user)
+    if not features.get("csv_upload"):
+        raise HTTPException(
+            status_code=403, 
+            detail="CSV upload is not available on your plan. Upgrade to Professional or Bring Your List plan."
+        )
+    
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be a CSV")
     
@@ -2212,6 +2570,14 @@ async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = De
 @api_router.get("/leads/export-csv")
 async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Dict = Depends(get_current_user)):
     """Export leads to CSV (only user's own leads)"""
+    # Check feature access - CSV export requires Starter+
+    features = get_tier_features(current_user)
+    if not features.get("csv_export"):
+        raise HTTPException(
+            status_code=403, 
+            detail="CSV export is not available on your plan. Upgrade to Starter or higher."
+        )
+    
     query = {"user_id": current_user["user_id"]}
     if status:
         query["status"] = status
@@ -2471,6 +2837,21 @@ async def score_lead_icp(
     
     use_ai=true for more accurate but costs ~$0.002/lead
     """
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("icp_scoring"):
+        raise HTTPException(
+            status_code=403, 
+            detail="ICP scoring is not available on your plan. Upgrade to Starter or higher."
+        )
+    
+    # AI scoring requires Professional+
+    if use_ai and not features.get("ai_icp_scoring"):
+        raise HTTPException(
+            status_code=403, 
+            detail="AI-powered ICP scoring requires Professional or higher plan."
+        )
+    
     # Multi-tenancy: Only access leads belonging to current user
     lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not lead:
@@ -2506,6 +2887,21 @@ async def batch_score_leads_icp(
     Score multiple leads for ICP fit.
     Returns list of scores with breakdown for each lead.
     """
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("icp_scoring"):
+        raise HTTPException(
+            status_code=403, 
+            detail="ICP scoring is not available on your plan. Upgrade to Starter or higher."
+        )
+    
+    # AI scoring requires Professional+
+    if request.use_ai and not features.get("ai_icp_scoring"):
+        raise HTTPException(
+            status_code=403, 
+            detail="AI-powered ICP scoring requires Professional or higher plan."
+        )
+    
     if len(request.lead_ids) > 100:
         raise HTTPException(status_code=400, detail="Maximum 100 leads per batch")
     
@@ -2639,6 +3035,11 @@ async def get_agent(agent_id: str, current_user: Dict = Depends(get_current_user
 @api_router.post("/agents", response_model=Agent)
 async def create_agent(agent: AgentCreate, current_user: Dict = Depends(get_current_user)):
     """Create a new agent owned by the current user"""
+    # Check subscription tier limits for agents
+    limit_check = await check_subscription_limit(current_user, "agents")
+    if not limit_check["allowed"]:
+        raise HTTPException(status_code=403, detail=limit_check["reason"])
+    
     agent_obj = Agent(**agent.model_dump(), user_id=current_user["user_id"])
     await db.agents.insert_one(agent_obj.model_dump())
     return agent_obj
@@ -2682,7 +3083,22 @@ async def get_campaign(campaign_id: str, current_user: Dict = Depends(get_curren
 @api_router.post("/campaigns", response_model=Campaign)
 async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends(get_current_user)):
     """Create a new campaign owned by the current user"""
-    campaign_obj = Campaign(**campaign.model_dump(), user_id=current_user["user_id"])
+    # Check subscription tier limits for campaigns
+    limit_check = await check_subscription_limit(current_user, "campaigns")
+    if not limit_check["allowed"]:
+        raise HTTPException(status_code=403, detail=limit_check["reason"])
+    
+    # Check feature access for voicemail drop
+    features = get_tier_features(current_user)
+    campaign_data = campaign.model_dump()
+    
+    if campaign_data.get("voicemail_enabled") and not features.get("voicemail_drop"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Voicemail drop is not available on your plan. Upgrade to Starter or higher to use this feature."
+        )
+    
+    campaign_obj = Campaign(**campaign_data, user_id=current_user["user_id"])
     await db.campaigns.insert_one(campaign_obj.model_dump())
     return campaign_obj
 

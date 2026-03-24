@@ -1399,7 +1399,14 @@ const Campaigns = () => {
     voicemail_enabled: true,
     voicemail_message: "",
     response_wait_seconds: 4,
-    company_name: ""
+    company_name: "",
+    icp_config: {
+      target_industries: [],
+      preferred_company_sizes: ["11-50", "51-200"],
+      min_intent_signals: 1,
+      preferred_roles: ["Owner", "CEO", "Manager", "Director"]
+    },
+    min_icp_score: 0
   });
 
   const fetchCampaigns = async () => {
@@ -1427,7 +1434,7 @@ const Campaigns = () => {
       await axios.post(`${API}/campaigns`, newCampaign);
       toast.success("Campaign created!");
       setShowCreate(false);
-      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, voicemail_enabled: true, voicemail_message: "", response_wait_seconds: 4, company_name: "" });
+      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, voicemail_enabled: true, voicemail_message: "", response_wait_seconds: 4, company_name: "", icp_config: { target_industries: [], preferred_company_sizes: ["11-50", "51-200"], min_intent_signals: 1, preferred_roles: ["Owner", "CEO", "Manager", "Director"] }, min_icp_score: 0 });
       fetchCampaigns();
     } catch (error) {
       toast.error("Failed to create campaign");
@@ -1694,6 +1701,126 @@ const Campaigns = () => {
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* ICP (Ideal Customer Profile) Settings */}
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="w-5 h-5 text-cyan-500" />
+                <h4 className="font-medium">Ideal Customer Profile (ICP)</h4>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">Configure which leads are prioritized for calling based on their fit.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Target Company Sizes</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {["1-10", "11-50", "51-200", "201-500", "500+"].map(size => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => {
+                          const current = newCampaign.icp_config?.preferred_company_sizes || [];
+                          const updated = current.includes(size) 
+                            ? current.filter(s => s !== size)
+                            : [...current, size];
+                          setNewCampaign({
+                            ...newCampaign, 
+                            icp_config: {...newCampaign.icp_config, preferred_company_sizes: updated}
+                          });
+                        }}
+                        className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                          (newCampaign.icp_config?.preferred_company_sizes || []).includes(size)
+                            ? "bg-cyan-100 border-cyan-500 text-cyan-700"
+                            : "border-gray-300 text-gray-600 hover:border-gray-400"
+                        }`}
+                      >
+                        {size} employees
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Preferred Roles</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {["Owner", "CEO", "Manager", "Director", "VP", "CFO"].map(role => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => {
+                          const current = newCampaign.icp_config?.preferred_roles || [];
+                          const updated = current.includes(role) 
+                            ? current.filter(r => r !== role)
+                            : [...current, role];
+                          setNewCampaign({
+                            ...newCampaign, 
+                            icp_config: {...newCampaign.icp_config, preferred_roles: updated}
+                          });
+                        }}
+                        className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                          (newCampaign.icp_config?.preferred_roles || []).includes(role)
+                            ? "bg-cyan-100 border-cyan-500 text-cyan-700"
+                            : "border-gray-300 text-gray-600 hover:border-gray-400"
+                        }`}
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <Label htmlFor="target-industries">Target Industries (comma-separated)</Label>
+                <Input
+                  id="target-industries"
+                  placeholder="e.g., Restaurant, Retail, Healthcare, Professional Services"
+                  value={(newCampaign.icp_config?.target_industries || []).join(", ")}
+                  onChange={(e) => {
+                    const industries = e.target.value ? e.target.value.split(",").map(i => i.trim()).filter(i => i) : [];
+                    setNewCampaign({
+                      ...newCampaign,
+                      icp_config: {...newCampaign.icp_config, target_industries: industries}
+                    });
+                  }}
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-400 mt-1">Leave empty to target all industries</p>
+              </div>
+
+              <div className="mt-4">
+                <Label htmlFor="min-icp">Minimum ICP Score to Dial</Label>
+                <div className="flex items-center gap-3 mt-1">
+                  <Input
+                    id="min-icp"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={newCampaign.min_icp_score || 0}
+                    onChange={(e) => setNewCampaign({...newCampaign, min_icp_score: parseInt(e.target.value) || 0})}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-gray-500">/ 100</span>
+                  <div className="flex-1">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="10"
+                      value={newCampaign.min_icp_score || 0}
+                      onChange={(e) => setNewCampaign({...newCampaign, min_icp_score: parseInt(e.target.value)})}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>0 - Call all leads</span>
+                  <span>40 - Skip D-tier</span>
+                  <span>60 - Only A/B tier</span>
+                  <span>80 - Only A-tier</span>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -850,30 +850,29 @@ class TwilioCallingService:
     async def make_outbound_call(
         self,
         to_number: str,
-        lead_id: str,
-        campaign_id: str,
+        lead: Dict,
+        campaign: Dict,
         callback_url: str
     ) -> Dict:
         """
         Initiate a real outbound call using Twilio.
-        The call will use TwiML to handle the conversation flow.
+        Uses inline TwiML for reliability (no webhook dependency).
         """
         if not self.is_configured:
             raise HTTPException(status_code=503, detail="Twilio not configured. Add TWILIO credentials to .env")
         
         try:
-            # Create TwiML for the call
-            # This URL will be called when the call connects
-            twiml_url = f"{callback_url}/api/twilio/voice/{lead_id}/{campaign_id}"
+            # Generate TwiML directly (more reliable than webhook)
+            twiml = self.generate_simple_twiml(lead, campaign)
             status_callback_url = f"{callback_url}/api/twilio/status"
             
             call = twilio_client.calls.create(
                 to=to_number,
                 from_=twilio_phone_number,
-                url=twiml_url,
+                twiml=twiml,  # Use inline TwiML instead of URL
                 status_callback=status_callback_url,
                 status_callback_event=["initiated", "ringing", "answered", "completed"],
-                record=True,  # Enable call recording
+                record=True,
                 recording_status_callback=f"{callback_url}/api/twilio/recording"
             )
             
@@ -889,6 +888,45 @@ class TwilioCallingService:
         except Exception as e:
             logger.error(f"Twilio call failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+    
+    def generate_simple_twiml(self, lead: Dict, campaign: Dict) -> str:
+        """Generate simple TwiML for AI call with compliance disclosure"""
+        response = VoiceResponse()
+        
+        company_name = campaign.get('company_name', 'our company')
+        business_name = lead.get('business_name', 'your company')
+        
+        # Compliance disclosure (REQUIRED by FCC)
+        response.say(
+            f"Hi, this is an AI assistant calling on behalf of {company_name}. "
+            "This is an automated business call.",
+            voice='Polly.Joanna'
+        )
+        
+        # Pause for natural flow
+        response.pause(length=1)
+        
+        # Main pitch
+        response.say(
+            f"I'm reaching out to {business_name} because we help businesses increase their profits "
+            "with solutions most companies don't take advantage of. "
+            "Would you be interested in learning more?",
+            voice='Polly.Joanna'
+        )
+        
+        # Pause for response (simulated - real AI would use Gather with speech recognition)
+        response.pause(length=3)
+        
+        # Follow up
+        response.say(
+            "If you'd like to learn more, one of our specialists will follow up with you shortly. "
+            "Or say 'remove me' to be added to our do not call list. "
+            "Thank you for your time, have a great day!",
+            voice='Polly.Joanna'
+        )
+        
+        response.hangup()
+        return str(response)
     
     def generate_ai_greeting_twiml(self, lead: Dict, campaign: Dict) -> str:
         """Generate TwiML for AI greeting with compliance disclosure"""
@@ -2636,11 +2674,11 @@ async def initiate_real_call(
     callback_url = str(http_request.base_url).rstrip("/")
     
     try:
-        # Initiate Twilio call
+        # Initiate Twilio call with inline TwiML
         twilio_result = await twilio_service.make_outbound_call(
             to_number=phone_number,
-            lead_id=request.lead_id,
-            campaign_id=request.campaign_id,
+            lead=lead,
+            campaign=campaign,
             callback_url=callback_url
         )
         

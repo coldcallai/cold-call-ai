@@ -212,6 +212,17 @@ A vertical-agnostic B2B SaaS platform that:
 - **31 backend tests passing** - Full coverage of isolation scenarios
 - **Test users created**: User A (test@example.com) and User B (test_user_b@example.com)
 
+### Session 8 (December 2025): Subscription Tier Enforcement & Features
+- **Subscription tier feature flags** - TIER_FEATURES dict with limits for free/starter/professional/unlimited/byl
+- **Monthly usage tracking** - get_monthly_usage() tracks leads and calls per billing month
+- **Feature access checks** - check_subscription_limit() enforces limits on leads, calls, campaigns, agents
+- **CSV export/upload enforcement** - Blocked for free users, allowed for higher tiers
+- **ICP scoring enforcement** - Basic scoring for Starter+, AI scoring for Professional+
+- **Low balance notifications** - Automatic email alerts when credits drop below threshold
+- **ICP configuration UI** - Added to campaign creation form (target industries, company sizes, roles)
+- **16 subscription tier tests passing**
+- **New endpoint**: GET /api/subscription/features - Returns user's tier limits and usage
+
 ## Prioritized Backlog
 
 ### P0 - Critical
@@ -225,7 +236,9 @@ A vertical-agnostic B2B SaaS platform that:
 
 ### P1 - High Priority
 - [x] ~~Multi-tenant data isolation - Scope leads/campaigns to user accounts~~ ✅ DONE (December 2025)
-- [ ] Subscription tier enforcement - Limit features by plan
+- [x] ~~Subscription tier enforcement - Limit features by plan~~ ✅ DONE (December 2025)
+- [x] ~~Low balance notification system~~ ✅ DONE (December 2025)
+- [x] ~~ICP configuration UI in campaign form~~ ✅ DONE (December 2025)
 - [ ] Improve STT accuracy - Consider Deepgram for lower latency
 
 ### P2 - Medium Priority
@@ -241,12 +254,13 @@ A vertical-agnostic B2B SaaS platform that:
 
 ## Testing
 - Backend: pytest suite at `/app/backend/tests/test_auth_and_api.py`
-- Multi-tenant isolation tests: `/app/backend/tests/test_multi_tenant_isolation.py`
+- Multi-tenant isolation tests: `/app/backend/tests/test_multi_tenant_isolation.py` (31 tests)
+- Subscription tier tests: `/app/backend/tests/test_subscription_tiers.py` (16 tests)
 - Auth testing playbook: `/app/auth_testing.md`
 - Test reports: `/app/test_reports/iteration_1.json`, `/app/test_reports/iteration_2.json`
 - Test users:
-  - User A: test@example.com / Test123!
-  - User B: test_user_b@example.com / Test456!
+  - User A (admin): test@example.com / Test123!
+  - User B (free): test_user_b@example.com / Test456!
 
 ## 3rd Party Integrations Status
 | Service | Status | Notes |

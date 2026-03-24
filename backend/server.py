@@ -2464,6 +2464,53 @@ async def get_leads(
     leads = await db.leads.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
     return leads
 
+@api_router.get("/leads/export-csv")
+async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Dict = Depends(get_current_user)):
+    """Export leads to CSV (only user's own leads)"""
+    # Check feature access - CSV export requires Starter+
+    features = get_tier_features(current_user)
+    if not features.get("csv_export"):
+        raise HTTPException(
+            status_code=403, 
+            detail="CSV export is not available on your plan. Upgrade to Starter or higher."
+        )
+    
+    query = {"user_id": current_user["user_id"]}
+    if status:
+        query["status"] = status
+    
+    leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
+    
+    if not leads:
+        raise HTTPException(status_code=404, detail="No leads to export")
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    fieldnames = ['business_name', 'contact_name', 'phone', 'email', 'status', 'source', 'intent_signals', 'qualification_score', 'created_at']
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    
+    for lead in leads:
+        writer.writerow({
+            'business_name': lead.get('business_name', ''),
+            'contact_name': lead.get('contact_name', ''),
+            'phone': lead.get('phone', ''),
+            'email': lead.get('email', ''),
+            'status': lead.get('status', ''),
+            'source': lead.get('source', ''),
+            'intent_signals': '; '.join(lead.get('intent_signals', [])),
+            'qualification_score': lead.get('qualification_score', ''),
+            'created_at': lead.get('created_at', '')
+        })
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+    )
+
 @api_router.get("/leads/{lead_id}", response_model=Lead)
 async def get_lead(lead_id: str, current_user: Dict = Depends(get_current_user)):
     """Get a specific lead (must belong to current user)"""
@@ -2501,7 +2548,7 @@ async def delete_lead(lead_id: str, current_user: Dict = Depends(get_current_use
         raise HTTPException(status_code=404, detail="Lead not found")
     return {"message": "Lead deleted"}
 
-# ----- CSV Upload & Export -----
+# ----- CSV Upload -----
 @api_router.post("/leads/upload-csv")
 async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = Depends(get_current_user)):
     """Upload leads from CSV file (Bring Your Own List)"""
@@ -2566,53 +2613,6 @@ async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = De
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
-
-@api_router.get("/leads/export-csv")
-async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Dict = Depends(get_current_user)):
-    """Export leads to CSV (only user's own leads)"""
-    # Check feature access - CSV export requires Starter+
-    features = get_tier_features(current_user)
-    if not features.get("csv_export"):
-        raise HTTPException(
-            status_code=403, 
-            detail="CSV export is not available on your plan. Upgrade to Starter or higher."
-        )
-    
-    query = {"user_id": current_user["user_id"]}
-    if status:
-        query["status"] = status
-    
-    leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
-    
-    if not leads:
-        raise HTTPException(status_code=404, detail="No leads to export")
-    
-    # Create CSV in memory
-    output = io.StringIO()
-    fieldnames = ['business_name', 'contact_name', 'phone', 'email', 'status', 'source', 'intent_signals', 'qualification_score', 'created_at']
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
-    
-    for lead in leads:
-        writer.writerow({
-            'business_name': lead.get('business_name', ''),
-            'contact_name': lead.get('contact_name', ''),
-            'phone': lead.get('phone', ''),
-            'email': lead.get('email', ''),
-            'status': lead.get('status', ''),
-            'source': lead.get('source', ''),
-            'intent_signals': '; '.join(lead.get('intent_signals', [])),
-            'qualification_score': lead.get('qualification_score', ''),
-            'created_at': lead.get('created_at', '')
-        })
-    
-    output.seek(0)
-    
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
-    )
 
 # ----- Phone & Email Verification Endpoints -----
 

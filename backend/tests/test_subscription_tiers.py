@@ -18,7 +18,7 @@ import requests
 import os
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://ai-cold-call.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 ADMIN_USER = {"email": "test@example.com", "password": "Test123!"}  # Has unlimited tier
@@ -41,7 +41,7 @@ class TestSubscriptionFeatures:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_subscription_features_admin_user(self):
@@ -143,7 +143,7 @@ class TestCSVFeatureAccess:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_csv_export_blocked_for_free_user(self):
@@ -237,7 +237,7 @@ class TestICPScoringAccess:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_icp_scoring_blocked_for_free_user(self):
@@ -328,7 +328,7 @@ class TestCampaignLimits:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_campaign_creation_with_icp_config(self):
@@ -445,7 +445,7 @@ class TestAgentLimits:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_admin_unlimited_agents(self):
@@ -541,7 +541,7 @@ class TestLeadDiscoveryLimits:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_lead_discovery_limit_check(self):
@@ -592,7 +592,7 @@ class TestLowBalanceNotification:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_auth_me_triggers_low_balance_check(self):
@@ -638,7 +638,7 @@ class TestMonthlyUsageTracking:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            return response.json().get("session_token")
         return None
     
     def test_monthly_usage_in_subscription_features(self):

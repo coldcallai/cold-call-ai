@@ -221,11 +221,12 @@ class TestMultiTenantIsolation:
         print(f"User A created campaign: {campaign['id']}")
     
     def test_user_b_can_create_campaign(self, user_b_headers):
-        """User B creates a campaign"""
+        """User B creates a campaign (free tier - no voicemail)"""
         campaign_data = {
             "name": f"TEST_UserB_Campaign_{uuid.uuid4().hex[:8]}",
             "ai_script": "Test script for User B",
-            "description": "User B's test campaign"
+            "description": "User B's test campaign",
+            "voicemail_enabled": False  # Free tier users cannot use voicemail
         }
         response = requests.post(f"{BASE_URL}/api/campaigns", json=campaign_data, headers=user_b_headers)
         assert response.status_code == 200, f"Failed to create campaign: {response.text}"

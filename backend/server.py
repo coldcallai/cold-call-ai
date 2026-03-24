@@ -208,6 +208,9 @@ class Campaign(BaseModel):
     successful_calls: int = 0
     qualified_leads: int = 0
     booked_meetings: int = 0
+    # AMD + Voicemail Drop settings
+    voicemail_enabled: bool = True  # Enable voicemail drop when machine detected
+    voicemail_message: Optional[str] = None  # Custom voicemail message (uses default if None)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -217,6 +220,8 @@ class CampaignCreate(BaseModel):
     ai_script: str
     qualification_criteria: Dict[str, Any] = {}
     calls_per_day: int = 100
+    voicemail_enabled: bool = True
+    voicemail_message: Optional[str] = None
 
 class Call(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -227,6 +232,10 @@ class Call(BaseModel):
     duration_seconds: int = 0
     transcript: List[Dict[str, str]] = []
     qualification_result: Optional[Dict[str, Any]] = None
+    # AMD tracking
+    answered_by: Optional[str] = None  # "human", "machine_start", "machine_end_beep", "machine_end_silence", "fax", "unknown"
+    voicemail_dropped: bool = False
+    amd_status: Optional[str] = None  # Raw AMD status from Twilio
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -943,10 +952,74 @@ compliance_service = ComplianceService()
 
 # ============== TWILIO CALLING SERVICE ==============
 class TwilioCallingService:
-    """Service for making real outbound calls via Twilio"""
+    """Service for making real outbound calls via Twilio with AMD + Voicemail Drop"""
     
     def __init__(self):
         self.is_configured = twilio_client is not None and twilio_phone_number is not None
+    
+    async def make_outbound_call_with_amd(
+        self,
+        to_number: str,
+        lead: Dict,
+        campaign: Dict,
+        callback_url: str,
+        call_id: str
+    ) -> Dict:
+        """
+        Initiate an outbound call with Answering Machine Detection (AMD).
+        AMD detects if human or voicemail answers, allowing us to:
+        - If human: Connect to full AI conversation
+        - If machine: Drop pre-recorded voicemail (saves AI costs)
+        
+        Cost: AMD adds ~$0.02 per call but saves ~$0.14 on voicemail calls
+        """
+        if not self.is_configured:
+            raise HTTPException(status_code=503, detail="Twilio not configured. Add TWILIO credentials to .env")
+        
+        try:
+            # Get external URL for callbacks
+            external_url = os.environ.get('EXTERNAL_URL') or callback_url
+            external_url = external_url.rstrip("/")
+            
+            # AMD callback URL - Twilio will call this when it determines human vs machine
+            amd_callback_url = f"{external_url}/api/twilio/amd/{call_id}"
+            status_callback_url = f"{external_url}/api/twilio/status"
+            
+            # Use AsyncAmd for better detection without blocking call connection
+            # machine_detection options:
+            # - "Enable": Basic detection, waits for determination
+            # - "DetectMessageEnd": Waits for voicemail beep before callback (better for VM drop)
+            call = twilio_client.calls.create(
+                to=to_number,
+                from_=twilio_phone_number,
+                url=f"{external_url}/api/twilio/amd-handler/{call_id}",  # Initial handler
+                status_callback=status_callback_url,
+                status_callback_event=["initiated", "ringing", "answered", "completed"],
+                machine_detection="DetectMessageEnd",  # Wait for beep to drop voicemail
+                machine_detection_timeout=30,  # Max seconds to wait for detection
+                machine_detection_silence_timeout=5000,  # Silence threshold in ms
+                machine_detection_speech_threshold=2400,  # Speech threshold in ms
+                machine_detection_speech_end_threshold=1200,  # End of speech threshold
+                async_amd=True,  # Non-blocking AMD
+                async_amd_status_callback=amd_callback_url,  # Callback for AMD result
+                async_amd_status_callback_method="POST",
+                record=True,
+                recording_status_callback=f"{external_url}/api/twilio/recording"
+            )
+            
+            logger.info(f"Twilio call with AMD initiated: {call.sid} to {to_number}")
+            
+            return {
+                "call_sid": call.sid,
+                "status": call.status,
+                "to": to_number,
+                "from": twilio_phone_number,
+                "amd_enabled": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Twilio call with AMD failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
     
     async def make_outbound_call(
         self,
@@ -956,7 +1029,7 @@ class TwilioCallingService:
         callback_url: str
     ) -> Dict:
         """
-        Initiate a real outbound call using Twilio.
+        Initiate a real outbound call using Twilio (legacy - no AMD).
         Uses inline TwiML for reliability (no webhook dependency).
         """
         if not self.is_configured:
@@ -989,6 +1062,79 @@ class TwilioCallingService:
         except Exception as e:
             logger.error(f"Twilio call failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+    
+    def generate_voicemail_twiml(self, lead: Dict, campaign: Dict) -> str:
+        """Generate TwiML for voicemail drop - short, professional message"""
+        response = VoiceResponse()
+        
+        company_name = campaign.get('company_name', 'our team')
+        business_name = lead.get('business_name', 'your company')
+        contact_name = lead.get('contact_name', '')
+        
+        # Use custom voicemail message if provided, otherwise use default
+        custom_vm = campaign.get('voicemail_message')
+        
+        if custom_vm:
+            # Use custom message with variable substitution
+            message = custom_vm.replace('{business_name}', business_name)
+            message = message.replace('{contact_name}', contact_name)
+            message = message.replace('{company_name}', company_name)
+        else:
+            # Default professional voicemail
+            greeting = f"Hi {contact_name}, " if contact_name else "Hi, "
+            message = (
+                f"{greeting}this is a quick message for {business_name}. "
+                f"I'm calling from {company_name} about an opportunity that could help increase your profits. "
+                "I'll try you again, or feel free to call us back at your convenience. "
+                "Thank you, have a great day!"
+            )
+        
+        # Use best Twilio voice for voicemail
+        response.say(message, voice='Polly.Matthew-Neural')
+        
+        # Pause then hang up
+        response.pause(length=1)
+        response.hangup()
+        
+        return str(response)
+    
+    def generate_human_twiml(self, lead: Dict, campaign: Dict, call_id: str) -> str:
+        """Generate TwiML for when human answers - connect to AI conversation"""
+        response = VoiceResponse()
+        
+        company_name = campaign.get('company_name', 'our company')
+        business_name = lead.get('business_name', 'your company')
+        
+        voice = 'Polly.Matthew-Neural'
+        
+        # Compliance disclosure (REQUIRED by FCC)
+        response.say(
+            f"Hi, this is an AI assistant calling on behalf of {company_name}. "
+            "This is an automated business call.",
+            voice=voice
+        )
+        
+        response.pause(length=1)
+        
+        # Main pitch
+        response.say(
+            f"I'm reaching out to {business_name} because we help businesses increase their profits "
+            "with solutions most companies don't take advantage of. "
+            "Would you be interested in learning more?",
+            voice=voice
+        )
+        
+        response.pause(length=3)
+        
+        # Follow up
+        response.say(
+            "If you'd like to learn more, one of our specialists will follow up with you shortly. "
+            "Or say remove me to be added to our do not call list. "
+            "Thank you for your time, have a great day!",
+            voice=voice
+        )
+        
+        return str(response)
     
     def generate_simple_twiml(self, lead: Dict, campaign: Dict) -> str:
         """Generate simple TwiML for AI call with compliance disclosure"""
@@ -3170,14 +3316,27 @@ async def initiate_real_call(
     # Get callback URL
     callback_url = str(http_request.base_url).rstrip("/")
     
+    # Check if campaign has voicemail enabled (use AMD)
+    use_amd = campaign.get("voicemail_enabled", True)
+    
     try:
-        # Initiate Twilio call with inline TwiML
-        twilio_result = await twilio_service.make_outbound_call(
-            to_number=phone_number,
-            lead=lead,
-            campaign=campaign,
-            callback_url=callback_url
-        )
+        if use_amd:
+            # Use AMD-enabled call (detects human vs voicemail)
+            twilio_result = await twilio_service.make_outbound_call_with_amd(
+                to_number=phone_number,
+                lead=lead,
+                campaign=campaign,
+                callback_url=callback_url,
+                call_id=call.id
+            )
+        else:
+            # Legacy call without AMD
+            twilio_result = await twilio_service.make_outbound_call(
+                to_number=phone_number,
+                lead=lead,
+                campaign=campaign,
+                callback_url=callback_url
+            )
         
         # Update call record with Twilio SID
         await db.calls.update_one(
@@ -3193,6 +3352,7 @@ async def initiate_real_call(
             "call_id": call.id,
             "twilio_sid": twilio_result["call_sid"],
             "message": "Call initiated successfully",
+            "amd_enabled": use_amd,
             "credits_remaining": calls_remaining - 1
         }
         
@@ -3401,6 +3561,136 @@ async def twilio_status_webhook(request: Request):
     )
     
     return {"status": "ok"}
+
+# ============== AMD (Answering Machine Detection) WEBHOOKS ==============
+
+@api_router.post("/twilio/amd-handler/{call_id}")
+async def twilio_amd_initial_handler(call_id: str, request: Request):
+    """
+    Initial TwiML handler for calls with AMD enabled.
+    This is called when the call connects, while AMD is still analyzing.
+    We play a brief pause while AMD determines human vs machine.
+    """
+    response = VoiceResponse()
+    
+    # Brief pause while AMD analyzes (async AMD will callback separately)
+    # This prevents awkward silence - we play hold music or a brief message
+    response.pause(length=2)
+    
+    # If AMD hasn't determined yet, say something generic
+    # (The real handling happens in the AMD callback)
+    response.say(
+        "Please hold for just a moment.",
+        voice='Polly.Matthew-Neural'
+    )
+    response.pause(length=10)  # Wait for AMD callback to potentially redirect
+    
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.post("/twilio/amd/{call_id}")
+async def twilio_amd_callback(call_id: str, request: Request):
+    """
+    Callback from Twilio's Async AMD with detection result.
+    This is where we decide to either:
+    - Drop voicemail (if machine detected)
+    - Connect to AI conversation (if human detected)
+    
+    AMD AnsweredBy values:
+    - "human": Human answered
+    - "machine_start": Machine detected, voicemail playing
+    - "machine_end_beep": Machine voicemail ended with beep
+    - "machine_end_silence": Machine voicemail ended with silence
+    - "machine_end_other": Machine voicemail ended other way
+    - "fax": Fax machine detected
+    - "unknown": Could not determine
+    """
+    form_data = await request.form()
+    
+    call_sid = form_data.get("CallSid", "")
+    answered_by = form_data.get("AnsweredBy", "unknown")
+    machine_detection_duration = form_data.get("MachineDetectionDuration", "0")
+    
+    logger.info(f"AMD callback for call {call_id}: AnsweredBy={answered_by}, Duration={machine_detection_duration}ms")
+    
+    # Get call and campaign info
+    call_record = await db.calls.find_one({"id": call_id}, {"_id": 0})
+    if not call_record:
+        logger.error(f"Call record not found for AMD callback: {call_id}")
+        return {"status": "error", "message": "Call not found"}
+    
+    lead = await db.leads.find_one({"id": call_record["lead_id"]}, {"_id": 0})
+    campaign = await db.campaigns.find_one({"id": call_record["campaign_id"]}, {"_id": 0})
+    
+    # Update call record with AMD result
+    await db.calls.update_one(
+        {"id": call_id},
+        {"$set": {
+            "answered_by": answered_by,
+            "amd_status": answered_by,
+            "amd_duration_ms": int(machine_detection_duration) if machine_detection_duration else 0
+        }}
+    )
+    
+    # Determine action based on AMD result
+    is_machine = answered_by in ["machine_start", "machine_end_beep", "machine_end_silence", "machine_end_other"]
+    is_human = answered_by == "human"
+    
+    if is_machine and campaign and campaign.get("voicemail_enabled", True):
+        # MACHINE DETECTED - Drop voicemail
+        logger.info(f"Machine detected for call {call_id}, dropping voicemail")
+        
+        # Update call to redirect to voicemail TwiML
+        try:
+            twilio_client.calls(call_sid).update(
+                twiml=twilio_service.generate_voicemail_twiml(lead or {}, campaign)
+            )
+            
+            # Mark as voicemail dropped
+            await db.calls.update_one(
+                {"id": call_id},
+                {"$set": {"voicemail_dropped": True}}
+            )
+            
+            logger.info(f"Voicemail dropped for call {call_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to drop voicemail for call {call_id}: {e}")
+    
+    elif is_human:
+        # HUMAN DETECTED - Connect to AI conversation
+        logger.info(f"Human detected for call {call_id}, connecting to AI")
+        
+        try:
+            twilio_client.calls(call_sid).update(
+                twiml=twilio_service.generate_human_twiml(lead or {}, campaign or {}, call_id)
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to connect human to AI for call {call_id}: {e}")
+    
+    else:
+        # UNKNOWN or FAX - Just log and let call continue
+        logger.warning(f"Unknown AMD result for call {call_id}: {answered_by}")
+    
+    return {"status": "ok", "answered_by": answered_by, "action": "voicemail" if is_machine else "ai_conversation"}
+
+@api_router.get("/calls/{call_id}/amd-status")
+async def get_call_amd_status(
+    call_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get AMD status for a specific call"""
+    call = await db.calls.find_one({"id": call_id}, {"_id": 0})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    return {
+        "call_id": call_id,
+        "answered_by": call.get("answered_by"),
+        "voicemail_dropped": call.get("voicemail_dropped", False),
+        "amd_status": call.get("amd_status"),
+        "amd_duration_ms": call.get("amd_duration_ms")
+    }
 
 @api_router.post("/twilio/recording")
 async def twilio_recording_webhook(request: Request):

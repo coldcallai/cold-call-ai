@@ -169,6 +169,23 @@ A vertical-agnostic B2B SaaS platform that:
   - Context-aware responses based on user's current page and account state
 - **"Save Keywords" button** - Explicitly save keywords to profile
 
+### Session 5 (December 24, 2025): Phone/Email Verification & AMD + Voicemail Drop
+- **Phone Verification via Twilio Lookup API** ($0.005/lookup, cached 30 days)
+  - Detects line type: mobile, landline, VoIP
+  - Dial priority scoring (mobile=100, landline=60, voip=30)
+  - Carrier name detection
+- **Email Verification** (FREE)
+  - Syntax validation, disposable domain detection, typo correction
+  - Quality scoring and business vs personal classification
+- **AMD (Answering Machine Detection)** - Detects human vs voicemail
+  - Uses Twilio's AsyncAMD with DetectMessageEnd
+  - Cost: ~$0.02 per call
+- **Voicemail Drop** - Auto-drops pre-recorded VM when machine detected
+  - Saves ~$0.14 per voicemail call (vs full AI processing)
+  - Custom voicemail messages per campaign with variable substitution
+  - Variables: {contact_name}, {business_name}, {company_name}
+- **ROI Impact**: 56% cost reduction on calls (from $15 to $6.55 per 100 calls)
+
 ## Prioritized Backlog
 
 ### P0 - Critical
@@ -176,6 +193,8 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~Twilio Media Streams WebSocket - Real-time AI conversations~~ ✅ DONE
 - [x] ~~Custom Keywords (up to 100) for lead discovery~~ ✅ DONE
 - [x] ~~In-App Training Guide & Help Chat~~ ✅ DONE
+- [x] ~~Phone Verification (Twilio Lookup)~~ ✅ DONE
+- [x] ~~AMD + Voicemail Drop~~ ✅ DONE
 
 ### P1 - High Priority
 - [ ] Multi-tenant data isolation - Scope leads/campaigns to user accounts

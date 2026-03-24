@@ -1395,7 +1395,9 @@ const Campaigns = () => {
     name: "",
     description: "",
     ai_script: "Hello, this is an AI assistant calling about credit card processing solutions for your business. Am I speaking with the owner or manager?",
-    calls_per_day: 100
+    calls_per_day: 100,
+    voicemail_enabled: true,
+    voicemail_message: ""
   });
 
   const fetchCampaigns = async () => {
@@ -1423,7 +1425,7 @@ const Campaigns = () => {
       await axios.post(`${API}/campaigns`, newCampaign);
       toast.success("Campaign created!");
       setShowCreate(false);
-      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100 });
+      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, voicemail_enabled: true, voicemail_message: "" });
       fetchCampaigns();
     } catch (error) {
       toast.error("Failed to create campaign");
@@ -1609,6 +1611,41 @@ const Campaigns = () => {
                 onChange={(e) => setNewCampaign({...newCampaign, calls_per_day: parseInt(e.target.value) || 0})}
                 className="mt-1"
               />
+            </div>
+
+            {/* Voicemail Drop Settings */}
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <Label className="text-base font-medium">Voicemail Drop</Label>
+                  <p className="text-sm text-gray-500">Auto-leave voicemail when machine detected (saves ~$0.14/call)</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCampaign.voicemail_enabled}
+                    onChange={(e) => setNewCampaign({...newCampaign, voicemail_enabled: e.target.checked})}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                </label>
+              </div>
+              
+              {newCampaign.voicemail_enabled && (
+                <div>
+                  <Label htmlFor="voicemail-message">Custom Voicemail (optional)</Label>
+                  <Textarea
+                    id="voicemail-message"
+                    value={newCampaign.voicemail_message}
+                    onChange={(e) => setNewCampaign({...newCampaign, voicemail_message: e.target.value})}
+                    placeholder="Hi {contact_name}, this is a quick message for {business_name}. I'm calling from {company_name} about an opportunity..."
+                    className="mt-1 min-h-[80px]"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Variables: {'{contact_name}'}, {'{business_name}'}, {'{company_name}'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

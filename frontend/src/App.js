@@ -494,6 +494,11 @@ const LeadDiscovery = () => {
   const [newKeyword, setNewKeyword] = useState("");
   const [showKeywordManager, setShowKeywordManager] = useState(false);
   const [bulkKeywords, setBulkKeywords] = useState("");
+  
+  // Preview state
+  const [previewing, setPreviewing] = useState(false);
+  const [previewLeads, setPreviewLeads] = useState([]);
+  const [showPreview, setShowPreview] = useState(false);
 
   const defaultIntentKeywords = [
     "Toast alternative",
@@ -544,6 +549,31 @@ const LeadDiscovery = () => {
       if (keywords.length > available) {
         toast.warning(`${keywords.length - available} keywords skipped (100 max limit)`);
       }
+    }
+  };
+
+  // Preview example leads (FREE - no credits used)
+  const previewExamples = async () => {
+    setPreviewing(true);
+    setShowPreview(true);
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await axios.post(`${API}/leads/preview-examples`, {
+        search_query: searchQuery,
+        industry: industry || null,
+        location: location || null,
+        custom_keywords: customKeywords.length > 0 ? customKeywords : null
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setPreviewLeads(response.data.example_leads || []);
+      toast.success("Preview generated! These are example leads based on your keywords.");
+    } catch (error) {
+      toast.error("Failed to generate preview");
+      setPreviewLeads([]);
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -906,7 +936,26 @@ const LeadDiscovery = () => {
                   </Select>
                 </div>
               </div>
-              <div className="mt-4 flex justify-end">
+              <div className="mt-4 flex justify-end gap-3">
+                <Button 
+                  variant="outline"
+                  data-testid="preview-btn"
+                  onClick={previewExamples} 
+                  disabled={previewing}
+                  className="border-cyan-500 text-cyan-700 hover:bg-cyan-50"
+                >
+                  {previewing ? (
+                    <>
+                      <Clock className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4 mr-2" />
+                      Preview Examples (Free)
+                    </>
+                  )}
+                </Button>
                 <Button 
                   data-testid="discover-btn"
                   onClick={discoverLeads} 
@@ -928,6 +977,82 @@ const LeadDiscovery = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Preview Results Section */}
+          {showPreview && (
+            <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 shadow-sm mt-4">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Search className="w-5 h-5 text-amber-600" />
+                    <CardTitle className="text-lg text-amber-800" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      Example Leads Preview
+                    </CardTitle>
+                    <span className="px-2 py-0.5 bg-amber-200 text-amber-800 text-xs rounded-full">FREE</span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowPreview(false)}
+                    className="text-amber-600 hover:text-amber-800"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <CardDescription className="text-amber-700">
+                  These are example leads based on your keywords. Run "Discover" to find and save real leads.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {previewing ? (
+                  <div className="text-center py-8">
+                    <Clock className="w-8 h-8 animate-spin text-amber-500 mx-auto mb-2" />
+                    <p className="text-amber-700">Generating preview examples...</p>
+                  </div>
+                ) : previewLeads.length > 0 ? (
+                  <div className="space-y-3">
+                    {previewLeads.map((lead, idx) => (
+                      <div key={idx} className="bg-white rounded-lg p-4 border border-amber-200">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-semibold text-gray-900">{lead.name}</h4>
+                            <p className="text-sm text-gray-600">{lead.industry} • {lead.location}</p>
+                            <p className="text-sm text-gray-500 mt-1">{lead.phone}</p>
+                          </div>
+                          <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded">Example</span>
+                        </div>
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500 mb-1">Intent Signals:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {(lead.intent_signals || []).slice(0, 3).map((signal, i) => (
+                              <span key={i} className="px-2 py-0.5 bg-cyan-100 text-cyan-700 text-xs rounded">
+                                {signal}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        {lead.pain_point && (
+                          <p className="text-xs text-gray-500 mt-2 italic">"{lead.pain_point}"</p>
+                        )}
+                      </div>
+                    ))}
+                    <div className="text-center pt-2">
+                      <Button 
+                        onClick={discoverLeads}
+                        disabled={discovering}
+                        className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white"
+                      >
+                        <Zap className="w-4 h-4 mr-2" />
+                        Find Real Leads Like These
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-center py-4 text-amber-700">No preview leads generated. Try different keywords.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="upload" className="mt-4">

@@ -1301,6 +1301,43 @@ class GPTIntentSearchRequest(BaseModel):
     max_results: int = 10
     custom_keywords: Optional[List[str]] = None  # Up to 100 custom intent keywords
 
+class PreviewLeadsRequest(BaseModel):
+    search_query: str = "credit card processing"
+    industry: Optional[str] = None
+    location: Optional[str] = None
+    custom_keywords: Optional[List[str]] = None
+
+@api_router.post("/leads/preview-examples")
+async def preview_lead_examples(
+    request: PreviewLeadsRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Preview example leads based on keywords WITHOUT using credits.
+    Returns 3 sample leads to show what kind of results the search would produce.
+    """
+    # Get custom keywords or use defaults
+    custom_keywords = None
+    if request.custom_keywords:
+        custom_keywords = [kw.strip() for kw in request.custom_keywords[:100] if kw and kw.strip()]
+    
+    # Generate preview leads (only 3, and don't save them)
+    preview_leads = await ai_service.gpt_intent_search(
+        query=request.search_query,
+        industry=request.industry,
+        location=request.location,
+        max_results=3,  # Only 3 examples
+        custom_keywords=custom_keywords
+    )
+    
+    return {
+        "preview": True,
+        "count": len(preview_leads),
+        "message": "These are example leads based on your keywords. Run a full search to discover and save leads.",
+        "example_leads": preview_leads,
+        "keywords_used": custom_keywords[:10] if custom_keywords else ["Using default keywords"]
+    }
+
 @api_router.post("/leads/discover")
 async def discover_leads(request: LeadDiscoveryRequest):
     """Discover new leads using AI-powered research (legacy endpoint)"""

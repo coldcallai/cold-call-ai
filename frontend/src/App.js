@@ -1397,7 +1397,9 @@ const Campaigns = () => {
     ai_script: "Hello, this is an AI assistant calling about credit card processing solutions for your business. Am I speaking with the owner or manager?",
     calls_per_day: 100,
     voicemail_enabled: true,
-    voicemail_message: ""
+    voicemail_message: "",
+    response_wait_seconds: 4,
+    company_name: ""
   });
 
   const fetchCampaigns = async () => {
@@ -1425,7 +1427,7 @@ const Campaigns = () => {
       await axios.post(`${API}/campaigns`, newCampaign);
       toast.success("Campaign created!");
       setShowCreate(false);
-      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, voicemail_enabled: true, voicemail_message: "" });
+      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, voicemail_enabled: true, voicemail_message: "", response_wait_seconds: 4, company_name: "" });
       fetchCampaigns();
     } catch (error) {
       toast.error("Failed to create campaign");
@@ -1611,6 +1613,52 @@ const Campaigns = () => {
                 onChange={(e) => setNewCampaign({...newCampaign, calls_per_day: parseInt(e.target.value) || 0})}
                 className="mt-1"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="company-name">Your Company Name</Label>
+              <Input
+                id="company-name"
+                value={newCampaign.company_name}
+                onChange={(e) => setNewCampaign({...newCampaign, company_name: e.target.value})}
+                placeholder="e.g., ABC Solutions"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-400 mt-1">Used in AI greeting and voicemail</p>
+            </div>
+
+            {/* AI Conversation Settings */}
+            <div className="border-t pt-4 mt-4">
+              <h4 className="font-medium mb-3">AI Conversation Settings</h4>
+              
+              <div className="mb-4">
+                <Label htmlFor="response-wait">Response Wait Time (seconds)</Label>
+                <div className="flex items-center gap-3 mt-1">
+                  <Input
+                    id="response-wait"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={newCampaign.response_wait_seconds}
+                    onChange={(e) => setNewCampaign({...newCampaign, response_wait_seconds: parseInt(e.target.value) || 4})}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-gray-500">seconds</span>
+                  <div className="flex-1">
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={newCampaign.response_wait_seconds}
+                      onChange={(e) => setNewCampaign({...newCampaign, response_wait_seconds: parseInt(e.target.value)})}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  How long AI waits for caller to respond before continuing. Recommended: 4-6 seconds.
+                </p>
+              </div>
             </div>
 
             {/* Voicemail Drop Settings */}

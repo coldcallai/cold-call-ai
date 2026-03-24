@@ -211,6 +211,9 @@ class Campaign(BaseModel):
     # AMD + Voicemail Drop settings
     voicemail_enabled: bool = True  # Enable voicemail drop when machine detected
     voicemail_message: Optional[str] = None  # Custom voicemail message (uses default if None)
+    # AI conversation settings
+    response_wait_seconds: int = 4  # Seconds to wait for caller response before AI continues
+    company_name: Optional[str] = None  # Company name for personalization
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -222,6 +225,8 @@ class CampaignCreate(BaseModel):
     calls_per_day: int = 100
     voicemail_enabled: bool = True
     voicemail_message: Optional[str] = None
+    response_wait_seconds: int = 4  # Default 4 seconds
+    company_name: Optional[str] = None
 
 class Call(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -1104,6 +1109,7 @@ class TwilioCallingService:
         
         company_name = campaign.get('company_name', 'our company')
         business_name = lead.get('business_name', 'your company')
+        wait_seconds = campaign.get('response_wait_seconds', 4)  # Configurable wait time
         
         voice = 'Polly.Matthew-Neural'
         
@@ -1124,7 +1130,8 @@ class TwilioCallingService:
             voice=voice
         )
         
-        response.pause(length=3)
+        # Wait for caller response (configurable)
+        response.pause(length=wait_seconds)
         
         # Follow up
         response.say(
@@ -1142,6 +1149,7 @@ class TwilioCallingService:
         
         company_name = campaign.get('company_name', 'our company')
         business_name = lead.get('business_name', 'your company')
+        wait_seconds = campaign.get('response_wait_seconds', 4)  # Configurable wait time
         
         # Use better Twilio neural voice (Polly Neural voices sound much better)
         # Options: Polly.Matthew-Neural, Polly.Joanna-Neural, Polly.Amy-Neural
@@ -1165,8 +1173,8 @@ class TwilioCallingService:
             voice=voice
         )
         
-        # Pause for response
-        response.pause(length=3)
+        # Wait for caller response (configurable)
+        response.pause(length=wait_seconds)
         
         # Follow up
         response.say(

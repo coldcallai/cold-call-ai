@@ -401,32 +401,35 @@ class AIService:
     def __init__(self):
         self.api_key = os.environ.get('EMERGENT_LLM_KEY')
     
-    async def gpt_intent_search(self, query: str, industry: str = None, location: str = None, max_results: int = 10) -> List[Dict]:
+    async def gpt_intent_search(self, query: str, industry: str = None, location: str = None, max_results: int = 10, custom_keywords: List[str] = None) -> List[Dict]:
         """Use GPT-5.2 to research and find businesses with buying intent"""
         if not self.api_key:
             logger.warning("EMERGENT_LLM_KEY not configured, using mock data")
             return await self._mock_discover_leads(query, location, max_results)
         
-        # High-intent keywords that indicate buying mode
-        intent_keywords = [
+        # Default high-intent keywords that indicate buying mode
+        default_keywords = [
             "Toast alternative", "Clover alternative", "Square alternative", "Stripe alternative",
             "best POS system", "credit card processing for contractors", "payment processing",
             "merchant services", "switch payment processor", "POS system for restaurants",
             "credit card machine", "payment terminal", "reduce processing fees"
         ]
         
+        # Use custom keywords if provided (up to 100), otherwise use defaults
+        if custom_keywords and len(custom_keywords) > 0:
+            # Limit to 100 keywords and filter empty strings
+            intent_keywords = [kw.strip() for kw in custom_keywords[:100] if kw and kw.strip()]
+            logger.info(f"Using {len(intent_keywords)} custom intent keywords for search")
+        else:
+            intent_keywords = default_keywords
+        
         try:
             chat = LlmChat(
                 api_key=self.api_key,
                 session_id=f"intent-search-{uuid.uuid4()}",
-                system_message="""You are a B2B lead research assistant specializing in finding businesses actively searching for payment processing solutions.
+                system_message="""You are a B2B lead research assistant specializing in finding businesses actively searching for solutions.
 
-Your job is to generate realistic business leads that are IN BUYING MODE - meaning they are actively searching for:
-- Alternatives to Toast, Square, Stripe, Clover
-- Best POS systems for their industry
-- Credit card processing solutions
-- Ways to reduce payment processing fees
-- New merchant services providers
+Your job is to generate realistic business leads that are IN BUYING MODE - meaning they are actively searching based on the keywords provided.
 
 These are HIGH-INTENT leads - people who are ready to switch or sign up NOW.
 
@@ -435,39 +438,42 @@ For each lead, provide:
 - Industry
 - Phone number (realistic US format)
 - Email (realistic business email)
-- Intent signals (SPECIFIC search terms or actions showing buying intent)
+- Intent signals (SPECIFIC search terms or actions showing buying intent from the provided keywords)
 - Location (city, state)
-- Pain point (why they're looking to switch)
+- Pain point (why they're looking)
 
 Return your response as a valid JSON array of objects with these fields:
 - name: string
 - industry: string  
 - phone: string
 - email: string
-- intent_signals: array of strings (include actual search terms like "Stripe alternative", "best POS for restaurants")
+- intent_signals: array of strings (include actual search terms from the keywords provided)
 - location: string
 - pain_point: string
 
 Only return the JSON array, no other text."""
             ).with_model("openai", "gpt-5.2")
             
-            search_prompt = f"""Find {max_results} businesses that are ACTIVELY IN BUYING MODE for payment processing solutions.
+            # Build keyword list for prompt
+            keywords_prompt = chr(10).join(f'- Searching for "{kw}"' for kw in intent_keywords[:50])  # Limit in prompt to avoid token overflow
+            
+            search_prompt = f"""Find {max_results} businesses that are ACTIVELY IN BUYING MODE based on these search signals.
 
 Search criteria:
 - Primary query: {query}
-- Industry focus: {industry or 'Any industry that processes card payments'}
+- Industry focus: {industry or 'Any relevant industry'}
 - Location: {location or 'United States'}
 
 Target businesses showing these high-intent signals:
-{chr(10).join(f'- Searching for "{kw}"' for kw in intent_keywords)}
+{keywords_prompt}
 
 These leads should be people who:
-1. Are actively comparing payment processors
-2. Searching for alternatives to major providers (Toast, Square, Stripe, Clover)
-3. Looking to switch due to high fees, poor service, or missing features
-4. New businesses setting up payment processing for the first time
+1. Are actively comparing solutions
+2. Searching for alternatives or new providers
+3. Looking to switch due to pain points
+4. New businesses setting up for the first time
 
-Return as JSON array with realistic business details and specific intent signals."""
+Return as JSON array with realistic business details and specific intent signals matching the keywords."""
 
             user_message = UserMessage(text=search_prompt)
             response = await chat.send_message(user_message)
@@ -1293,6 +1299,7 @@ class GPTIntentSearchRequest(BaseModel):
     industry: Optional[str] = None
     location: Optional[str] = None
     max_results: int = 10
+    custom_keywords: Optional[List[str]] = None  # Up to 100 custom intent keywords
 
 @api_router.post("/leads/discover")
 async def discover_leads(request: LeadDiscoveryRequest):
@@ -1329,6 +1336,13 @@ async def gpt_intent_search(
     leads_requested = request.max_results
     leads_remaining = current_user.get("lead_credits_remaining", 0)
     
+    # Validate custom keywords (max 100)
+    custom_keywords = None
+    if request.custom_keywords:
+        custom_keywords = [kw.strip() for kw in request.custom_keywords[:100] if kw and kw.strip()]
+        if len(custom_keywords) > 100:
+            raise HTTPException(status_code=400, detail="Maximum 100 custom keywords allowed")
+    
     # Check if user has enough credits
     if leads_remaining < leads_requested:
         raise HTTPException(
@@ -1340,7 +1354,8 @@ async def gpt_intent_search(
         query=request.search_query,
         industry=request.industry,
         location=request.location,
-        max_results=request.max_results
+        max_results=request.max_results,
+        custom_keywords=custom_keywords
     )
     
     created_leads = []

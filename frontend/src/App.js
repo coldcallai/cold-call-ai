@@ -9,7 +9,7 @@ import {
   PhoneCall, PhoneOff, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
   ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
-  CreditCard, Package, ShoppingCart, LogOut, BarChart3
+  CreditCard, Package, ShoppingCart, LogOut, BarChart3, X, Edit3, Tags
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -488,8 +488,14 @@ const LeadDiscovery = () => {
   const [selectedLead, setSelectedLead] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState("");
   const [activeTab, setActiveTab] = useState("discover");
+  
+  // Custom keywords state
+  const [customKeywords, setCustomKeywords] = useState([]);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [showKeywordManager, setShowKeywordManager] = useState(false);
+  const [bulkKeywords, setBulkKeywords] = useState("");
 
-  const intentKeywords = [
+  const defaultIntentKeywords = [
     "Toast alternative",
     "Square alternative",
     "Stripe alternative",
@@ -500,6 +506,46 @@ const LeadDiscovery = () => {
     "merchant services",
     "reduce processing fees"
   ];
+  
+  // Use custom keywords if any, otherwise use defaults
+  const intentKeywords = customKeywords.length > 0 ? customKeywords : defaultIntentKeywords;
+
+  const addKeyword = () => {
+    const keyword = newKeyword.trim();
+    if (keyword && !customKeywords.includes(keyword) && customKeywords.length < 100) {
+      setCustomKeywords([...customKeywords, keyword]);
+      setNewKeyword("");
+    } else if (customKeywords.length >= 100) {
+      toast.error("Maximum 100 keywords allowed");
+    }
+  };
+
+  const removeKeyword = (keywordToRemove) => {
+    setCustomKeywords(customKeywords.filter(k => k !== keywordToRemove));
+  };
+
+  const clearAllKeywords = () => {
+    setCustomKeywords([]);
+  };
+
+  const addBulkKeywords = () => {
+    const keywords = bulkKeywords
+      .split(/[\n,]/)
+      .map(k => k.trim())
+      .filter(k => k && !customKeywords.includes(k));
+    
+    const available = 100 - customKeywords.length;
+    const toAdd = keywords.slice(0, available);
+    
+    if (toAdd.length > 0) {
+      setCustomKeywords([...customKeywords, ...toAdd]);
+      setBulkKeywords("");
+      toast.success(`Added ${toAdd.length} keywords`);
+      if (keywords.length > available) {
+        toast.warning(`${keywords.length - available} keywords skipped (100 max limit)`);
+      }
+    }
+  };
 
   const fetchLeads = async () => {
     try {
@@ -534,7 +580,8 @@ const LeadDiscovery = () => {
         search_query: searchQuery,
         industry: industry || null,
         location: location || null,
-        max_results: 10
+        max_results: 10,
+        custom_keywords: customKeywords.length > 0 ? customKeywords : null
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -665,25 +712,146 @@ const LeadDiscovery = () => {
         </TabsList>
 
         <TabsContent value="discover" className="space-y-4 mt-4">
-          {/* Intent Keywords Quick Select */}
+          {/* Intent Keywords Section */}
           <Card className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 shadow-sm">
             <CardContent className="p-4">
-              <p className="text-sm font-medium text-cyan-800 mb-3">High-Intent Keywords (People in Buying Mode)</p>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Tags className="w-4 h-4 text-cyan-700" />
+                  <p className="text-sm font-medium text-cyan-800">
+                    Intent Keywords ({customKeywords.length > 0 ? `${customKeywords.length} custom` : 'defaults'})
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowKeywordManager(!showKeywordManager)}
+                  className="text-cyan-700 border-cyan-300 hover:bg-cyan-100"
+                  data-testid="manage-keywords-btn"
+                >
+                  <Edit3 className="w-3 h-3 mr-1" />
+                  {showKeywordManager ? 'Hide' : 'Manage Keywords'}
+                </Button>
+              </div>
+              
+              {/* Quick Select Keywords */}
               <div className="flex flex-wrap gap-2">
-                {intentKeywords.map((keyword) => (
+                {intentKeywords.slice(0, 15).map((keyword) => (
                   <button
                     key={keyword}
                     onClick={() => setSearchQuery(keyword)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1 ${
                       searchQuery === keyword
                         ? 'bg-cyan-600 text-white'
                         : 'bg-white text-cyan-700 border border-cyan-300 hover:bg-cyan-100'
                     }`}
                   >
                     {keyword}
+                    {customKeywords.length > 0 && (
+                      <X 
+                        className="w-3 h-3 ml-1 hover:text-red-500" 
+                        onClick={(e) => { e.stopPropagation(); removeKeyword(keyword); }}
+                      />
+                    )}
                   </button>
                 ))}
+                {intentKeywords.length > 15 && (
+                  <span className="px-3 py-1.5 text-sm text-cyan-600">
+                    +{intentKeywords.length - 15} more
+                  </span>
+                )}
               </div>
+
+              {/* Keyword Manager Panel */}
+              {showKeywordManager && (
+                <div className="mt-4 pt-4 border-t border-cyan-200 space-y-4">
+                  {/* Add Single Keyword */}
+                  <div>
+                    <Label className="text-cyan-800 text-sm">Add Keyword</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        value={newKeyword}
+                        onChange={(e) => setNewKeyword(e.target.value)}
+                        placeholder="e.g., best CRM software"
+                        className="flex-1"
+                        onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
+                        data-testid="new-keyword-input"
+                      />
+                      <Button 
+                        onClick={addKeyword}
+                        disabled={!newKeyword.trim() || customKeywords.length >= 100}
+                        className="bg-cyan-600 hover:bg-cyan-700"
+                        data-testid="add-keyword-btn"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Bulk Add Keywords */}
+                  <div>
+                    <Label className="text-cyan-800 text-sm">Bulk Add (paste multiple, comma or newline separated)</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Textarea
+                        value={bulkKeywords}
+                        onChange={(e) => setBulkKeywords(e.target.value)}
+                        placeholder="keyword 1, keyword 2&#10;keyword 3&#10;keyword 4"
+                        className="flex-1 h-20"
+                        data-testid="bulk-keywords-input"
+                      />
+                      <Button 
+                        onClick={addBulkKeywords}
+                        disabled={!bulkKeywords.trim()}
+                        className="bg-cyan-600 hover:bg-cyan-700 self-end"
+                        data-testid="add-bulk-btn"
+                      >
+                        Add All
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Keywords Summary */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-cyan-700">
+                      {customKeywords.length}/100 keywords
+                    </span>
+                    <div className="flex gap-2">
+                      {customKeywords.length > 0 && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={clearAllKeywords}
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                          data-testid="clear-keywords-btn"
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" />
+                          Clear All
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* All Custom Keywords List */}
+                  {customKeywords.length > 0 && (
+                    <div className="bg-white rounded-lg p-3 max-h-40 overflow-y-auto">
+                      <div className="flex flex-wrap gap-1">
+                        {customKeywords.map((keyword, idx) => (
+                          <span 
+                            key={idx}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-100 text-cyan-800 rounded text-xs"
+                          >
+                            {keyword}
+                            <X 
+                              className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                              onClick={() => removeKeyword(keyword)}
+                            />
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

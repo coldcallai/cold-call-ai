@@ -6,6 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
@@ -765,29 +766,94 @@ class ComplianceService:
         """
         Verify phone number type using Twilio Lookup API.
         Returns line type (landline, mobile, voip) and carrier info.
+        Cost: $0.005 per lookup (cached for 30 days)
         """
-        # Check cache first
-        cached = await db.number_verifications.find_one({"phone_number": phone_number}, {"_id": 0})
+        # Normalize phone number
+        clean_number = ''.join(filter(str.isdigit, phone_number))
+        if not clean_number.startswith('1') and len(clean_number) == 10:
+            clean_number = '1' + clean_number
+        formatted_number = f"+{clean_number}"
+        
+        # Check cache first (saves money!)
+        cached = await db.number_verifications.find_one({"phone_number": formatted_number}, {"_id": 0})
         if cached:
             # Return cached result if less than 30 days old
-            verified_at = datetime.fromisoformat(cached["verified_at"].replace("Z", "+00:00"))
-            if (datetime.now(timezone.utc) - verified_at).days < 30:
-                return cached
+            try:
+                verified_at = datetime.fromisoformat(cached["verified_at"].replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - verified_at).days < 30:
+                    logger.info(f"Using cached verification for {formatted_number}")
+                    return cached
+            except Exception:
+                pass
         
-        # For now, return a default verification (Twilio Lookup costs money)
-        # In production, use Twilio Lookup API for real verification
+        # Use Twilio Lookup API for real verification
         verification = {
-            "phone_number": phone_number,
-            "is_valid": True,
-            "line_type": "unknown",  # Would be "landline", "mobile", "voip" with real lookup
-            "is_business": True,  # Assume business for B2B
+            "phone_number": formatted_number,
+            "is_valid": False,
+            "line_type": "unknown",
+            "is_mobile": False,
             "carrier": None,
+            "carrier_type": None,
+            "error": None,
             "verified_at": datetime.now(timezone.utc).isoformat()
         }
         
-        # Cache the result
+        try:
+            if twilio_client:
+                # Twilio Lookup API v2 with Line Type Intelligence
+                # Cost: $0.005 per successful lookup
+                lookup_result = await asyncio.to_thread(
+                    twilio_client.lookups.v2.phone_numbers(formatted_number).fetch,
+                    fields='line_type_intelligence'
+                )
+                
+                verification["is_valid"] = lookup_result.valid
+                verification["calling_country_code"] = lookup_result.calling_country_code
+                verification["national_format"] = lookup_result.national_format
+                
+                # Extract line type intelligence
+                line_type_info = lookup_result.line_type_intelligence or {}
+                verification["line_type"] = line_type_info.get("type") or "unknown"
+                verification["carrier"] = line_type_info.get("carrier_name")
+                verification["carrier_type"] = line_type_info.get("mobile_network_code")
+                
+                # Determine if mobile (higher pickup rates)
+                line_type = (verification["line_type"] or "unknown").lower()
+                verification["is_mobile"] = line_type in ["mobile", "cellphone", "wireless"]
+                verification["is_landline"] = line_type in ["landline", "fixedline", "fixed", "fixedvoip"]
+                verification["is_voip"] = line_type in ["voip", "non-fixed voip", "virtual", "nonFixedVoip"]
+                
+                # Priority score for dialing (mobile > landline > voip > unknown)
+                priority_map = {"mobile": 100, "cellphone": 100, "wireless": 100, 
+                               "landline": 60, "fixedline": 60, "fixed": 60, "fixedvoip": 55,
+                               "voip": 30, "non-fixed voip": 20, "nonfixedvoip": 20, "virtual": 20}
+                verification["dial_priority"] = priority_map.get(line_type, 40)
+                
+                logger.info(f"Twilio Lookup: {formatted_number} -> {verification['line_type']} (valid: {verification['is_valid']})")
+            else:
+                verification["error"] = "Twilio client not configured"
+                verification["is_valid"] = True  # Assume valid if can't verify
+                verification["dial_priority"] = 50
+                logger.warning("Twilio client not available for phone verification")
+                
+        except Exception as e:
+            error_msg = str(e)
+            verification["error"] = error_msg
+            
+            # Check if number is invalid based on error
+            if "not a valid phone number" in error_msg.lower():
+                verification["is_valid"] = False
+                verification["dial_priority"] = 0
+            else:
+                # Network error - assume valid but log it
+                verification["is_valid"] = True
+                verification["dial_priority"] = 40
+            
+            logger.error(f"Phone verification error for {formatted_number}: {e}")
+        
+        # Cache the result (even errors, to avoid repeated lookups)
         await db.number_verifications.update_one(
-            {"phone_number": phone_number},
+            {"phone_number": formatted_number},
             {"$set": verification},
             upsert=True
         )
@@ -797,11 +863,13 @@ class ComplianceService:
     async def pre_call_compliance_check(self, phone_number: str, user_id: str = None) -> Dict:
         """
         Perform all compliance checks before making a call.
-        Returns whether call is allowed and reasons if not.
+        Returns whether call is allowed, reasons if not, and dial priority.
         """
         checks_performed = []
         reasons = []
+        warnings = []
         is_allowed = True
+        dial_priority = 50  # Default priority
         
         # 1. Check internal DNC list
         checks_performed.append("internal_dnc")
@@ -809,14 +877,28 @@ class ComplianceService:
             is_allowed = False
             reasons.append("Number is on internal Do Not Call list")
         
-        # 2. Verify number (landline vs mobile)
+        # 2. Verify number with Twilio Lookup (landline vs mobile vs voip)
         checks_performed.append("number_verification")
         verification = await self.verify_number(phone_number)
         
-        # If we know it's a mobile and not verified for business, flag it
-        if verification.get("line_type") == "mobile" and not verification.get("is_business"):
+        # Check if number is valid
+        if not verification.get("is_valid", True):
             is_allowed = False
-            reasons.append("Mobile number without business verification - consent required")
+            reasons.append(f"Invalid phone number: {verification.get('error', 'verification failed')}")
+        
+        # Get dial priority from verification
+        dial_priority = verification.get("dial_priority", 50)
+        
+        # Add warnings for low-priority number types (but still allow)
+        line_type = verification.get("line_type", "unknown")
+        if verification.get("is_voip"):
+            warnings.append(f"VoIP number detected ({line_type}) - may have lower pickup rate")
+            dial_priority = min(dial_priority, 30)
+        elif verification.get("is_landline"):
+            warnings.append(f"Landline detected ({line_type}) - typically 20% pickup rate vs 80% for mobile")
+        elif verification.get("is_mobile"):
+            # Mobile is preferred - no warning needed
+            pass
         
         # 3. Check recent call history (don't call too frequently)
         checks_performed.append("call_frequency")
@@ -827,6 +909,8 @@ class ComplianceService:
         if recent_calls >= 3:
             is_allowed = False
             reasons.append("Called 3+ times in last 7 days - cooling off period")
+        elif recent_calls >= 2:
+            warnings.append(f"Called {recent_calls} times in last 7 days - consider spacing calls")
         
         # Log the compliance check
         check_result = {
@@ -835,7 +919,10 @@ class ComplianceService:
             "user_id": user_id,
             "is_allowed": is_allowed,
             "reasons": reasons,
+            "warnings": warnings,
             "checks_performed": checks_performed,
+            "verification": verification,
+            "dial_priority": dial_priority,
             "checked_at": datetime.now(timezone.utc).isoformat()
         }
         await db.compliance_checks.insert_one(check_result)
@@ -844,7 +931,12 @@ class ComplianceService:
             "phone_number": phone_number,
             "is_allowed": is_allowed,
             "reasons": reasons,
-            "checks_performed": checks_performed
+            "warnings": warnings,
+            "checks_performed": checks_performed,
+            "line_type": line_type,
+            "is_mobile": verification.get("is_mobile", False),
+            "carrier": verification.get("carrier"),
+            "dial_priority": dial_priority
         }
 
 compliance_service = ComplianceService()
@@ -1716,6 +1808,200 @@ async def export_leads_csv(status: Optional[LeadStatus] = None):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
     )
+
+# ----- Phone & Email Verification Endpoints -----
+
+class PhoneVerifyRequest(BaseModel):
+    phone_number: str
+
+class EmailVerifyRequest(BaseModel):
+    email: str
+
+@api_router.post("/verify/phone")
+async def verify_phone_number(
+    request: PhoneVerifyRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Verify a phone number using Twilio Lookup API.
+    Returns line type (mobile/landline/voip), carrier, and dial priority.
+    Cost: $0.005 per lookup (cached for 30 days).
+    """
+    verification = await compliance_service.verify_number(request.phone_number)
+    
+    return {
+        "phone_number": verification.get("phone_number"),
+        "is_valid": verification.get("is_valid", False),
+        "line_type": verification.get("line_type", "unknown"),
+        "is_mobile": verification.get("is_mobile", False),
+        "is_landline": verification.get("is_landline", False),
+        "is_voip": verification.get("is_voip", False),
+        "carrier": verification.get("carrier"),
+        "dial_priority": verification.get("dial_priority", 50),
+        "recommendation": _get_dial_recommendation(verification),
+        "cached": verification.get("verified_at") != datetime.now(timezone.utc).isoformat()
+    }
+
+def _get_dial_recommendation(verification: Dict) -> str:
+    """Generate human-readable dial recommendation based on verification"""
+    if not verification.get("is_valid", True):
+        return "DO NOT CALL - Invalid number"
+    
+    priority = verification.get("dial_priority", 50)
+    line_type = verification.get("line_type", "unknown")
+    
+    if priority >= 80:
+        return f"HIGH PRIORITY - Mobile number ({line_type}) - expect 70-80% pickup rate"
+    elif priority >= 50:
+        return f"MEDIUM PRIORITY - Landline ({line_type}) - expect 15-25% pickup rate"
+    elif priority >= 20:
+        return f"LOW PRIORITY - VoIP ({line_type}) - may be spam filtered, expect 5-15% pickup rate"
+    else:
+        return "UNKNOWN - Unable to determine line type, proceed with caution"
+
+@api_router.post("/verify/email")
+async def verify_email_address(
+    request: EmailVerifyRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Verify an email address for syntax, domain validity, and common issues.
+    FREE - no external API cost.
+    """
+    email = request.email.strip().lower()
+    issues = []
+    is_valid = True
+    quality_score = 100
+    
+    # 1. Basic syntax check
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        is_valid = False
+        issues.append("Invalid email syntax")
+        quality_score -= 50
+    
+    # 2. Extract domain
+    domain = email.split('@')[-1] if '@' in email else None
+    
+    if domain:
+        # 3. Check for disposable/temp email domains
+        disposable_domains = [
+            'tempmail.com', 'throwaway.email', '10minutemail.com', 'guerrillamail.com',
+            'mailinator.com', 'fakeinbox.com', 'trashmail.com', 'yopmail.com',
+            'temp-mail.org', 'disposablemail.com', 'sharklasers.com'
+        ]
+        if domain in disposable_domains:
+            issues.append("Disposable/temporary email domain detected")
+            quality_score -= 30
+        
+        # 4. Check for catch-all suspicious domains
+        catch_all_patterns = ['noreply', 'no-reply', 'donotreply', 'test', 'example']
+        if any(pattern in email.split('@')[0] for pattern in catch_all_patterns):
+            issues.append("Email appears to be a no-reply or test address")
+            quality_score -= 20
+        
+        # 5. Check for common typos in major domains
+        typo_corrections = {
+            'gmial.com': 'gmail.com', 'gmal.com': 'gmail.com', 'gamil.com': 'gmail.com',
+            'outlok.com': 'outlook.com', 'outllook.com': 'outlook.com',
+            'yahooo.com': 'yahoo.com', 'yaho.com': 'yahoo.com',
+            'hotmal.com': 'hotmail.com', 'hotmai.com': 'hotmail.com'
+        }
+        if domain in typo_corrections:
+            issues.append(f"Possible typo - did you mean {typo_corrections[domain]}?")
+            quality_score -= 15
+        
+        # 6. Check for business vs personal domain
+        personal_domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com']
+        is_business_email = domain not in personal_domains
+        
+        if is_business_email:
+            quality_score += 10  # Business emails are preferred for B2B
+    
+    return {
+        "email": email,
+        "is_valid": is_valid and len(issues) == 0,
+        "quality_score": max(0, min(100, quality_score)),
+        "issues": issues,
+        "domain": domain,
+        "is_business_email": is_business_email if domain else False,
+        "recommendation": _get_email_recommendation(quality_score, issues, is_business_email if domain else False)
+    }
+
+def _get_email_recommendation(score: int, issues: List, is_business: bool) -> str:
+    """Generate email quality recommendation"""
+    if score >= 90:
+        prefix = "EXCELLENT" if is_business else "GOOD"
+        return f"{prefix} - {'Business' if is_business else 'Personal'} email, safe to use"
+    elif score >= 70:
+        return f"ACCEPTABLE - Minor concerns: {', '.join(issues[:2])}"
+    elif score >= 50:
+        return f"CAUTION - Quality issues: {', '.join(issues[:2])}"
+    else:
+        return f"AVOID - Significant issues: {', '.join(issues[:2])}"
+
+@api_router.post("/verify/lead/{lead_id}")
+async def verify_lead_contact_info(
+    lead_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Verify both phone and email for a specific lead.
+    Updates lead record with verification results.
+    """
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    results = {"lead_id": lead_id}
+    
+    # Verify phone
+    if lead.get("phone"):
+        phone_verification = await compliance_service.verify_number(lead["phone"])
+        results["phone"] = {
+            "number": lead["phone"],
+            "is_valid": phone_verification.get("is_valid"),
+            "line_type": phone_verification.get("line_type"),
+            "dial_priority": phone_verification.get("dial_priority"),
+            "recommendation": _get_dial_recommendation(phone_verification)
+        }
+    
+    # Verify email (using the same logic as the endpoint)
+    if lead.get("email"):
+        email = lead["email"].strip().lower()
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        is_valid_email = bool(re.match(email_pattern, email))
+        domain = email.split('@')[-1] if '@' in email else None
+        personal_domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com']
+        
+        results["email"] = {
+            "address": email,
+            "is_valid": is_valid_email,
+            "is_business_email": domain not in personal_domains if domain else False
+        }
+    
+    # Calculate overall lead quality score
+    lead_quality = 50  # Base score
+    if results.get("phone", {}).get("is_valid"):
+        lead_quality += results["phone"].get("dial_priority", 0) * 0.3
+    if results.get("email", {}).get("is_valid"):
+        lead_quality += 20
+        if results["email"].get("is_business_email"):
+            lead_quality += 10
+    
+    results["lead_quality_score"] = min(100, int(lead_quality))
+    
+    # Update lead with verification data
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {
+            "verification": results,
+            "lead_quality_score": results["lead_quality_score"],
+            "verified_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return results
 
 # ----- Agents CRUD -----
 @api_router.get("/agents", response_model=List[Agent])

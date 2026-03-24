@@ -156,6 +156,7 @@ class PasswordUser(BaseModel):
 # ============== MODELS ==============
 class Lead(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None  # Owner of this lead (for multi-tenancy)
     business_name: str
     contact_name: Optional[str] = None
     phone: str
@@ -188,6 +189,7 @@ class LeadCreate(BaseModel):
 
 class Agent(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None  # Owner of this agent (for multi-tenancy)
     name: str
     email: str
     phone: Optional[str] = None
@@ -206,6 +208,7 @@ class AgentCreate(BaseModel):
 
 class Campaign(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None  # Owner of this campaign (for multi-tenancy)
     name: str
     description: Optional[str] = None
     ai_script: str
@@ -243,6 +246,7 @@ class CampaignCreate(BaseModel):
 
 class Call(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None  # Owner of this call (for multi-tenancy)
     lead_id: str
     campaign_id: str
     agent_id: Optional[str] = None
@@ -2091,9 +2095,11 @@ async def gpt_intent_search(
 async def get_leads(
     status: Optional[LeadStatus] = None,
     limit: int = Query(100, le=500),
-    skip: int = 0
+    skip: int = 0,
+    current_user: Dict = Depends(get_current_user)
 ):
-    query = {}
+    """Get leads belonging to the current user"""
+    query = {"user_id": current_user["user_id"]}
     if status:
         query["status"] = status
     
@@ -2101,23 +2107,26 @@ async def get_leads(
     return leads
 
 @api_router.get("/leads/{lead_id}", response_model=Lead)
-async def get_lead(lead_id: str):
-    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+async def get_lead(lead_id: str, current_user: Dict = Depends(get_current_user)):
+    """Get a specific lead (must belong to current user)"""
+    lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
 
 @api_router.post("/leads", response_model=Lead)
-async def create_lead(lead: LeadCreate):
-    lead_obj = Lead(**lead.model_dump())
+async def create_lead(lead: LeadCreate, current_user: Dict = Depends(get_current_user)):
+    """Create a new lead owned by the current user"""
+    lead_obj = Lead(**lead.model_dump(), user_id=current_user["user_id"])
     await db.leads.insert_one(lead_obj.model_dump())
     return lead_obj
 
 @api_router.put("/leads/{lead_id}", response_model=Lead)
-async def update_lead(lead_id: str, updates: Dict[str, Any]):
+async def update_lead(lead_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
+    """Update a lead (must belong to current user)"""
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.leads.update_one(
-        {"id": lead_id},
+        {"id": lead_id, "user_id": current_user["user_id"]},
         {"$set": updates}
     )
     if result.matched_count == 0:
@@ -2127,18 +2136,21 @@ async def update_lead(lead_id: str, updates: Dict[str, Any]):
     return lead
 
 @api_router.delete("/leads/{lead_id}")
-async def delete_lead(lead_id: str):
-    result = await db.leads.delete_one({"id": lead_id})
+async def delete_lead(lead_id: str, current_user: Dict = Depends(get_current_user)):
+    """Delete a lead (must belong to current user)"""
+    result = await db.leads.delete_one({"id": lead_id, "user_id": current_user["user_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
     return {"message": "Lead deleted"}
 
 # ----- CSV Upload & Export -----
 @api_router.post("/leads/upload-csv")
-async def upload_leads_csv(file: UploadFile = File(...)):
+async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = Depends(get_current_user)):
     """Upload leads from CSV file (Bring Your Own List)"""
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be a CSV")
+    
+    user_id = current_user["user_id"]
     
     try:
         content = await file.read()
@@ -2155,16 +2167,21 @@ async def upload_leads_csv(file: UploadFile = File(...)):
                 phone = row.get('phone') or row.get('Phone') or row.get('phone_number') or row.get('Phone Number')
                 email = row.get('email') or row.get('Email') or row.get('email_address')
                 contact_name = row.get('contact_name') or row.get('contact') or row.get('Contact') or row.get('Contact Name')
+                industry = row.get('industry') or row.get('Industry')
+                company_size = row.get('company_size') or row.get('size') or row.get('Company Size')
                 
                 if not business_name or not phone:
                     errors.append(f"Row {idx + 1}: Missing business_name or phone")
                     continue
                 
                 lead_data = Lead(
+                    user_id=user_id,  # Assign to current user
                     business_name=business_name,
                     phone=phone,
                     email=email,
                     contact_name=contact_name,
+                    industry=industry,
+                    company_size=company_size,
                     source="csv_upload",
                     intent_signals=["Uploaded from CSV"]
                 )
@@ -2185,9 +2202,9 @@ async def upload_leads_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
 
 @api_router.get("/leads/export-csv")
-async def export_leads_csv(status: Optional[LeadStatus] = None):
-    """Export leads to CSV (Discovery Only mode)"""
-    query = {}
+async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Dict = Depends(get_current_user)):
+    """Export leads to CSV (only user's own leads)"""
+    query = {"user_id": current_user["user_id"]}
     if status:
         query["status"] = status
     
@@ -2592,27 +2609,31 @@ async def score_campaign_leads(
 
 # ----- Agents CRUD -----
 @api_router.get("/agents", response_model=List[Agent])
-async def get_agents():
-    agents = await db.agents.find({}, {"_id": 0}).to_list(100)
+async def get_agents(current_user: Dict = Depends(get_current_user)):
+    """Get agents belonging to the current user"""
+    agents = await db.agents.find({"user_id": current_user["user_id"]}, {"_id": 0}).to_list(100)
     return agents
 
 @api_router.get("/agents/{agent_id}", response_model=Agent)
-async def get_agent(agent_id: str):
-    agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
+async def get_agent(agent_id: str, current_user: Dict = Depends(get_current_user)):
+    """Get a specific agent (must belong to current user)"""
+    agent = await db.agents.find_one({"id": agent_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent
 
 @api_router.post("/agents", response_model=Agent)
-async def create_agent(agent: AgentCreate):
-    agent_obj = Agent(**agent.model_dump())
+async def create_agent(agent: AgentCreate, current_user: Dict = Depends(get_current_user)):
+    """Create a new agent owned by the current user"""
+    agent_obj = Agent(**agent.model_dump(), user_id=current_user["user_id"])
     await db.agents.insert_one(agent_obj.model_dump())
     return agent_obj
 
 @api_router.put("/agents/{agent_id}", response_model=Agent)
-async def update_agent(agent_id: str, updates: Dict[str, Any]):
+async def update_agent(agent_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
+    """Update an agent (must belong to current user)"""
     result = await db.agents.update_one(
-        {"id": agent_id},
+        {"id": agent_id, "user_id": current_user["user_id"]},
         {"$set": updates}
     )
     if result.matched_count == 0:
@@ -2622,36 +2643,41 @@ async def update_agent(agent_id: str, updates: Dict[str, Any]):
     return agent
 
 @api_router.delete("/agents/{agent_id}")
-async def delete_agent(agent_id: str):
-    result = await db.agents.delete_one({"id": agent_id})
+async def delete_agent(agent_id: str, current_user: Dict = Depends(get_current_user)):
+    """Delete an agent (must belong to current user)"""
+    result = await db.agents.delete_one({"id": agent_id, "user_id": current_user["user_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"message": "Agent deleted"}
 
 # ----- Campaigns CRUD -----
 @api_router.get("/campaigns", response_model=List[Campaign])
-async def get_campaigns():
-    campaigns = await db.campaigns.find({}, {"_id": 0}).to_list(100)
+async def get_campaigns(current_user: Dict = Depends(get_current_user)):
+    """Get campaigns belonging to the current user"""
+    campaigns = await db.campaigns.find({"user_id": current_user["user_id"]}, {"_id": 0}).to_list(100)
     return campaigns
 
 @api_router.get("/campaigns/{campaign_id}", response_model=Campaign)
-async def get_campaign(campaign_id: str):
-    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+async def get_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
+    """Get a specific campaign (must belong to current user)"""
+    campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     return campaign
 
 @api_router.post("/campaigns", response_model=Campaign)
-async def create_campaign(campaign: CampaignCreate):
-    campaign_obj = Campaign(**campaign.model_dump())
+async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends(get_current_user)):
+    """Create a new campaign owned by the current user"""
+    campaign_obj = Campaign(**campaign.model_dump(), user_id=current_user["user_id"])
     await db.campaigns.insert_one(campaign_obj.model_dump())
     return campaign_obj
 
 @api_router.put("/campaigns/{campaign_id}", response_model=Campaign)
-async def update_campaign(campaign_id: str, updates: Dict[str, Any]):
+async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
+    """Update a campaign (must belong to current user)"""
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.campaigns.update_one(
-        {"id": campaign_id},
+        {"id": campaign_id, "user_id": current_user["user_id"]},
         {"$set": updates}
     )
     if result.matched_count == 0:
@@ -2661,9 +2687,10 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any]):
     return campaign
 
 @api_router.post("/campaigns/{campaign_id}/start")
-async def start_campaign(campaign_id: str):
+async def start_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
+    """Start a campaign (must belong to current user)"""
     result = await db.campaigns.update_one(
-        {"id": campaign_id},
+        {"id": campaign_id, "user_id": current_user["user_id"]},
         {"$set": {"status": CampaignStatus.ACTIVE, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     if result.matched_count == 0:
@@ -2671,9 +2698,10 @@ async def start_campaign(campaign_id: str):
     return {"message": "Campaign started", "status": "active"}
 
 @api_router.post("/campaigns/{campaign_id}/pause")
-async def pause_campaign(campaign_id: str):
+async def pause_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
+    """Pause a campaign (must belong to current user)"""
     result = await db.campaigns.update_one(
-        {"id": campaign_id},
+        {"id": campaign_id, "user_id": current_user["user_id"]},
         {"$set": {"status": CampaignStatus.PAUSED, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     if result.matched_count == 0:
@@ -2681,8 +2709,9 @@ async def pause_campaign(campaign_id: str):
     return {"message": "Campaign paused", "status": "paused"}
 
 @api_router.delete("/campaigns/{campaign_id}")
-async def delete_campaign(campaign_id: str):
-    result = await db.campaigns.delete_one({"id": campaign_id})
+async def delete_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
+    """Delete a campaign (must belong to current user)"""
+    result = await db.campaigns.delete_one({"id": campaign_id, "user_id": current_user["user_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Campaign not found")
     return {"message": "Campaign deleted"}

@@ -145,19 +145,29 @@ A vertical-agnostic B2B SaaS platform that:
 - **Checkout session polling for payment verification**
 - **Admin account with unlimited credits for testing**
 - **Compliance Layer (DNC management, number verification, pre-call checks)**
-- **Twilio Integration for real outbound calls (awaiting credentials)**
+- **Twilio Integration for real outbound calls (LIVE)**
 - **TwiML webhooks for AI conversation flow**
 - **Call recording and status tracking**
+
+### Session 3 (December 24, 2025): Real-Time AI Voice Conversations
+- **Fixed Twilio Media Streams WebSocket connection** - Root cause was internal URL being used instead of external URL
+- **Implemented Synthflow-style real-time AI calls** - Full bidirectional conversation pipeline
+- **ElevenLabs TTS streaming to Twilio** - μ-law audio format for direct playback
+- **WebSocket handler for Media Streams** - Handles connected, start, media, stop events
+- **STT integration via OpenAI Whisper** - Transcribes caller audio for AI processing
+- **GPT-5.2 response generation** - Context-aware sales conversation
+- **Tested live calls** - Verified end-to-end flow with real phone calls
 
 ## Prioritized Backlog
 
 ### P0 - Critical
 - [x] ~~Stripe Integration - Real checkout sessions for subscriptions and packs~~ ✅ DONE
+- [x] ~~Twilio Media Streams WebSocket - Real-time AI conversations~~ ✅ DONE
 
 ### P1 - High Priority
-- [ ] Twilio Integration - Move from mocked to real outbound calls
 - [ ] Multi-tenant data isolation - Scope leads/campaigns to user accounts
 - [ ] Subscription tier enforcement - Limit features by plan
+- [ ] Improve STT accuracy - Consider Deepgram for lower latency
 
 ### P2 - Medium Priority
 - [ ] Low-balance email notifications
@@ -168,6 +178,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [ ] Team seat management
 - [ ] API rate limiting by tier
 - [ ] Refactor App.js (2000+ lines) into smaller components
+- [ ] Calendar integration for auto-booking qualified leads
 
 ## Testing
 - Backend: pytest suite at `/app/backend/tests/test_auth_and_api.py`
@@ -179,8 +190,9 @@ A vertical-agnostic B2B SaaS platform that:
 | Service | Status | Notes |
 |---------|--------|-------|
 | OpenAI GPT-5.2 | ✅ Active | Via Emergent LLM Key |
+| OpenAI Whisper | ✅ Active | STT for caller audio |
 | Emergent Auth | ✅ Active | Google OAuth |
-| ElevenLabs | ✅ Active | TTS voice generation |
+| ElevenLabs | ✅ Active | TTS voice generation, μ-law output |
 | Stripe | ✅ Active | Test keys, checkout working |
+| Twilio | ✅ Active | Live outbound calls + Media Streams |
 | Resend | ⚠️ Requires Key | Email notifications |
-| Twilio | ⚠️ Mocked | Real calls require credentials |

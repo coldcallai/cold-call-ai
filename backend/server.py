@@ -3007,7 +3007,15 @@ async def initiate_realtime_call(
     }
     
     # Get callback URL (must be wss:// for Media Streams)
-    callback_url = str(http_request.base_url).rstrip("/")
+    # IMPORTANT: Use the external URL that Twilio can reach, not the internal request URL
+    # The external URL comes from frontend .env or an explicit backend env var
+    external_url = os.environ.get('EXTERNAL_URL') or os.environ.get('REACT_APP_BACKEND_URL')
+    if not external_url:
+        # Fallback to request base_url but this may not work if behind a proxy
+        external_url = str(http_request.base_url).rstrip("/")
+        logger.warning(f"No EXTERNAL_URL configured, using request base: {external_url}")
+    
+    callback_url = external_url.rstrip("/")
     ws_url = callback_url.replace("https://", "wss://").replace("http://", "ws://")
     
     try:
@@ -3097,11 +3105,18 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                 logger.info(f"Media stream connected: {message}")
                 
             elif event == "start":
+                # Twilio start event - get the streamSid
                 stream_sid = message.get("streamSid")
+                start_data = message.get("start", {})
+                
+                # Handle both formats: top-level and nested in start object
+                if not stream_sid:
+                    stream_sid = start_data.get("streamSid")
+                
                 logger.info(f"Media stream started: {stream_sid}")
                 
                 # Send initial AI greeting
-                if is_first_response:
+                if is_first_response and stream_sid:
                     is_first_response = False
                     business = lead.get('business_name', 'your company')
                     greeting = f"Am I speaking with someone at {business}? I'm reaching out because we help businesses increase their profits with solutions most companies overlook. Do you have a moment?"
@@ -3187,6 +3202,8 @@ async def send_tts_to_stream(websocket: WebSocket, stream_sid: str, text: str):
         for chunk in audio_gen:
             audio_data += chunk
         
+        logger.info(f"TTS generated {len(audio_data)} bytes for: '{text[:40]}...'")
+        
         # Send in 20ms chunks (160 bytes at 8kHz)
         chunk_size = 160
         for i in range(0, len(audio_data), chunk_size):
@@ -3201,7 +3218,7 @@ async def send_tts_to_stream(websocket: WebSocket, stream_sid: str, text: str):
             await asyncio.sleep(0.02)
             
     except Exception as e:
-        logger.error(f"TTS streaming error: {e}")
+        logger.error(f"TTS streaming error: {e}", exc_info=True)
 
 async def transcribe_audio_chunk(audio_data: bytes) -> str:
     """Transcribe audio using a speech recognition service"""

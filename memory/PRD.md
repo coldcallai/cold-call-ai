@@ -158,11 +158,24 @@ A vertical-agnostic B2B SaaS platform that:
 - **GPT-5.2 response generation** - Context-aware sales conversation
 - **Tested live calls** - Verified end-to-end flow with real phone calls
 
+### Session 4 (December 24, 2025): Training & Onboarding Features
+- **Custom Keywords up to 100** - Agents can add their own intent keywords for lead discovery
+- **Preview Examples (Free)** - See sample leads before using credits
+- **Keyword Persistence** - Keywords saved to user profile in database (survives refresh/logout)
+- **Interactive Onboarding Guide** - 8-step walkthrough for new users covering:
+  - Welcome, Keywords Setup, Preview Leads, Discover Real Leads, Create Campaign, Add Agents, Launch & Monitor, Completion
+- **AI Help Chat Assistant** - GPT-powered chat that answers questions and guides users through:
+  - Campaign setup, keyword selection, feature explanations, troubleshooting
+  - Context-aware responses based on user's current page and account state
+- **"Save Keywords" button** - Explicitly save keywords to profile
+
 ## Prioritized Backlog
 
 ### P0 - Critical
 - [x] ~~Stripe Integration - Real checkout sessions for subscriptions and packs~~ ✅ DONE
 - [x] ~~Twilio Media Streams WebSocket - Real-time AI conversations~~ ✅ DONE
+- [x] ~~Custom Keywords (up to 100) for lead discovery~~ ✅ DONE
+- [x] ~~In-App Training Guide & Help Chat~~ ✅ DONE
 
 ### P1 - High Priority
 - [ ] Multi-tenant data isolation - Scope leads/campaigns to user accounts

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useLocation, Navigate, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Toaster, toast } from "sonner";
 import { 
@@ -29,6 +29,8 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import LoginPage from "@/pages/LoginPage";
 import AuthCallback from "@/pages/AuthCallback";
 import UsageDashboard from "@/pages/UsageDashboard";
+import HelpChat from "@/components/HelpChat";
+import OnboardingGuide from "@/components/OnboardingGuide";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -577,6 +579,35 @@ const LeadDiscovery = () => {
     }
   };
 
+  // Load saved keywords from backend
+  const loadSavedKeywords = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await axios.get(`${API}/user/keywords`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.keywords && response.data.keywords.length > 0) {
+        setCustomKeywords(response.data.keywords);
+      }
+    } catch (error) {
+      console.error("Failed to load saved keywords:", error);
+    }
+  };
+
+  // Save keywords to backend
+  const saveKeywords = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      await axios.post(`${API}/user/keywords`, 
+        { keywords: customKeywords },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(`Saved ${customKeywords.length} keywords to your profile`);
+    } catch (error) {
+      toast.error("Failed to save keywords");
+    }
+  };
+
   const fetchLeads = async () => {
     try {
       const response = await axios.get(`${API}/leads`);
@@ -600,6 +631,7 @@ const LeadDiscovery = () => {
   useEffect(() => {
     fetchLeads();
     fetchCampaigns();
+    loadSavedKeywords();
   }, []);
 
   const discoverLeads = async () => {
@@ -847,16 +879,28 @@ const LeadDiscovery = () => {
                     </span>
                     <div className="flex gap-2">
                       {customKeywords.length > 0 && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={clearAllKeywords}
-                          className="text-red-600 border-red-300 hover:bg-red-50"
-                          data-testid="clear-keywords-btn"
-                        >
-                          <Trash2 className="w-3 h-3 mr-1" />
-                          Clear All
-                        </Button>
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={saveKeywords}
+                            className="text-green-600 border-green-300 hover:bg-green-50"
+                            data-testid="save-keywords-btn"
+                          >
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Save Keywords
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={clearAllKeywords}
+                            className="text-red-600 border-red-300 hover:bg-red-50"
+                            data-testid="clear-keywords-btn"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Clear All
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -2802,6 +2846,16 @@ const ProtectedRoute = ({ children }) => {
 // App Router - handles OAuth callback detection
 const AppRouter = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  
+  // Check if user needs onboarding
+  useEffect(() => {
+    if (user && !user.onboarding_completed && location.pathname.startsWith('/app')) {
+      setShowOnboarding(true);
+    }
+  }, [user, location.pathname]);
 
   // CRITICAL: Check URL fragment for session_id synchronously during render
   // This prevents race conditions by processing OAuth callback FIRST
@@ -2810,32 +2864,49 @@ const AppRouter = () => {
   }
 
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      
-      {/* Protected Dashboard Routes */}
-      <Route path="/app/*" element={
-        <ProtectedRoute>
-          <div className="flex">
-            <Sidebar />
-            <main className="flex-1 min-h-screen">
-              <Routes>
-                <Route path="/" element={<FunnelPage />} />
-                <Route path="/usage" element={<UsageDashboard />} />
-                <Route path="/leads" element={<LeadDiscovery />} />
-                <Route path="/campaigns" element={<Campaigns />} />
-                <Route path="/agents" element={<Agents />} />
-                <Route path="/calls" element={<CallHistory />} />
-                <Route path="/packs" element={<CreditPacks />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Routes>
-            </main>
-          </div>
-        </ProtectedRoute>
-      } />
-    </Routes>
+    <>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        
+        {/* Protected Dashboard Routes */}
+        <Route path="/app/*" element={
+          <ProtectedRoute>
+            <div className="flex">
+              <Sidebar />
+              <main className="flex-1 min-h-screen">
+                <Routes>
+                  <Route path="/" element={<FunnelPage />} />
+                  <Route path="/usage" element={<UsageDashboard />} />
+                  <Route path="/leads" element={<LeadDiscovery />} />
+                  <Route path="/campaigns" element={<Campaigns />} />
+                  <Route path="/agents" element={<Agents />} />
+                  <Route path="/calls" element={<CallHistory />} />
+                  <Route path="/packs" element={<CreditPacks />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </main>
+              
+              {/* Help Chat - Always visible in dashboard */}
+              <HelpChat currentPage={location.pathname} />
+            </div>
+            
+            {/* Onboarding Guide - Shows for new users */}
+            {showOnboarding && (
+              <OnboardingGuide 
+                user={user}
+                onComplete={() => setShowOnboarding(false)}
+                onNavigate={(path) => {
+                  navigate(path);
+                  setShowOnboarding(false);
+                }}
+              />
+            )}
+          </ProtectedRoute>
+        } />
+      </Routes>
+    </>
   );
 };
 

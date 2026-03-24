@@ -116,6 +116,8 @@ class User(BaseModel):
     monthly_lead_allowance: int = 0
     monthly_call_allowance: int = 0
     team_seat_count: int = 1
+    saved_keywords: List[str] = []  # User's saved intent keywords (up to 100)
+    onboarding_completed: bool = False  # Track if user completed onboarding
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -1264,6 +1266,148 @@ async def logout(request: Request, response: Response):
     response.delete_cookie(key="session_token", path="/")
     
     return {"message": "Logged out successfully"}
+
+# ----- User Keywords Management -----
+class SaveKeywordsRequest(BaseModel):
+    keywords: List[str]
+
+@api_router.post("/user/keywords")
+async def save_user_keywords(
+    request: SaveKeywordsRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Save user's intent keywords (up to 100)"""
+    # Validate and clean keywords
+    keywords = [kw.strip() for kw in request.keywords[:100] if kw and kw.strip()]
+    
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {
+            "saved_keywords": keywords,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": f"Saved {len(keywords)} keywords",
+        "keywords": keywords
+    }
+
+@api_router.get("/user/keywords")
+async def get_user_keywords(current_user: Dict = Depends(get_current_user)):
+    """Get user's saved intent keywords"""
+    return {
+        "keywords": current_user.get("saved_keywords", [])
+    }
+
+@api_router.post("/user/onboarding-complete")
+async def complete_onboarding(current_user: Dict = Depends(get_current_user)):
+    """Mark user's onboarding as completed"""
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {
+            "onboarding_completed": True,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    return {"message": "Onboarding completed"}
+
+# ----- AI Help Chat -----
+class HelpChatRequest(BaseModel):
+    message: str
+    context: Optional[str] = None  # Current page/feature user is on
+
+@api_router.post("/help/chat")
+async def help_chat(
+    request: HelpChatRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """AI-powered help chat that guides users through the system"""
+    
+    system_prompt = """You are ColdCall.ai's helpful assistant. You guide sales agents through using the AI cold calling platform.
+
+PLATFORM OVERVIEW:
+ColdCall.ai is a B2B SaaS that:
+1. Discovers high-intent leads using AI (businesses actively searching for solutions)
+2. Makes AI-powered cold calls to qualify leads
+3. Books meetings with qualified prospects
+
+KEY FEATURES & HOW TO USE THEM:
+
+📍 LEAD DISCOVERY (Most Important First Step):
+- Go to "Lead Discovery" in the sidebar
+- Add your custom keywords (up to 100) that indicate buying intent for YOUR industry
+- Example keywords: "Salesforce alternative", "best CRM software", "switching providers"
+- Click "Preview Examples (Free)" to see sample leads before using credits
+- Click "Discover High-Intent Leads" to find and save real leads
+
+📞 CAMPAIGNS:
+- Create a campaign with your AI script
+- The script tells the AI what to say and how to qualify leads
+- Good scripts: Introduce yourself, ask qualifying questions, handle objections, book meetings
+- Assign leads to campaigns to start calling
+
+👥 AGENTS:
+- Add human agents who receive qualified leads
+- Each agent needs a Calendly link for booking
+- AI calls qualify leads, then routes hot leads to agents
+
+📊 CALL HISTORY:
+- View all calls made by the AI
+- Listen to recordings, read transcripts
+- See qualification scores and outcomes
+
+💳 CREDITS & BILLING:
+- Lead credits: Used when discovering leads
+- Call credits: Used when AI makes calls
+- Buy more in "Credit Packs" or upgrade your subscription
+
+CAMPAIGN SETUP CHECKLIST:
+1. ✅ Add your industry-specific keywords in Lead Discovery
+2. ✅ Preview examples to validate keywords
+3. ✅ Discover 10-20 leads to start
+4. ✅ Create a campaign with qualifying questions
+5. ✅ Add at least one agent with Calendly
+6. ✅ Assign leads to the campaign
+7. ✅ Start the campaign and monitor results
+
+Be helpful, concise, and guide users step-by-step. If they seem stuck, ask what they're trying to accomplish."""
+
+    try:
+        chat = LlmChat(
+            api_key=os.environ.get("EMERGENT_LLM_KEY"),
+            session_id=f"help-{current_user['user_id']}-{uuid.uuid4().hex[:8]}",
+            system_message=system_prompt
+        ).with_model("openai", "gpt-5.2")
+        
+        # Add context about user's current state
+        user_context = f"""
+User Info:
+- Name: {current_user.get('name', 'User')}
+- Subscription: {current_user.get('subscription_tier', 'None')} ({current_user.get('subscription_status', 'inactive')})
+- Lead Credits: {current_user.get('lead_credits_remaining', 0)}
+- Call Credits: {current_user.get('call_credits_remaining', 0)}
+- Has saved keywords: {'Yes' if current_user.get('saved_keywords') else 'No'}
+- Onboarding completed: {'Yes' if current_user.get('onboarding_completed') else 'No'}
+- Current page: {request.context or 'Unknown'}
+
+User's question: {request.message}
+"""
+        
+        user_message = UserMessage(text=user_context)
+        response = await chat.send_message(user_message)
+        
+        return {
+            "response": response,
+            "suggested_actions": []  # Can add contextual action buttons
+        }
+        
+    except Exception as e:
+        logger.error(f"Help chat error: {e}")
+        return {
+            "response": "I'm having trouble connecting right now. For quick help: 1) Start with Lead Discovery to find prospects, 2) Create a Campaign with your script, 3) Add Agents with Calendly links, 4) Assign leads and start calling!",
+            "error": True
+        }
 
 # ----- Dashboard Stats -----
 @api_router.get("/dashboard/stats")

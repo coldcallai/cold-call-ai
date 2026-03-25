@@ -520,6 +520,7 @@ const LeadDiscovery = () => {
   const [selectedCampaign, setSelectedCampaign] = useState("");
   const [activeTab, setActiveTab] = useState("discover");
   const [setupStatus, setSetupStatus] = useState(null);
+  const [verifyingPhone, setVerifyingPhone] = useState(null); // Track which lead is being verified
   
   // Custom keywords state
   const [customKeywords, setCustomKeywords] = useState([]);
@@ -531,6 +532,9 @@ const LeadDiscovery = () => {
   const [previewing, setPreviewing] = useState(false);
   const [previewLeads, setPreviewLeads] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
+  
+  // Line type filter
+  const [lineTypeFilter, setLineTypeFilter] = useState("all");
 
   const defaultIntentKeywords = [
     "Toast alternative",
@@ -793,6 +797,94 @@ const LeadDiscovery = () => {
     }
   };
 
+  const verifyPhone = async (leadId) => {
+    setVerifyingPhone(leadId);
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await axios.post(
+        `${API}/leads/${leadId}/verify-phone`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const { verification } = response.data;
+      const lineType = verification.line_type || 'unknown';
+      const carrier = verification.carrier || 'Unknown carrier';
+      
+      // Update local state with verification result
+      setLeads(prevLeads => 
+        prevLeads.map(lead => 
+          lead.id === leadId 
+            ? { 
+                ...lead, 
+                line_type: lineType,
+                carrier: carrier,
+                phone_verified: verification.is_valid,
+                dial_priority: verification.dial_priority
+              }
+            : lead
+        )
+      );
+      
+      // Show appropriate toast based on line type
+      if (verification.is_mobile) {
+        toast.success(`Mobile number verified: ${carrier}`, {
+          description: "High pickup rate expected (80%+)"
+        });
+      } else if (verification.is_landline) {
+        toast.info(`Landline verified: ${carrier}`, {
+          description: "Business line - 20% typical pickup rate"
+        });
+      } else if (verification.is_voip) {
+        toast.warning(`VoIP number detected: ${carrier}`, {
+          description: "May have lower pickup rate"
+        });
+      } else {
+        toast.info(`Phone verified: ${lineType}`);
+      }
+    } catch (error) {
+      const errDetail = error.response?.data?.detail;
+      const errMsg = typeof errDetail === 'string' ? errDetail : "Failed to verify phone";
+      toast.error(errMsg);
+    } finally {
+      setVerifyingPhone(null);
+    }
+  };
+
+  const verifyAllUnverified = async () => {
+    const unverifiedLeads = leads.filter(l => !l.phone_verified && l.phone);
+    if (unverifiedLeads.length === 0) {
+      toast.info("All leads are already verified");
+      return;
+    }
+    
+    setVerifyingPhone('bulk');
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await axios.post(
+        `${API}/leads/verify-phones-bulk`,
+        { verify_all_unverified: true },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const results = response.data.results || {};
+      toast.success(`Verified ${results.verified || 0} phone numbers`, {
+        description: `Mobile: ${results.mobile || 0}, Landline: ${results.landline || 0}, VoIP: ${results.voip || 0}`
+      });
+      
+      fetchLeads(); // Refresh to show updated data
+    } catch (error) {
+      const errDetail = error.response?.data?.detail;
+      const errMsg = typeof errDetail === 'string' ? errDetail : "Failed to bulk verify phones";
+      toast.error(errMsg);
+    } finally {
+      setVerifyingPhone(null);
+    }
+  };
+
+  // Count unverified leads
+  const unverifiedCount = leads.filter(l => !l.phone_verified && l.phone).length;
+
   return (
     <div className="p-6 md:p-8 space-y-6" data-testid="lead-discovery-page">
       <div className="flex items-center justify-between">
@@ -803,6 +895,22 @@ const LeadDiscovery = () => {
           <p className="text-gray-500 mt-1">Find businesses actively searching for payment solutions</p>
         </div>
         <div className="flex items-center gap-2">
+          {unverifiedCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={verifyAllUnverified}
+              disabled={verifyingPhone === 'bulk'}
+              className="border-blue-200 text-blue-600 hover:bg-blue-50"
+              data-testid="verify-all-phones-btn"
+            >
+              {verifyingPhone === 'bulk' ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              Verify All ({unverifiedCount})
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={exportLeads}
@@ -1221,8 +1329,26 @@ const LeadDiscovery = () => {
             <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               Discovered Leads ({leads.length})
             </CardTitle>
-            <div className="text-sm text-gray-500">
-              {leads.filter(l => l.source === 'gpt_intent_search').length} from GPT Intent Search
+            <div className="flex items-center gap-4">
+              {/* Line Type Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Filter:</span>
+                <Select value={lineTypeFilter} onValueChange={setLineTypeFilter}>
+                  <SelectTrigger className="w-[140px] h-8" data-testid="line-type-filter">
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="mobile">Mobile Only</SelectItem>
+                    <SelectItem value="landline">Landline Only</SelectItem>
+                    <SelectItem value="voip">VoIP Only</SelectItem>
+                    <SelectItem value="unverified">Unverified</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-sm text-gray-500">
+                {leads.filter(l => l.source === 'gpt_intent_search').length} from GPT Intent Search
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -1238,7 +1364,16 @@ const LeadDiscovery = () => {
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {leads.map((lead) => (
+              {leads
+                .filter(lead => {
+                  if (lineTypeFilter === 'all') return true;
+                  if (lineTypeFilter === 'unverified') return !lead.phone_verified;
+                  if (lineTypeFilter === 'mobile') return ['mobile', 'cellphone', 'wireless'].includes(lead.line_type?.toLowerCase());
+                  if (lineTypeFilter === 'landline') return ['landline', 'fixedline', 'fixed'].includes(lead.line_type?.toLowerCase());
+                  if (lineTypeFilter === 'voip') return ['voip', 'nonfixedvoip', 'non-fixed voip', 'virtual'].includes(lead.line_type?.toLowerCase());
+                  return true;
+                })
+                .map((lead) => (
                 <div key={lead.id} className="p-4 hover:bg-gray-50 transition-colors" data-testid={`lead-row-${lead.id}`}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -1250,9 +1385,57 @@ const LeadDiscovery = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
-                        <span>{lead.phone}</span>
+                        <span className="flex items-center gap-2">
+                          {lead.phone}
+                          {/* Line Type Badge */}
+                          {lead.line_type && lead.line_type !== 'unknown' && (
+                            <Badge 
+                              className={`text-xs ${
+                                lead.line_type === 'mobile' || lead.line_type === 'cellphone' || lead.line_type === 'wireless'
+                                  ? 'bg-green-100 text-green-700 border-green-200'
+                                  : lead.line_type === 'landline' || lead.line_type === 'fixedline'
+                                    ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                    : lead.line_type === 'voip' || lead.line_type === 'nonFixedVoip'
+                                      ? 'bg-orange-100 text-orange-700 border-orange-200'
+                                      : 'bg-gray-100 text-gray-600'
+                              }`}
+                              data-testid={`line-type-${lead.id}`}
+                            >
+                              {lead.line_type === 'mobile' || lead.line_type === 'cellphone' || lead.line_type === 'wireless' ? 'Mobile' :
+                               lead.line_type === 'landline' || lead.line_type === 'fixedline' ? 'Landline' :
+                               lead.line_type === 'voip' || lead.line_type === 'nonFixedVoip' ? 'VoIP' : lead.line_type}
+                            </Badge>
+                          )}
+                          {/* Verify Button */}
+                          {!lead.phone_verified && lead.phone && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => verifyPhone(lead.id)}
+                              disabled={verifyingPhone === lead.id}
+                              data-testid={`verify-phone-${lead.id}`}
+                            >
+                              {verifyingPhone === lead.id ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Verify
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          {lead.phone_verified && !lead.line_type && (
+                            <CheckCircle className="w-4 h-4 text-green-500" title="Phone verified" />
+                          )}
+                        </span>
                         {lead.email && <span>{lead.email}</span>}
                       </div>
+                      {/* Carrier info if available */}
+                      {lead.carrier && (
+                        <p className="text-xs text-gray-400 mt-0.5">{lead.carrier}</p>
+                      )}
                       {/* Intent Signals */}
                       {lead.intent_signals && lead.intent_signals.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">

@@ -4889,10 +4889,14 @@ async def verify_lead_phone(
         }
     }
 
+class BulkVerifyRequest(BaseModel):
+    """Request body for bulk phone verification"""
+    lead_ids: Optional[List[str]] = None
+    verify_all_unverified: bool = False
+
 @api_router.post("/leads/verify-phones-bulk")
 async def verify_leads_phones_bulk(
-    lead_ids: Optional[List[str]] = None,
-    verify_all_unverified: bool = False,
+    request: BulkVerifyRequest,
     current_user: Dict = Depends(get_current_user)
 ):
     """
@@ -4903,6 +4907,8 @@ async def verify_leads_phones_bulk(
     Note: Uses Twilio Lookup which has per-lookup costs.
     """
     user_id = current_user["user_id"]
+    lead_ids = request.lead_ids
+    verify_all_unverified = request.verify_all_unverified
     
     query = {"user_id": user_id}
     

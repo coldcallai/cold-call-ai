@@ -393,6 +393,37 @@ A vertical-agnostic B2B SaaS platform that:
 - **Compliance Audit Trail** - All acknowledgments logged for legal protection
 - **Resources Section** - FAQ accordion with B2B/B2C explanation, penalties, AI disclosure info
 
+### Session 16 (December 2025): Setup Instructions & Onboarding Wizard
+- **Getting Started Page** (`/app/getting-started`) - Permanent setup checklist:
+  - Progress tracking with percentage (0-100%)
+  - 5 required + 1 optional setup steps with expand/collapse instructions
+  - Step-by-step guidance with "Go to Setup" navigation buttons
+  - "Calling Features Locked" warning when setup incomplete
+  - "You're All Set!" success banner when all required steps complete
+  - External links to Twilio Console, Calendly for account creation
+- **Setup Wizard Modal** - First-login guided setup:
+  - Appears automatically for new users (setup_wizard_completed=false)
+  - Step-by-step walkthrough of all 5 required setup tasks
+  - Shows completion status (Completed/Pending badge) for each step
+  - Can be skipped with toast notification pointing to Getting Started page
+  - Minimizable to continue working while keeping wizard accessible
+  - Progress bar showing overall setup completion
+- **Call Blocking Feature** - Blocks AI calls until setup complete:
+  - FunnelPage and LeadDiscovery simulateCall checks setup status
+  - Shows toast with "Go to Setup" action when blocked
+  - Uses `can_make_calls` flag from /api/setup/status
+- **Setup Status API Endpoints**:
+  - GET /api/setup/status - Returns all steps with completion status
+  - GET /api/setup/can-call - Quick check for call gating
+  - POST /api/user/setup-wizard-complete - Mark wizard as done
+- **Required Setup Steps Tracked**:
+  1. Twilio Voice connection (env vars or settings)
+  2. Calendly booking links (via agents with calendly_link)
+  3. Compliance acknowledgment (compliance_acknowledged=true)
+  4. First agent created (agents collection count)
+  5. First campaign created (campaigns collection count)
+- **Tests**: 24 setup status tests passing (`/app/backend/tests/test_setup_status.py`)
+
 ## Prioritized Backlog
 
 ### P0 - Critical
@@ -403,6 +434,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~Phone Verification (Twilio Lookup)~~ ✅ DONE
 - [x] ~~AMD + Voicemail Drop~~ ✅ DONE
 - [x] ~~ICP Scoring~~ ✅ DONE
+- [x] ~~Setup Instructions / Onboarding Wizard~~ ✅ DONE (December 2025)
 
 ### P1 - High Priority
 - [x] ~~Multi-tenant data isolation - Scope leads/campaigns to user accounts~~ ✅ DONE (December 2025)
@@ -436,8 +468,9 @@ A vertical-agnostic B2B SaaS platform that:
 - Subscription tier tests: `/app/backend/tests/test_subscription_tiers.py` (16 tests)
 - CRM integration tests: `/app/backend/tests/test_crm_integration.py` (16 tests)
 - TCPA compliance tests: `/app/backend/tests/test_tcpa_compliance.py` (24 tests)
+- Setup status tests: `/app/backend/tests/test_setup_status.py` (24 tests)
 - Auth testing playbook: `/app/auth_testing.md`
-- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_4.json`
+- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_5.json`
 - Test users:
   - User A (admin): test@example.com / Test123!
   - User B (free): test_user_b@example.com / Test456!

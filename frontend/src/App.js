@@ -9,7 +9,8 @@ import {
   PhoneCall, PhoneOff, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
   ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
-  CreditCard, Package, ShoppingCart, LogOut, BarChart3, X, Edit3, Tags, RefreshCw
+  CreditCard, Package, ShoppingCart, LogOut, BarChart3, X, Edit3, Tags, RefreshCw,
+  Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -30,6 +31,7 @@ import LoginPage from "@/pages/LoginPage";
 import AuthCallback from "@/pages/AuthCallback";
 import UsageDashboard from "@/pages/UsageDashboard";
 import BookingsPage from "@/pages/BookingsPage";
+import CRMIntegrationsPage from "@/pages/CRMIntegrationsPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 
@@ -49,6 +51,7 @@ const Sidebar = () => {
     { path: "/app/agents", icon: Users, label: "Agents" },
     { path: "/app/bookings", icon: Calendar, label: "Bookings" },
     { path: "/app/calls", icon: History, label: "Call History" },
+    { path: "/app/integrations", icon: Database, label: "CRM Integrations" },
     { path: "/app/packs", icon: Package, label: "Credit Packs" },
     { path: "/app/settings", icon: Settings, label: "Settings" },
   ];
@@ -3446,6 +3449,7 @@ const AppRouter = () => {
                   <Route path="/agents" element={<Agents />} />
                   <Route path="/bookings" element={<BookingsPage />} />
                   <Route path="/calls" element={<CallHistory />} />
+                  <Route path="/integrations" element={<CRMIntegrationsPage />} />
                   <Route path="/packs" element={<CreditPacks />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Routes>

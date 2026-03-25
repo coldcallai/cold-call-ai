@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File, Depends, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -2100,6 +2100,468 @@ class TwilioCallingService:
 
 twilio_service = TwilioCallingService()
 
+# ============== CRM INTEGRATION SERVICE ==============
+from enum import Enum as PyEnum
+from cryptography.fernet import Fernet
+
+class CRMProvider(str, Enum):
+    GOHIGHLEVEL = "gohighlevel"
+    SALESFORCE = "salesforce"
+    HUBSPOT = "hubspot"
+
+class CRMCredentials(BaseModel):
+    """Model for storing encrypted CRM credentials"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    provider: CRMProvider
+    # Encrypted tokens
+    encrypted_access_token: Optional[str] = None
+    encrypted_refresh_token: Optional[str] = None
+    encrypted_api_key: Optional[str] = None
+    # Provider-specific info
+    instance_url: Optional[str] = None  # Salesforce instance URL
+    portal_id: Optional[str] = None  # HubSpot portal ID
+    location_id: Optional[str] = None  # GoHighLevel location ID
+    # Token metadata
+    token_expires_at: Optional[str] = None
+    # Status
+    is_active: bool = True
+    is_connected: bool = False
+    last_sync_at: Optional[str] = None
+    last_error: Optional[str] = None
+    total_leads_pushed: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class CRMLeadPushLog(BaseModel):
+    """Audit log for lead pushes to CRM"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    lead_id: str
+    provider: CRMProvider
+    crm_contact_id: Optional[str] = None  # ID returned from CRM
+    status: str  # "success", "failed", "pending"
+    error_message: Optional[str] = None
+    lead_data: Dict[str, Any]
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class CRMConnectionRequest(BaseModel):
+    """Request model for connecting CRM"""
+    provider: CRMProvider
+    api_key: Optional[str] = None  # For API key auth (GHL private apps)
+    oauth_code: Optional[str] = None  # For OAuth flow
+    instance_url: Optional[str] = None  # For Salesforce
+
+class CRMIntegrationService:
+    """
+    Universal CRM integration service supporting:
+    - GoHighLevel
+    - Salesforce
+    - HubSpot
+    
+    Handles OAuth flows, API key auth, token refresh, and lead pushing.
+    """
+    
+    def __init__(self):
+        # Generate encryption key from JWT secret for secure credential storage
+        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'coldcallai_default_secret_key')
+        # Use a consistent key derivation
+        key_bytes = jwt_secret.encode()[:32].ljust(32, b'0')
+        self.cipher = Fernet(base64.urlsafe_b64encode(key_bytes))
+        
+        # Provider-specific endpoints
+        self.endpoints = {
+            CRMProvider.GOHIGHLEVEL: {
+                "base_url": "https://services.leadconnectorhq.com",
+                "oauth_url": "https://marketplace.gohighlevel.com/oauth/authorize",
+                "token_url": "https://services.leadconnectorhq.com/oauth/token",
+            },
+            CRMProvider.SALESFORCE: {
+                "base_url": "",  # Instance-specific
+                "oauth_url": "https://login.salesforce.com/services/oauth2/authorize",
+                "token_url": "https://login.salesforce.com/services/oauth2/token",
+            },
+            CRMProvider.HUBSPOT: {
+                "base_url": "https://api.hubapi.com",
+                "oauth_url": "https://app.hubspot.com/oauth/authorize",
+                "token_url": "https://api.hubapi.com/oauth/v1/token",
+            },
+        }
+        
+        logger.info("CRM Integration Service initialized")
+    
+    def encrypt_credential(self, credential: str) -> str:
+        """Encrypt a credential for secure storage"""
+        return self.cipher.encrypt(credential.encode()).decode()
+    
+    def decrypt_credential(self, encrypted: str) -> str:
+        """Decrypt a stored credential"""
+        try:
+            return self.cipher.decrypt(encrypted.encode()).decode()
+        except Exception as e:
+            logger.error(f"Failed to decrypt credential: {e}")
+            return None
+    
+    async def save_credentials(self, user_id: str, provider: CRMProvider, 
+                               access_token: str = None, refresh_token: str = None,
+                               api_key: str = None, **kwargs) -> Dict:
+        """Save CRM credentials securely to database"""
+        
+        # Check if credentials already exist
+        existing = await db.crm_credentials.find_one(
+            {"user_id": user_id, "provider": provider.value}, {"_id": 0}
+        )
+        
+        credential_data = {
+            "user_id": user_id,
+            "provider": provider.value,
+            "is_active": True,
+            "is_connected": True,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        if access_token:
+            credential_data["encrypted_access_token"] = self.encrypt_credential(access_token)
+        if refresh_token:
+            credential_data["encrypted_refresh_token"] = self.encrypt_credential(refresh_token)
+        if api_key:
+            credential_data["encrypted_api_key"] = self.encrypt_credential(api_key)
+        
+        # Add provider-specific info
+        for key in ["instance_url", "portal_id", "location_id", "token_expires_at"]:
+            if kwargs.get(key):
+                credential_data[key] = kwargs[key]
+        
+        if existing:
+            await db.crm_credentials.update_one(
+                {"user_id": user_id, "provider": provider.value},
+                {"$set": credential_data}
+            )
+        else:
+            credential_data["id"] = str(uuid.uuid4())
+            credential_data["created_at"] = datetime.now(timezone.utc).isoformat()
+            credential_data["total_leads_pushed"] = 0
+            await db.crm_credentials.insert_one(credential_data)
+        
+        logger.info(f"CRM credentials saved for user {user_id}, provider {provider.value}")
+        return {"status": "connected", "provider": provider.value}
+    
+    async def get_credentials(self, user_id: str, provider: CRMProvider) -> Optional[Dict]:
+        """Get and decrypt CRM credentials for a user"""
+        credential = await db.crm_credentials.find_one(
+            {"user_id": user_id, "provider": provider.value, "is_active": True},
+            {"_id": 0}
+        )
+        
+        if not credential:
+            return None
+        
+        # Decrypt tokens
+        result = dict(credential)
+        if credential.get("encrypted_access_token"):
+            result["access_token"] = self.decrypt_credential(credential["encrypted_access_token"])
+        if credential.get("encrypted_refresh_token"):
+            result["refresh_token"] = self.decrypt_credential(credential["encrypted_refresh_token"])
+        if credential.get("encrypted_api_key"):
+            result["api_key"] = self.decrypt_credential(credential["encrypted_api_key"])
+        
+        return result
+    
+    async def disconnect(self, user_id: str, provider: CRMProvider) -> Dict:
+        """Disconnect CRM integration"""
+        await db.crm_credentials.update_one(
+            {"user_id": user_id, "provider": provider.value},
+            {"$set": {
+                "is_active": False,
+                "is_connected": False,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        logger.info(f"CRM disconnected for user {user_id}, provider {provider.value}")
+        return {"status": "disconnected", "provider": provider.value}
+    
+    async def refresh_token(self, user_id: str, provider: CRMProvider) -> Optional[str]:
+        """Refresh OAuth access token"""
+        credentials = await self.get_credentials(user_id, provider)
+        if not credentials or not credentials.get("refresh_token"):
+            return None
+        
+        refresh_token = credentials["refresh_token"]
+        endpoints = self.endpoints.get(provider)
+        
+        # Provider-specific refresh logic
+        try:
+            async with httpx.AsyncClient() as client:
+                if provider == CRMProvider.GOHIGHLEVEL:
+                    response = await client.post(
+                        endpoints["token_url"],
+                        data={
+                            "grant_type": "refresh_token",
+                            "refresh_token": refresh_token,
+                            "client_id": os.environ.get("GHL_CLIENT_ID", ""),
+                            "client_secret": os.environ.get("GHL_CLIENT_SECRET", ""),
+                        },
+                        timeout=30.0
+                    )
+                elif provider == CRMProvider.SALESFORCE:
+                    response = await client.post(
+                        endpoints["token_url"],
+                        data={
+                            "grant_type": "refresh_token",
+                            "refresh_token": refresh_token,
+                            "client_id": os.environ.get("SALESFORCE_CLIENT_ID", ""),
+                            "client_secret": os.environ.get("SALESFORCE_CLIENT_SECRET", ""),
+                        },
+                        timeout=30.0
+                    )
+                elif provider == CRMProvider.HUBSPOT:
+                    response = await client.post(
+                        endpoints["token_url"],
+                        data={
+                            "grant_type": "refresh_token",
+                            "refresh_token": refresh_token,
+                            "client_id": os.environ.get("HUBSPOT_CLIENT_ID", ""),
+                            "client_secret": os.environ.get("HUBSPOT_CLIENT_SECRET", ""),
+                        },
+                        timeout=30.0
+                    )
+                
+                if response.status_code == 200:
+                    token_data = response.json()
+                    new_access_token = token_data.get("access_token")
+                    new_refresh_token = token_data.get("refresh_token", refresh_token)
+                    
+                    # Save new tokens
+                    await self.save_credentials(
+                        user_id, provider,
+                        access_token=new_access_token,
+                        refresh_token=new_refresh_token
+                    )
+                    
+                    return new_access_token
+                else:
+                    logger.error(f"Token refresh failed: {response.text}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"Token refresh error for {provider.value}: {e}")
+            return None
+    
+    async def push_lead_to_crm(self, user_id: str, provider: CRMProvider, lead: Dict) -> Dict:
+        """Push a qualified lead to the user's CRM"""
+        credentials = await self.get_credentials(user_id, provider)
+        
+        if not credentials:
+            return {"status": "error", "message": f"No {provider.value} credentials found"}
+        
+        access_token = credentials.get("access_token") or credentials.get("api_key")
+        if not access_token:
+            return {"status": "error", "message": "No valid access token or API key"}
+        
+        try:
+            result = None
+            
+            if provider == CRMProvider.GOHIGHLEVEL:
+                result = await self._push_to_gohighlevel(access_token, lead, credentials)
+            elif provider == CRMProvider.SALESFORCE:
+                result = await self._push_to_salesforce(access_token, lead, credentials)
+            elif provider == CRMProvider.HUBSPOT:
+                result = await self._push_to_hubspot(access_token, lead, credentials)
+            
+            # Log the push
+            log_entry = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "lead_id": lead.get("id", "unknown"),
+                "provider": provider.value,
+                "crm_contact_id": result.get("contact_id") if result else None,
+                "status": "success" if result and result.get("success") else "failed",
+                "error_message": result.get("error") if result else "Unknown error",
+                "lead_data": lead,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.crm_lead_push_logs.insert_one(log_entry)
+            
+            # Update push count
+            if result and result.get("success"):
+                await db.crm_credentials.update_one(
+                    {"user_id": user_id, "provider": provider.value},
+                    {
+                        "$inc": {"total_leads_pushed": 1},
+                        "$set": {"last_sync_at": datetime.now(timezone.utc).isoformat()}
+                    }
+                )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error pushing lead to {provider.value}: {e}")
+            return {"status": "error", "message": str(e), "success": False}
+    
+    async def _push_to_gohighlevel(self, access_token: str, lead: Dict, credentials: Dict) -> Dict:
+        """Push lead to GoHighLevel"""
+        location_id = credentials.get("location_id")
+        if not location_id:
+            return {"success": False, "error": "Location ID not configured"}
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                # Create contact in GHL
+                payload = {
+                    "firstName": lead.get("contact_name", "").split()[0] if lead.get("contact_name") else "",
+                    "lastName": " ".join(lead.get("contact_name", "").split()[1:]) if lead.get("contact_name") else "",
+                    "email": lead.get("email", ""),
+                    "phone": lead.get("phone", ""),
+                    "companyName": lead.get("business_name", ""),
+                    "source": "ColdCall.ai",
+                    "tags": ["qualified-lead", "ai-cold-call"],
+                }
+                
+                response = await client.post(
+                    "https://services.leadconnectorhq.com/contacts/",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json",
+                        "Version": "2021-07-28"
+                    },
+                    json=payload,
+                    timeout=30.0
+                )
+                
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "contact_id": data.get("contact", {}).get("id"),
+                        "provider": "gohighlevel"
+                    }
+                else:
+                    return {"success": False, "error": f"GHL API error: {response.text}"}
+                    
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    async def _push_to_salesforce(self, access_token: str, lead: Dict, credentials: Dict) -> Dict:
+        """Push lead to Salesforce"""
+        instance_url = credentials.get("instance_url")
+        if not instance_url:
+            return {"success": False, "error": "Salesforce instance URL not configured"}
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                # Create Lead in Salesforce
+                contact_name = lead.get("contact_name", "Unknown")
+                name_parts = contact_name.split()
+                
+                payload = {
+                    "FirstName": name_parts[0] if name_parts else "",
+                    "LastName": " ".join(name_parts[1:]) if len(name_parts) > 1 else contact_name,
+                    "Email": lead.get("email", ""),
+                    "Phone": lead.get("phone", ""),
+                    "Company": lead.get("business_name", "Unknown Company"),
+                    "LeadSource": "ColdCall.ai",
+                    "Status": "Open - Not Contacted",
+                    "Rating": "Warm",
+                    "Industry": lead.get("industry", ""),
+                }
+                
+                response = await client.post(
+                    f"{instance_url}/services/data/v59.0/sobjects/Lead",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload,
+                    timeout=30.0
+                )
+                
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "contact_id": data.get("id"),
+                        "provider": "salesforce"
+                    }
+                else:
+                    return {"success": False, "error": f"Salesforce API error: {response.text}"}
+                    
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    async def _push_to_hubspot(self, access_token: str, lead: Dict, credentials: Dict) -> Dict:
+        """Push lead to HubSpot"""
+        try:
+            async with httpx.AsyncClient() as client:
+                # Create contact in HubSpot
+                contact_name = lead.get("contact_name", "Unknown")
+                name_parts = contact_name.split()
+                
+                payload = {
+                    "properties": {
+                        "firstname": name_parts[0] if name_parts else "",
+                        "lastname": " ".join(name_parts[1:]) if len(name_parts) > 1 else "",
+                        "email": lead.get("email", ""),
+                        "phone": lead.get("phone", ""),
+                        "company": lead.get("business_name", ""),
+                        "hs_lead_status": "NEW",
+                        "lifecyclestage": "lead"
+                    }
+                }
+                
+                response = await client.post(
+                    "https://api.hubapi.com/crm/v3/objects/contacts",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload,
+                    timeout=30.0
+                )
+                
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "contact_id": data.get("id"),
+                        "provider": "hubspot"
+                    }
+                elif response.status_code == 409:
+                    # Contact already exists
+                    return {
+                        "success": True,
+                        "contact_id": "existing",
+                        "provider": "hubspot",
+                        "message": "Contact already exists in HubSpot"
+                    }
+                else:
+                    return {"success": False, "error": f"HubSpot API error: {response.text}"}
+                    
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    async def auto_push_qualified_lead(self, user_id: str, lead: Dict) -> List[Dict]:
+        """
+        Automatically push a qualified lead to all connected CRMs.
+        Called when a lead status changes to 'qualified'.
+        """
+        results = []
+        
+        # Get all connected CRMs for this user
+        cursor = db.crm_credentials.find(
+            {"user_id": user_id, "is_active": True, "is_connected": True},
+            {"_id": 0}
+        )
+        
+        async for credential in cursor:
+            provider = CRMProvider(credential["provider"])
+            result = await self.push_lead_to_crm(user_id, provider, lead)
+            result["provider"] = credential["provider"]
+            results.append(result)
+        
+        return results
+
+crm_service = CRMIntegrationService()
+
 # ============== WEBHOOK MODELS ==============
 class WebhookConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -2188,6 +2650,8 @@ TIER_FEATURES = {
         "call_recording": False,
         "recording_retention_days": 0,
         "call_transcription": False,
+        # CRM Integration
+        "crm_integration": False,
     },
     "payg": {  # Pay-as-you-go - No monthly, credit-based
         "max_leads_per_month": -1,  # Unlimited (credit-based)
@@ -2212,6 +2676,8 @@ TIER_FEATURES = {
         "is_payg": True,
         "cost_per_lead": 0.25,
         "cost_per_call": 0.50,
+        # CRM Integration
+        "crm_integration": False,
     },
     "starter": {
         "max_leads_per_month": 250,
@@ -2232,6 +2698,8 @@ TIER_FEATURES = {
         "call_recording": True,
         "recording_retention_days": 7,
         "call_transcription": False,
+        # CRM Integration
+        "crm_integration": False,
     },
     "professional": {
         "max_leads_per_month": 1000,
@@ -2252,6 +2720,8 @@ TIER_FEATURES = {
         "call_recording": True,
         "recording_retention_days": 30,
         "call_transcription": True,
+        # CRM Integration - Enabled
+        "crm_integration": True,
     },
     "unlimited": {
         "max_leads_per_month": 5000,
@@ -2272,6 +2742,8 @@ TIER_FEATURES = {
         "call_recording": True,
         "recording_retention_days": 90,
         "call_transcription": True,
+        # CRM Integration - Enabled
+        "crm_integration": True,
     },
     "byl": {  # Bring Your List
         "max_leads_per_month": 0,  # They bring their own
@@ -2292,6 +2764,8 @@ TIER_FEATURES = {
         "call_recording": True,
         "recording_retention_days": 30,
         "call_transcription": True,
+        # CRM Integration - Enabled
+        "crm_integration": True,
     },
 }
 
@@ -2692,6 +3166,333 @@ async def get_subscription_features(current_user: Dict = Depends(get_current_use
         }
     
     return response
+
+# ============== CRM INTEGRATION ENDPOINTS ==============
+
+@api_router.get("/crm/status")
+async def get_crm_status(current_user: Dict = Depends(get_current_user)):
+    """Get status of all CRM integrations for current user"""
+    user_id = current_user["user_id"]
+    
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("crm_integration"):
+        return {
+            "enabled": False,
+            "message": "CRM integration requires Professional plan or higher",
+            "upgrade_required": True,
+            "connections": []
+        }
+    
+    connections = []
+    for provider in CRMProvider:
+        credential = await db.crm_credentials.find_one(
+            {"user_id": user_id, "provider": provider.value},
+            {"_id": 0, "encrypted_access_token": 0, "encrypted_refresh_token": 0, "encrypted_api_key": 0}
+        )
+        
+        connections.append({
+            "provider": provider.value,
+            "name": provider.value.replace("gohighlevel", "GoHighLevel").replace("salesforce", "Salesforce").replace("hubspot", "HubSpot"),
+            "is_connected": credential.get("is_connected", False) if credential else False,
+            "is_active": credential.get("is_active", False) if credential else False,
+            "total_leads_pushed": credential.get("total_leads_pushed", 0) if credential else 0,
+            "last_sync_at": credential.get("last_sync_at") if credential else None,
+            "last_error": credential.get("last_error") if credential else None,
+        })
+    
+    return {
+        "enabled": True,
+        "connections": connections
+    }
+
+@api_router.post("/crm/connect")
+async def connect_crm(
+    request: CRMConnectionRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Connect a CRM using API key authentication"""
+    user_id = current_user["user_id"]
+    
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("crm_integration"):
+        raise HTTPException(
+            status_code=403,
+            detail="CRM integration requires Professional plan or higher"
+        )
+    
+    provider = request.provider
+    
+    # For API key authentication (simpler than OAuth)
+    if request.api_key:
+        # Validate the API key by making a test request
+        is_valid = await _validate_crm_api_key(provider, request.api_key, request.instance_url)
+        
+        if not is_valid["valid"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid API key: {is_valid.get('error', 'Unknown error')}"
+            )
+        
+        # Save credentials
+        await crm_service.save_credentials(
+            user_id=user_id,
+            provider=provider,
+            api_key=request.api_key,
+            instance_url=request.instance_url,
+            location_id=is_valid.get("location_id"),
+            portal_id=is_valid.get("portal_id")
+        )
+        
+        return {
+            "status": "connected",
+            "provider": provider.value,
+            "message": f"Successfully connected to {provider.value}"
+        }
+    
+    # For OAuth - return authorization URL
+    else:
+        auth_url = _get_oauth_authorization_url(provider, user_id)
+        return {
+            "status": "redirect",
+            "auth_url": auth_url,
+            "message": "Redirect user to this URL to authorize"
+        }
+
+async def _validate_crm_api_key(provider: CRMProvider, api_key: str, instance_url: str = None) -> Dict:
+    """Validate CRM API key by making a test request"""
+    try:
+        async with httpx.AsyncClient() as client:
+            if provider == CRMProvider.GOHIGHLEVEL:
+                # GHL uses Bearer token for API key
+                response = await client.get(
+                    "https://services.leadconnectorhq.com/locations/",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Version": "2021-07-28"
+                    },
+                    timeout=10.0
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    locations = data.get("locations", [])
+                    return {
+                        "valid": True,
+                        "location_id": locations[0].get("id") if locations else None
+                    }
+                return {"valid": False, "error": "Invalid GoHighLevel API key"}
+                
+            elif provider == CRMProvider.SALESFORCE:
+                if not instance_url:
+                    return {"valid": False, "error": "Salesforce instance URL required"}
+                response = await client.get(
+                    f"{instance_url}/services/data/v59.0/",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    timeout=10.0
+                )
+                if response.status_code == 200:
+                    return {"valid": True}
+                return {"valid": False, "error": "Invalid Salesforce access token"}
+                
+            elif provider == CRMProvider.HUBSPOT:
+                response = await client.get(
+                    "https://api.hubapi.com/crm/v3/objects/contacts?limit=1",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    timeout=10.0
+                )
+                if response.status_code == 200:
+                    # Get portal ID from response headers or account info
+                    portal_id = response.headers.get("X-HubSpot-Portal-Id", "unknown")
+                    return {"valid": True, "portal_id": portal_id}
+                return {"valid": False, "error": "Invalid HubSpot API key"}
+                
+    except Exception as e:
+        return {"valid": False, "error": str(e)}
+
+def _get_oauth_authorization_url(provider: CRMProvider, user_id: str) -> str:
+    """Generate OAuth authorization URL for CRM"""
+    external_url = os.environ.get('EXTERNAL_URL', 'http://localhost:8001')
+    callback_url = f"{external_url}/api/crm/oauth/callback"
+    
+    if provider == CRMProvider.GOHIGHLEVEL:
+        client_id = os.environ.get("GHL_CLIENT_ID", "")
+        return (
+            f"https://marketplace.gohighlevel.com/oauth/chooselocation?"
+            f"response_type=code&redirect_uri={callback_url}&"
+            f"client_id={client_id}&scope=contacts.readonly contacts.write&"
+            f"state={user_id}_{provider.value}"
+        )
+    elif provider == CRMProvider.SALESFORCE:
+        client_id = os.environ.get("SALESFORCE_CLIENT_ID", "")
+        return (
+            f"https://login.salesforce.com/services/oauth2/authorize?"
+            f"response_type=code&client_id={client_id}&"
+            f"redirect_uri={callback_url}&scope=api&"
+            f"state={user_id}_{provider.value}"
+        )
+    elif provider == CRMProvider.HUBSPOT:
+        client_id = os.environ.get("HUBSPOT_CLIENT_ID", "")
+        return (
+            f"https://app.hubspot.com/oauth/authorize?"
+            f"client_id={client_id}&redirect_uri={callback_url}&"
+            f"scope=crm.objects.contacts.read crm.objects.contacts.write&"
+            f"state={user_id}_{provider.value}"
+        )
+    
+    return ""
+
+@api_router.get("/crm/oauth/callback")
+async def crm_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...)
+):
+    """Handle OAuth callback from CRM providers"""
+    try:
+        # Parse state to get user_id and provider
+        parts = state.rsplit("_", 1)
+        if len(parts) != 2:
+            raise HTTPException(status_code=400, detail="Invalid state parameter")
+        
+        user_id, provider_str = parts
+        provider = CRMProvider(provider_str)
+        
+        external_url = os.environ.get('EXTERNAL_URL', 'http://localhost:8001')
+        callback_url = f"{external_url}/api/crm/oauth/callback"
+        
+        # Exchange code for tokens
+        async with httpx.AsyncClient() as client:
+            if provider == CRMProvider.GOHIGHLEVEL:
+                response = await client.post(
+                    "https://services.leadconnectorhq.com/oauth/token",
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": code,
+                        "client_id": os.environ.get("GHL_CLIENT_ID", ""),
+                        "client_secret": os.environ.get("GHL_CLIENT_SECRET", ""),
+                        "redirect_uri": callback_url,
+                        "user_type": "Location"
+                    },
+                    timeout=30.0
+                )
+            elif provider == CRMProvider.SALESFORCE:
+                response = await client.post(
+                    "https://login.salesforce.com/services/oauth2/token",
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": code,
+                        "client_id": os.environ.get("SALESFORCE_CLIENT_ID", ""),
+                        "client_secret": os.environ.get("SALESFORCE_CLIENT_SECRET", ""),
+                        "redirect_uri": callback_url
+                    },
+                    timeout=30.0
+                )
+            elif provider == CRMProvider.HUBSPOT:
+                response = await client.post(
+                    "https://api.hubapi.com/oauth/v1/token",
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": code,
+                        "client_id": os.environ.get("HUBSPOT_CLIENT_ID", ""),
+                        "client_secret": os.environ.get("HUBSPOT_CLIENT_SECRET", ""),
+                        "redirect_uri": callback_url
+                    },
+                    timeout=30.0
+                )
+            
+            if response.status_code != 200:
+                logger.error(f"OAuth token exchange failed: {response.text}")
+                raise HTTPException(status_code=400, detail="OAuth token exchange failed")
+            
+            token_data = response.json()
+            
+            # Save credentials
+            await crm_service.save_credentials(
+                user_id=user_id,
+                provider=provider,
+                access_token=token_data.get("access_token"),
+                refresh_token=token_data.get("refresh_token"),
+                instance_url=token_data.get("instance_url"),  # Salesforce
+                location_id=token_data.get("locationId"),  # GHL
+            )
+        
+        # Redirect to frontend success page
+        frontend_url = os.environ.get('EXTERNAL_URL', 'http://localhost:3000')
+        return RedirectResponse(url=f"{frontend_url}/app?crm_connected={provider.value}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"OAuth callback error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/crm/disconnect/{provider}")
+async def disconnect_crm(
+    provider: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Disconnect a CRM integration"""
+    user_id = current_user["user_id"]
+    
+    try:
+        crm_provider = CRMProvider(provider)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid CRM provider: {provider}")
+    
+    result = await crm_service.disconnect(user_id, crm_provider)
+    return result
+
+@api_router.post("/crm/push-lead/{provider}")
+async def push_lead_to_crm(
+    provider: str,
+    lead_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Manually push a lead to a specific CRM"""
+    user_id = current_user["user_id"]
+    
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("crm_integration"):
+        raise HTTPException(
+            status_code=403,
+            detail="CRM integration requires Professional plan or higher"
+        )
+    
+    try:
+        crm_provider = CRMProvider(provider)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid CRM provider: {provider}")
+    
+    # Get lead
+    lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    result = await crm_service.push_lead_to_crm(user_id, crm_provider, lead)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Failed to push lead"))
+    
+    return result
+
+@api_router.get("/crm/push-logs")
+async def get_crm_push_logs(
+    provider: Optional[str] = None,
+    limit: int = Query(default=50, le=100),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get CRM lead push logs"""
+    user_id = current_user["user_id"]
+    
+    query = {"user_id": user_id}
+    if provider:
+        query["provider"] = provider
+    
+    cursor = db.crm_lead_push_logs.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+    logs = await cursor.to_list(length=limit)
+    
+    return {"logs": logs, "count": len(logs)}
 
 # ============== PAY-AS-YOU-GO ENDPOINTS ==============
 
@@ -3287,17 +4088,45 @@ async def create_lead(lead: LeadCreate, current_user: Dict = Depends(get_current
     return lead_obj
 
 @api_router.put("/leads/{lead_id}", response_model=Lead)
-async def update_lead(lead_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
+async def update_lead(
+    lead_id: str, 
+    updates: Dict[str, Any], 
+    background_tasks: BackgroundTasks,
+    current_user: Dict = Depends(get_current_user)
+):
     """Update a lead (must belong to current user)"""
+    user_id = current_user["user_id"]
+    
+    # Get current lead to check status change
+    current_lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
+    if not current_lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    old_status = current_lead.get("status")
+    new_status = updates.get("status")
+    
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.leads.update_one(
-        {"id": lead_id, "user_id": current_user["user_id"]},
+        {"id": lead_id, "user_id": user_id},
         {"$set": updates}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
     
-    lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
+    
+    # Auto-push to CRM when lead becomes qualified
+    if new_status == "qualified" and old_status != "qualified":
+        features = get_tier_features(current_user)
+        if features.get("crm_integration"):
+            # Push to all connected CRMs in background
+            background_tasks.add_task(
+                crm_service.auto_push_qualified_lead,
+                user_id,
+                lead
+            )
+            logger.info(f"Queued CRM push for qualified lead {lead_id}")
+    
     return lead
 
 @api_router.delete("/leads/{lead_id}")

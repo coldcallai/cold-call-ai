@@ -270,6 +270,26 @@ A vertical-agnostic B2B SaaS platform that:
   - Full transcript view with timestamped segments
   - Request transcription button
 
+### Session 11 (December 2025): Pay-as-you-go Pricing Tier
+- **New PAYG Tier** - $0/month, pay only for usage
+  - $0.50 per AI call
+  - $0.25 per lead discovered
+  - 3-day call recording retention
+  - CSV export/upload included
+  - Basic ICP scoring
+- **PAYG Credit Packs**:
+  - Starter Pack: $19 for 25 leads + 25 calls ($0.38 each)
+  - Growth Pack: $69 for 100 leads + 100 calls ($0.35 each, 10% savings)
+  - Scale Pack: $249 for 400 leads + 400 calls ($0.31 each, 20% savings)
+- **New API Endpoints**:
+  - GET /api/pricing/plans - Public pricing information
+  - GET /api/payg/packs - Available credit packs
+  - POST /api/payg/purchase - Purchase credit pack
+  - POST /api/payg/upgrade - Upgrade from free trial to PAYG
+  - GET /api/payg/balance - Check credit balance and history
+- **Landing Page Updated** - PAYG option prominently displayed with "No Commitment" badge
+- **Competitive Positioning**: Now competes with Bland AI for low-volume users
+
 ## Prioritized Backlog
 
 ### P0 - Critical

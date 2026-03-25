@@ -316,12 +316,24 @@ class PackType(str, Enum):
 
 # Subscription Plans
 SUBSCRIPTION_PLANS = {
+    "payg": {
+        "name": "Pay-as-you-go",
+        "price": 0,  # No monthly fee
+        "leads_per_month": 0,  # Credits only
+        "calls_per_month": 0,  # Credits only
+        "features": ["No monthly commitment", "Pay per call/lead", "Basic dashboard"],
+        "users": 1,
+        "credit_cost": {
+            "per_lead": 0.25,  # $0.25 per lead discovered
+            "per_call": 0.50,  # $0.50 per AI call
+        }
+    },
     "starter": {
         "name": "Starter",
         "price": 199,
         "leads_per_month": 250,
         "calls_per_month": 250,
-        "features": ["CSV export", "GPT-powered search", "Intent signals included"],
+        "features": ["CSV export", "GPT-powered search", "Intent signals included", "7-day call recordings"],
         "users": 1
     },
     "professional": {
@@ -329,7 +341,7 @@ SUBSCRIPTION_PLANS = {
         "price": 399,
         "leads_per_month": 1000,
         "calls_per_month": 1000,
-        "features": ["Auto calendar booking", "API access", "Call transcripts", "Email notifications"],
+        "features": ["Auto calendar booking", "API access", "Call transcripts", "30-day recordings", "Email notifications"],
         "users": 5
     },
     "unlimited": {
@@ -337,7 +349,7 @@ SUBSCRIPTION_PLANS = {
         "price": 699,
         "leads_per_month": 5000,
         "calls_per_month": -1,  # Unlimited
-        "features": ["Priority support", "5 team seats", "Custom AI scripts", "Dedicated account manager"],
+        "features": ["Priority support", "5 team seats", "Custom AI scripts", "90-day recordings", "Dedicated account manager"],
         "users": 5
     },
     "byl": {
@@ -349,6 +361,13 @@ SUBSCRIPTION_PLANS = {
         "users": 3
     }
 }
+
+# Pay-as-you-go Credit Packs (for PAYG tier users)
+PAYG_CREDIT_PACKS = [
+    {"id": "payg_starter_10", "name": "Starter Pack", "leads": 25, "calls": 25, "price": 19, "per_lead": 0.38, "per_call": 0.38, "bonus": "Perfect for testing"},
+    {"id": "payg_growth_50", "name": "Growth Pack", "leads": 100, "calls": 100, "price": 69, "per_lead": 0.35, "per_call": 0.35, "bonus": "10% savings"},
+    {"id": "payg_scale_200", "name": "Scale Pack", "leads": 400, "calls": 400, "price": 249, "per_lead": 0.31, "per_call": 0.31, "bonus": "20% savings"},
+]
 
 # Lead Packs (Auto-replenishing subscriptions)
 LEAD_PACKS = [
@@ -2170,6 +2189,30 @@ TIER_FEATURES = {
         "recording_retention_days": 0,
         "call_transcription": False,
     },
+    "payg": {  # Pay-as-you-go - No monthly, credit-based
+        "max_leads_per_month": -1,  # Unlimited (credit-based)
+        "max_calls_per_month": -1,  # Unlimited (credit-based)
+        "max_custom_keywords": 20,
+        "csv_export": True,
+        "csv_upload": True,
+        "api_access": False,
+        "calendar_booking": False,
+        "icp_scoring": True,
+        "ai_icp_scoring": False,
+        "voicemail_drop": True,
+        "custom_scripts": False,
+        "max_campaigns": 2,
+        "max_agents": 2,
+        "max_team_seats": 1,
+        # Recording & Transcription - Basic
+        "call_recording": True,
+        "recording_retention_days": 3,  # Short retention for PAYG
+        "call_transcription": False,
+        # PAYG specific
+        "is_payg": True,
+        "cost_per_lead": 0.25,
+        "cost_per_call": 0.50,
+    },
     "starter": {
         "max_leads_per_month": 250,
         "max_calls_per_month": 250,
@@ -2623,7 +2666,7 @@ async def get_subscription_features(current_user: Dict = Depends(get_current_use
     tier = current_user.get("subscription_tier") or "free_trial"
     plan_info = SUBSCRIPTION_PLANS.get(tier, {})
     
-    return {
+    response = {
         "tier": tier,
         "plan_name": plan_info.get("name", "Free Trial"),
         "features": features,
@@ -2637,6 +2680,188 @@ async def get_subscription_features(current_user: Dict = Depends(get_current_use
         "credits": {
             "lead_credits": current_user.get("lead_credits_remaining", 0),
             "call_credits": current_user.get("call_credits_remaining", 0)
+        }
+    }
+    
+    # Add PAYG specific info
+    if tier == "payg" or features.get("is_payg"):
+        response["payg_info"] = {
+            "cost_per_lead": features.get("cost_per_lead", 0.25),
+            "cost_per_call": features.get("cost_per_call", 0.50),
+            "available_packs": PAYG_CREDIT_PACKS
+        }
+    
+    return response
+
+# ============== PAY-AS-YOU-GO ENDPOINTS ==============
+
+@api_router.get("/pricing/plans")
+async def get_pricing_plans():
+    """Get all available pricing plans (public endpoint)"""
+    plans = []
+    
+    for tier_id, plan in SUBSCRIPTION_PLANS.items():
+        plan_data = {
+            "id": tier_id,
+            "name": plan["name"],
+            "price": plan["price"],
+            "features": plan.get("features", []),
+            "users": plan.get("users", 1),
+            "leads_per_month": plan.get("leads_per_month", 0),
+            "calls_per_month": plan.get("calls_per_month", 0),
+        }
+        
+        # Add PAYG credit costs
+        if tier_id == "payg":
+            plan_data["credit_cost"] = plan.get("credit_cost", {})
+            plan_data["is_payg"] = True
+        
+        plans.append(plan_data)
+    
+    # Sort by price
+    plans.sort(key=lambda x: x["price"])
+    
+    return {
+        "plans": plans,
+        "payg_packs": PAYG_CREDIT_PACKS,
+        "comparison": {
+            "payg_best_for": "Testing, low volume (<100 calls/month)",
+            "starter_best_for": "Solo founders, small teams",
+            "professional_best_for": "Growing sales teams, agencies",
+            "unlimited_best_for": "High-volume outbound teams"
+        }
+    }
+
+@api_router.get("/payg/packs")
+async def get_payg_packs():
+    """Get available PAYG credit packs"""
+    return {
+        "packs": PAYG_CREDIT_PACKS,
+        "credit_rates": {
+            "per_lead": 0.25,
+            "per_call": 0.50,
+            "bulk_savings": "Up to 38% off with larger packs"
+        }
+    }
+
+@api_router.post("/payg/purchase")
+async def purchase_payg_pack(
+    pack_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Purchase a PAYG credit pack.
+    In production, this would integrate with Stripe for payment processing.
+    """
+    # Find the pack
+    pack = next((p for p in PAYG_CREDIT_PACKS if p["id"] == pack_id), None)
+    if not pack:
+        raise HTTPException(status_code=404, detail="Credit pack not found")
+    
+    # Add credits to user account (works for any tier as top-up)
+    lead_credits = pack.get("leads", 0)
+    call_credits = pack.get("calls", 0)
+    
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {
+            "$inc": {
+                "lead_credits_remaining": lead_credits,
+                "call_credits_remaining": call_credits
+            },
+            "$set": {
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    # Log the purchase
+    purchase_record = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["user_id"],
+        "pack_id": pack_id,
+        "pack_name": pack["name"],
+        "leads_added": lead_credits,
+        "calls_added": call_credits,
+        "amount": pack["price"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.credit_purchases.insert_one(purchase_record)
+    
+    # Get updated balance
+    user = await db.users.find_one({"user_id": current_user["user_id"]}, {"_id": 0})
+    
+    return {
+        "message": f"Successfully purchased {pack['name']}",
+        "pack": pack,
+        "credits_added": {
+            "leads": lead_credits,
+            "calls": call_credits
+        },
+        "new_balance": {
+            "lead_credits": user.get("lead_credits_remaining", 0),
+            "call_credits": user.get("call_credits_remaining", 0)
+        }
+    }
+
+@api_router.post("/payg/upgrade")
+async def upgrade_to_payg(current_user: Dict = Depends(get_current_user)):
+    """
+    Upgrade a free trial user to PAYG tier.
+    This allows them to purchase credits without a monthly subscription.
+    """
+    current_tier = current_user.get("subscription_tier")
+    
+    # Only allow upgrade from free trial (None)
+    if current_tier and current_tier not in [None, "free_trial"]:
+        raise HTTPException(
+            status_code=400, 
+            detail="You already have an active subscription. Contact support to change plans."
+        )
+    
+    # Update user to PAYG tier
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {
+            "$set": {
+                "subscription_tier": "payg",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {
+        "message": "Successfully upgraded to Pay-as-you-go plan",
+        "tier": "payg",
+        "features": TIER_FEATURES["payg"],
+        "next_step": "Purchase a credit pack to start making calls"
+    }
+
+@api_router.get("/payg/balance")
+async def get_payg_balance(current_user: Dict = Depends(get_current_user)):
+    """Get current credit balance and usage history"""
+    # Get recent purchases
+    purchases = await db.credit_purchases.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(10).to_list(10)
+    
+    # Get usage stats
+    usage = await get_monthly_usage(current_user["user_id"])
+    
+    return {
+        "balance": {
+            "lead_credits": current_user.get("lead_credits_remaining", 0),
+            "call_credits": current_user.get("call_credits_remaining", 0)
+        },
+        "this_month": {
+            "leads_used": usage["leads_used"],
+            "calls_used": usage["calls_used"]
+        },
+        "recent_purchases": purchases,
+        "estimated_remaining": {
+            "leads_at_current_rate": current_user.get("lead_credits_remaining", 0),
+            "calls_at_current_rate": current_user.get("call_credits_remaining", 0)
         }
     }
 

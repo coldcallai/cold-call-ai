@@ -1734,18 +1734,22 @@ class ComplianceService:
     
     Features:
     - Internal DNC list management
-    - National DNC Registry integration (via external API)
+    - National DNC Registry integration (via Real Phone Validation API)
+    - State DNC Registry checks
+    - Litigator detection
     - Calling hours enforcement (8am-9pm local time)
     - State-specific time restrictions
     - Call frequency limits
     - Phone number verification
+    - Usage tracking with tier-based allowances
     """
     
     def __init__(self):
-        # DNC.com or similar service API key (optional)
+        # Real Phone Validation DNC Plus API
+        # Sign up at: https://realphonevalidation.com/
         self.dnc_api_key = os.environ.get("DNC_API_KEY")
-        self.dnc_api_url = os.environ.get("DNC_API_URL", "https://api.dncscrub.com/v1")
-        logger.info(f"ComplianceService initialized. External DNC API: {'configured' if self.dnc_api_key else 'not configured'}")
+        self.dnc_api_url = os.environ.get("DNC_API_URL", "https://api.realvalidation.com/rpvWebService/DNCPlus.php")
+        logger.info(f"ComplianceService initialized. DNC API: {'configured' if self.dnc_api_key else 'not configured (internal list only)'}")
     
     def get_timezone_for_number(self, phone_number: str) -> tuple:
         """
@@ -1847,24 +1851,30 @@ class ComplianceService:
         dnc_entry = await db.dnc_list.find_one({"phone_number": phone_number}, {"_id": 0})
         return dnc_entry is not None
     
-    async def check_national_dnc(self, phone_number: str) -> dict:
+    async def check_national_dnc(self, phone_number: str, user_id: str = None) -> dict:
         """
         Check if number is on the National Do Not Call Registry.
-        Uses external DNC scrubbing service (DNC.com, Gryphon, etc.)
+        Uses Real Phone Validation DNC Plus API.
         
         Returns:
             {
                 "on_national_dnc": bool,
+                "on_state_dnc": bool,
+                "is_litigator": bool,
+                "is_cell": bool,
                 "checked": bool,
                 "source": str,
                 "checked_at": str,
-                "error": str or None
+                "error": str or None,
+                "billable": bool
             }
         """
+        # Normalize phone number - Real Phone Validation expects 10 digits
         clean_number = ''.join(filter(str.isdigit, phone_number))
-        if not clean_number.startswith('1') and len(clean_number) == 10:
-            clean_number = '1' + clean_number
-        formatted_number = f"+{clean_number}"
+        if clean_number.startswith('1') and len(clean_number) == 11:
+            clean_number = clean_number[1:]  # Remove country code
+        
+        formatted_number = f"+1{clean_number}"
         
         # Check cache first (DNC status cached for 30 days per FTC requirements)
         cached = await db.national_dnc_checks.find_one(
@@ -1876,6 +1886,7 @@ class ComplianceService:
                 checked_at = datetime.fromisoformat(cached["checked_at"].replace("Z", "+00:00"))
                 if (datetime.now(timezone.utc) - checked_at).days < 30:
                     logger.info(f"Using cached National DNC check for {formatted_number}")
+                    cached["billable"] = False  # Cached result is free
                     return cached
             except Exception:
                 pass
@@ -1883,37 +1894,58 @@ class ComplianceService:
         result = {
             "phone_number": formatted_number,
             "on_national_dnc": False,
+            "on_state_dnc": False,
+            "is_litigator": False,
+            "is_cell": False,
+            "on_dma": False,
             "checked": False,
             "source": "none",
             "checked_at": datetime.now(timezone.utc).isoformat(),
-            "error": None
+            "error": None,
+            "billable": False
         }
         
-        # If external DNC API is configured, use it
+        # If Real Phone Validation API is configured, use it
         if self.dnc_api_key:
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{self.dnc_api_url}/scrub",
-                        headers={
-                            "Authorization": f"Bearer {self.dnc_api_key}",
-                            "Content-Type": "application/json"
+                    # Real Phone Validation DNC Plus API
+                    # Endpoint: https://api.realvalidation.com/rpvWebService/DNCPlus.php
+                    response = await client.get(
+                        self.dnc_api_url,
+                        params={
+                            "phone": clean_number,  # 10 digits only
+                            "token": self.dnc_api_key
                         },
-                        json={"phone_numbers": [formatted_number]},
                         timeout=10.0
                     )
                     
                     if response.status_code == 200:
                         data = response.json()
-                        # Parse response (format varies by provider)
-                        dnc_status = data.get("results", [{}])[0]
-                        result["on_national_dnc"] = dnc_status.get("on_dnc", False) or dnc_status.get("status") == "dnc"
-                        result["checked"] = True
-                        result["source"] = "external_api"
-                        result["registry_type"] = dnc_status.get("registry_type", "federal")
-                        logger.info(f"External DNC check: {formatted_number} -> {'ON DNC' if result['on_national_dnc'] else 'CLEAR'}")
+                        
+                        # Check response status
+                        if data.get("status") == "connected":
+                            result["on_national_dnc"] = data.get("national_dnc") == "Y"
+                            result["on_state_dnc"] = data.get("state_dnc") == "Y"
+                            result["is_litigator"] = data.get("litigator") == "Y"
+                            result["is_cell"] = data.get("iscell") == "Y"
+                            result["on_dma"] = data.get("dma") == "Y"
+                            result["checked"] = True
+                            result["source"] = "real_phone_validation"
+                            result["billable"] = True
+                            
+                            logger.info(f"DNC check: {formatted_number} -> National:{result['on_national_dnc']}, State:{result['on_state_dnc']}, Litigator:{result['is_litigator']}")
+                        elif data.get("status") == "invalid-phone":
+                            result["error"] = "Invalid phone number"
+                            result["checked"] = True
+                            result["source"] = "real_phone_validation"
+                        elif data.get("status") == "unauthorized":
+                            result["error"] = "DNC API authentication failed - check DNC_API_KEY"
+                            logger.error("DNC API unauthorized - invalid token")
+                        else:
+                            result["error"] = f"DNC API status: {data.get('status')}"
                     else:
-                        result["error"] = f"DNC API error: {response.status_code}"
+                        result["error"] = f"DNC API HTTP error: {response.status_code}"
                         logger.error(f"DNC API error: {response.text}")
                         
             except Exception as e:
@@ -1942,7 +1974,40 @@ class ComplianceService:
             upsert=True
         )
         
+        # Track DNC usage for billing if this was a billable check
+        if result.get("billable") and user_id:
+            await self.track_dnc_usage(user_id)
+        
         return result
+    
+    async def track_dnc_usage(self, user_id: str):
+        """Track DNC check usage for the current billing month"""
+        now = datetime.now(timezone.utc)
+        month_key = f"{now.year}-{now.month:02d}"
+        
+        await db.dnc_usage.update_one(
+            {"user_id": user_id, "month": month_key},
+            {
+                "$inc": {"checks": 1},
+                "$set": {"updated_at": now.isoformat()}
+            },
+            upsert=True
+        )
+    
+    async def get_dnc_usage(self, user_id: str) -> dict:
+        """Get DNC check usage for the current billing month"""
+        now = datetime.now(timezone.utc)
+        month_key = f"{now.year}-{now.month:02d}"
+        
+        usage = await db.dnc_usage.find_one(
+            {"user_id": user_id, "month": month_key},
+            {"_id": 0}
+        )
+        
+        return {
+            "month": month_key,
+            "checks_used": usage.get("checks", 0) if usage else 0
+        }
     
     async def add_to_dnc(self, phone_number: str, reason: str = "user_request", added_by: str = None):
         """Add number to internal DNC list"""
@@ -2101,11 +2166,22 @@ class ComplianceService:
         
         # 3. CHECK NATIONAL DNC REGISTRY (TCPA requirement)
         checks_performed.append("national_dnc")
-        national_dnc_info = await self.check_national_dnc(phone_number)
-        if national_dnc_info.get("on_national_dnc"):
+        national_dnc_info = await self.check_national_dnc(phone_number, user_id)
+        if national_dnc_info.get("on_national_dnc") or national_dnc_info.get("on_state_dnc"):
             is_allowed = False
-            reasons.append("Number is on National Do Not Call Registry")
-        elif national_dnc_info.get("warning"):
+            dnc_reasons = []
+            if national_dnc_info.get("on_national_dnc"):
+                dnc_reasons.append("National DNC")
+            if national_dnc_info.get("on_state_dnc"):
+                dnc_reasons.append("State DNC")
+            reasons.append(f"Number is on {' and '.join(dnc_reasons)} Registry")
+        
+        # Warn about litigators (very high risk!)
+        if national_dnc_info.get("is_litigator"):
+            is_allowed = False
+            reasons.append("CAUTION: Known TCPA litigator - high lawsuit risk")
+        
+        if national_dnc_info.get("warning"):
             warnings.append(national_dnc_info.get("warning"))
         
         # 4. Verify number with Twilio Lookup (landline vs mobile vs voip)
@@ -3025,6 +3101,9 @@ TIER_FEATURES = {
         "call_transcription": False,
         # CRM Integration
         "crm_integration": False,
+        # DNC Compliance - Basic internal only
+        "dnc_checks_per_month": 50,
+        "national_dnc_enabled": False,
     },
     "payg": {  # Pay-as-you-go - No monthly, credit-based
         "max_leads_per_month": -1,  # Unlimited (credit-based)
@@ -3051,6 +3130,10 @@ TIER_FEATURES = {
         "cost_per_call": 0.50,
         # CRM Integration
         "crm_integration": False,
+        # DNC Compliance - Basic with overage
+        "dnc_checks_per_month": 100,
+        "national_dnc_enabled": True,
+        "dnc_overage_cost": 0.015,  # $0.015 per check over limit
     },
     "starter": {
         "max_leads_per_month": 250,
@@ -3073,6 +3156,10 @@ TIER_FEATURES = {
         "call_transcription": False,
         # CRM Integration
         "crm_integration": False,
+        # DNC Compliance - 500 included
+        "dnc_checks_per_month": 500,
+        "national_dnc_enabled": True,
+        "dnc_overage_cost": 0.012,  # $0.012 per check over limit
     },
     "professional": {
         "max_leads_per_month": 1000,
@@ -3095,6 +3182,10 @@ TIER_FEATURES = {
         "call_transcription": True,
         # CRM Integration - Enabled
         "crm_integration": True,
+        # DNC Compliance - 2000 included
+        "dnc_checks_per_month": 2000,
+        "national_dnc_enabled": True,
+        "dnc_overage_cost": 0.01,  # $0.01 per check over limit
     },
     "unlimited": {
         "max_leads_per_month": 5000,
@@ -3117,6 +3208,10 @@ TIER_FEATURES = {
         "call_transcription": True,
         # CRM Integration - Enabled
         "crm_integration": True,
+        # DNC Compliance - Unlimited
+        "dnc_checks_per_month": -1,  # Unlimited
+        "national_dnc_enabled": True,
+        "dnc_overage_cost": 0,
     },
     "byl": {  # Bring Your List
         "max_leads_per_month": 0,  # They bring their own
@@ -3139,8 +3234,15 @@ TIER_FEATURES = {
         "call_transcription": True,
         # CRM Integration - Enabled
         "crm_integration": True,
+        # DNC Compliance - 1500 included (matches call volume)
+        "dnc_checks_per_month": 1500,
+        "national_dnc_enabled": True,
+        "dnc_overage_cost": 0.01,
     },
 }
+
+# DNC check overage pricing (when user exceeds monthly allowance)
+DNC_OVERAGE_COST_DEFAULT = 0.015  # $0.015 per check
 
 def get_tier_features(user: Dict) -> Dict:
     """Get feature flags for user's subscription tier"""
@@ -6370,10 +6472,10 @@ async def check_national_dnc(
 ):
     """
     Check if a phone number is on the National Do Not Call Registry.
-    Requires DNC_API_KEY environment variable for external DNC service integration.
-    Without it, only checks internal DNC list.
+    Uses Real Phone Validation DNC Plus API (requires DNC_API_KEY).
+    Returns: national_dnc, state_dnc, litigator status, and cell phone detection.
     """
-    result = await compliance_service.check_national_dnc(phone_number)
+    result = await compliance_service.check_national_dnc(phone_number, current_user["user_id"])
     return result
 
 @api_router.get("/compliance/status")
@@ -6382,26 +6484,61 @@ async def get_compliance_status(
 ):
     """
     Get TCPA compliance configuration status.
-    Shows which compliance features are configured and active.
+    Shows which compliance features are configured, active, and usage stats.
     """
+    user_id = current_user["user_id"]
+    features = get_tier_features(current_user)
+    
+    # Get DNC usage for current month
+    dnc_usage = await compliance_service.get_dnc_usage(user_id)
+    dnc_allowance = features.get("dnc_checks_per_month", 0)
+    dnc_remaining = dnc_allowance - dnc_usage["checks_used"] if dnc_allowance > 0 else "unlimited"
+    
     return {
         "tcpa_compliance": {
             "calling_hours_enforcement": True,
             "internal_dnc_list": True,
             "national_dnc_registry": {
-                "enabled": bool(os.environ.get("DNC_API_KEY")),
+                "enabled": features.get("national_dnc_enabled", False),
                 "api_configured": bool(os.environ.get("DNC_API_KEY")),
-                "note": "Configure DNC_API_KEY for National DNC Registry integration" if not os.environ.get("DNC_API_KEY") else "External DNC API configured"
+                "provider": "Real Phone Validation" if os.environ.get("DNC_API_KEY") else None,
+                "note": "Configure DNC_API_KEY for National DNC Registry integration" if not os.environ.get("DNC_API_KEY") else "DNC Plus API configured - checks National DNC, State DNC, and Litigators"
+            },
+            "state_dnc_registry": {
+                "enabled": bool(os.environ.get("DNC_API_KEY")),
+                "note": "State DNC checks included with Real Phone Validation API"
+            },
+            "litigator_detection": {
+                "enabled": bool(os.environ.get("DNC_API_KEY")),
+                "note": "TCPA litigator database check - high lawsuit risk numbers blocked"
             },
             "ai_disclosure": True,
             "call_frequency_limits": True,
             "phone_verification": bool(twilio_client),
         },
+        "dnc_usage": {
+            "month": dnc_usage["month"],
+            "checks_used": dnc_usage["checks_used"],
+            "checks_allowance": dnc_allowance if dnc_allowance > 0 else "unlimited",
+            "checks_remaining": dnc_remaining,
+            "overage_cost": features.get("dnc_overage_cost", 0.015) if dnc_allowance > 0 else 0,
+            "tier": current_user.get("subscription_tier", "free")
+        },
+        "tier_dnc_allowances": {
+            "free": "50 checks/month (internal only)",
+            "payg": "100 checks/month + $0.015/overage",
+            "starter": "500 checks/month + $0.012/overage",
+            "professional": "2,000 checks/month + $0.01/overage",
+            "unlimited": "Unlimited checks",
+            "byl": "1,500 checks/month + $0.01/overage"
+        },
         "state_restrictions": STATE_CALLING_RESTRICTIONS,
         "checks_performed": [
             "calling_hours - Blocks calls outside 8am-9pm local time (with state-specific rules)",
             "internal_dnc - Checks against your internal Do Not Call list",
-            "national_dnc - Checks against National DNC Registry (if configured)",
+            "national_dnc - Checks against National DNC Registry",
+            "state_dnc - Checks against State DNC Registries",
+            "litigator - Checks against known TCPA litigator database",
             "number_verification - Validates phone number and determines line type",
             "call_frequency - Limits calls to 3 per number per 7 days"
         ]

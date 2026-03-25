@@ -328,17 +328,27 @@ A vertical-agnostic B2B SaaS platform that:
   - Connecticut: 9am-8pm
   - Florida, Georgia, Louisiana, Massachusetts, Oklahoma, Rhode Island, Washington, Wisconsin: 8am-8pm
   - Pennsylvania: 9am-9pm
-- **National DNC Registry Integration**:
-  - External DNC API integration ready (configure DNC_API_KEY)
-  - Internal DNC list fallback
+- **National DNC Registry Integration** (Real Phone Validation API):
+  - National DNC Registry check
+  - State DNC Registry check
+  - **TCPA Litigator detection** (blocks known lawsuit-happy numbers)
+  - Cell phone detection
   - 30-day caching per FTC requirements
   - Bulk upload endpoint for FTC data imports
+- **Tiered DNC Allowances** (included in subscription):
+  - Free: 50 checks/month (internal only)
+  - PAYG: 100 checks/month + $0.015/overage
+  - Starter: 500 checks/month + $0.012/overage
+  - Professional: 2,000 checks/month + $0.01/overage
+  - Unlimited: Unlimited checks
+  - BYL: 1,500 checks/month + $0.01/overage
+- **DNC Usage Tracking** - Monthly usage tracked per user with overage billing
 - **Enhanced Compliance Endpoints**:
-  - GET /api/compliance/status - TCPA configuration overview
+  - GET /api/compliance/status - TCPA configuration + DNC usage stats
   - GET /api/compliance/calling-hours/{phone} - Check calling window
-  - GET /api/compliance/national-dnc/{phone} - Check National DNC
+  - GET /api/compliance/national-dnc/{phone} - Check National + State DNC + Litigator
   - POST /api/compliance/national-dnc/upload - Bulk DNC list import
-- **5 Pre-Call Checks**: calling_hours, internal_dnc, national_dnc, number_verification, call_frequency
+- **7 Pre-Call Checks**: calling_hours, internal_dnc, national_dnc, state_dnc, litigator, number_verification, call_frequency
 - **Tests**: 24 TCPA compliance tests passing (`/app/backend/tests/test_tcpa_compliance.py`)
 
 ## Prioritized Backlog
@@ -368,10 +378,15 @@ A vertical-agnostic B2B SaaS platform that:
 - [ ] Stripe recurring subscriptions (currently one-time payments)
 
 ### P3 - Future
+- [ ] **Multi-language support** (50+ languages like Synthflow) - Currently English only
 - [ ] Team seat management
 - [ ] API rate limiting by tier
 - [ ] Refactor App.js (2000+ lines) into smaller components
-- [ ] Calendar integration for auto-booking qualified leads
+- [ ] Two-party call recording disclosure (state-specific)
+- [ ] Consent tracking system (TCPA express written consent)
+- [ ] Parallel dialing (Orum-style)
+- [ ] Call Analytics Dashboard
+- [ ] A/B testing for call scripts
 
 ## Testing
 - Backend: pytest suite at `/app/backend/tests/test_auth_and_api.py`
@@ -399,3 +414,4 @@ A vertical-agnostic B2B SaaS platform that:
 | GoHighLevel | ✅ Ready | CRM integration - requires user API key |
 | Salesforce | ✅ Ready | CRM integration - requires user API key |
 | HubSpot | ✅ Ready | CRM integration - requires user API key |
+| Real Phone Validation | ⚠️ Ready | DNC Plus API - configure DNC_API_KEY |

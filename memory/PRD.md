@@ -443,13 +443,15 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~ICP configuration UI in campaign form~~ ✅ DONE (December 2025)
 - [x] ~~Calendar/Calendly integration for auto-booking~~ ✅ DONE (December 2025)
 - [x] ~~CRM Integrations (GoHighLevel, Salesforce, HubSpot)~~ ✅ DONE (December 2025)
+- [x] ~~Phone Verify Button - Individual & bulk verify with line type filter~~ ✅ DONE (December 2025)
 - [ ] Improve STT accuracy - Consider Deepgram for lower latency
 
 ### P2 - Medium Priority
-- [ ] Connect real Stripe checkout for PAYG credit packs (currently mocked)
+- [ ] Connect real Stripe checkout for PAYG credit packs (Blocked: waiting for domain + Stripe approval)
 - [ ] Low-balance email notifications
 - [ ] Auto-suggest plan upgrades based on top-up purchases
 - [ ] Stripe recurring subscriptions (currently one-time payments)
+- [ ] Domain setup for dialgenix.ai
 
 ### P3 - Future
 - [ ] **Multi-language support** (50+ languages like Synthflow) - Currently English only
@@ -469,8 +471,9 @@ A vertical-agnostic B2B SaaS platform that:
 - CRM integration tests: `/app/backend/tests/test_crm_integration.py` (16 tests)
 - TCPA compliance tests: `/app/backend/tests/test_tcpa_compliance.py` (24 tests)
 - Setup status tests: `/app/backend/tests/test_setup_status.py` (24 tests)
+- Phone verification tests: `/app/backend/tests/test_phone_verification.py` (12 tests)
 - Auth testing playbook: `/app/auth_testing.md`
-- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_5.json`
+- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_6.json`
 - Test users:
   - User A (admin): test@example.com / Test123!
   - User B (free): test_user_b@example.com / Test456!

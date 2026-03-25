@@ -33,6 +33,7 @@ import UsageDashboard from "@/pages/UsageDashboard";
 import BookingsPage from "@/pages/BookingsPage";
 import CRMIntegrationsPage from "@/pages/CRMIntegrationsPage";
 import DNCManagementPage from "@/pages/DNCManagementPage";
+import ComplianceSetupPage from "@/pages/ComplianceSetupPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 
@@ -53,7 +54,7 @@ const Sidebar = () => {
     { path: "/app/bookings", icon: Calendar, label: "Bookings" },
     { path: "/app/calls", icon: History, label: "Call History" },
     { path: "/app/integrations", icon: Database, label: "CRM Integrations" },
-    { path: "/app/dnc", icon: Shield, label: "DNC Compliance" },
+    { path: "/app/compliance", icon: Shield, label: "Compliance" },
     { path: "/app/packs", icon: Package, label: "Credit Packs" },
     { path: "/app/settings", icon: Settings, label: "Settings" },
   ];
@@ -3453,6 +3454,7 @@ const AppRouter = () => {
                   <Route path="/calls" element={<CallHistory />} />
                   <Route path="/integrations" element={<CRMIntegrationsPage />} />
                   <Route path="/dnc" element={<DNCManagementPage />} />
+                  <Route path="/compliance" element={<ComplianceSetupPage />} />
                   <Route path="/packs" element={<CreditPacks />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Routes>

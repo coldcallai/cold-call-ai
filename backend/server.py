@@ -121,6 +121,12 @@ class User(BaseModel):
     team_seat_count: int = 1
     saved_keywords: List[str] = []  # User's saved intent keywords (up to 100)
     onboarding_completed: bool = False  # Track if user completed onboarding
+    # Compliance acknowledgment
+    compliance_acknowledged: bool = False  # Must acknowledge before making calls
+    compliance_acknowledged_at: Optional[str] = None
+    compliance_acknowledged_version: Optional[str] = None  # Track which version they agreed to
+    ftc_san: Optional[str] = None  # FTC Subscription Account Number (for B2C callers)
+    calling_mode: str = "b2b"  # "b2b" (no DNC needed) or "b2c" (DNC required)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -6558,6 +6564,264 @@ async def get_compliance_status(
         ]
     }
 
+# Current compliance agreement version
+COMPLIANCE_VERSION = "1.0"
+
+class ComplianceAcknowledgment(BaseModel):
+    """Model for compliance acknowledgment request"""
+    calling_mode: str = "b2b"  # "b2b" or "b2c"
+    ftc_san: Optional[str] = None  # Required if calling_mode is "b2c"
+    acknowledge_dnc_responsibility: bool = True
+    acknowledge_tcpa_rules: bool = True
+    acknowledge_calling_hours: bool = True
+    acknowledge_litigator_risk: bool = True
+
+@api_router.get("/compliance/acknowledgment")
+async def get_compliance_acknowledgment(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get user's compliance acknowledgment status.
+    Users must acknowledge compliance before making calls.
+    """
+    return {
+        "acknowledged": current_user.get("compliance_acknowledged", False),
+        "acknowledged_at": current_user.get("compliance_acknowledged_at"),
+        "acknowledged_version": current_user.get("compliance_acknowledged_version"),
+        "current_version": COMPLIANCE_VERSION,
+        "calling_mode": current_user.get("calling_mode", "b2b"),
+        "ftc_san": current_user.get("ftc_san"),
+        "requires_update": (
+            current_user.get("compliance_acknowledged_version") != COMPLIANCE_VERSION
+            if current_user.get("compliance_acknowledged")
+            else True
+        ),
+        "can_make_calls": (
+            current_user.get("compliance_acknowledged", False) and
+            current_user.get("compliance_acknowledged_version") == COMPLIANCE_VERSION
+        )
+    }
+
+@api_router.post("/compliance/acknowledge")
+async def acknowledge_compliance(
+    acknowledgment: ComplianceAcknowledgment,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Submit compliance acknowledgment.
+    Required before making any outbound calls.
+    """
+    user_id = current_user["user_id"]
+    
+    # Validate all checkboxes are checked
+    if not all([
+        acknowledgment.acknowledge_dnc_responsibility,
+        acknowledgment.acknowledge_tcpa_rules,
+        acknowledgment.acknowledge_calling_hours,
+        acknowledgment.acknowledge_litigator_risk
+    ]):
+        raise HTTPException(
+            status_code=400,
+            detail="All compliance acknowledgments must be accepted"
+        )
+    
+    # If B2C mode, FTC SAN is recommended (not required, but logged)
+    if acknowledgment.calling_mode == "b2c" and not acknowledgment.ftc_san:
+        logger.warning(f"User {user_id} selected B2C mode without FTC SAN")
+    
+    # Update user record
+    update_data = {
+        "compliance_acknowledged": True,
+        "compliance_acknowledged_at": datetime.now(timezone.utc).isoformat(),
+        "compliance_acknowledged_version": COMPLIANCE_VERSION,
+        "calling_mode": acknowledgment.calling_mode,
+        "ftc_san": acknowledgment.ftc_san,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": update_data}
+    )
+    
+    # Log the acknowledgment for audit
+    await db.compliance_acknowledgments.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "email": current_user.get("email"),
+        "version": COMPLIANCE_VERSION,
+        "calling_mode": acknowledgment.calling_mode,
+        "ftc_san": acknowledgment.ftc_san,
+        "ip_address": None,  # Could capture from request if needed
+        "acknowledged_at": datetime.now(timezone.utc).isoformat(),
+        "acknowledgments": {
+            "dnc_responsibility": acknowledgment.acknowledge_dnc_responsibility,
+            "tcpa_rules": acknowledgment.acknowledge_tcpa_rules,
+            "calling_hours": acknowledgment.acknowledge_calling_hours,
+            "litigator_risk": acknowledgment.acknowledge_litigator_risk
+        }
+    })
+    
+    logger.info(f"User {user_id} acknowledged compliance v{COMPLIANCE_VERSION}, mode: {acknowledgment.calling_mode}")
+    
+    return {
+        "success": True,
+        "message": "Compliance acknowledgment recorded",
+        "calling_mode": acknowledgment.calling_mode,
+        "can_make_calls": True
+    }
+
+@api_router.get("/compliance/setup-guide")
+async def get_compliance_setup_guide(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get compliance setup guide and checklist.
+    """
+    user_acknowledged = current_user.get("compliance_acknowledged", False)
+    calling_mode = current_user.get("calling_mode", "b2b")
+    
+    # Get DNC stats
+    dnc_count = await db.national_dnc_list.count_documents({})
+    litigator_count = await db.tcpa_litigators.count_documents({})
+    
+    # Get last DNC refresh
+    refresh_info = await db.dnc_refresh_log.find_one(
+        {"type": "national_dnc"},
+        {"_id": 0},
+        sort=[("refreshed_at", -1)]
+    )
+    
+    dnc_current = False
+    if refresh_info:
+        try:
+            last_refresh = datetime.fromisoformat(refresh_info["refreshed_at"].replace("Z", "+00:00"))
+            dnc_current = (datetime.now(timezone.utc) - last_refresh).days <= 31
+        except Exception:
+            pass
+    
+    b2b_checklist = [
+        {
+            "id": "acknowledge",
+            "title": "Acknowledge Compliance Responsibility",
+            "description": "Confirm you understand TCPA rules and accept responsibility",
+            "completed": user_acknowledged,
+            "required": True,
+            "action": "acknowledge"
+        },
+        {
+            "id": "calling_hours",
+            "title": "Calling Hours",
+            "description": "System enforces 8am-9pm local time (state-specific rules apply)",
+            "completed": True,  # Auto-enforced by platform
+            "required": True,
+            "action": None
+        },
+        {
+            "id": "ai_disclosure",
+            "title": "AI Call Disclosure",
+            "description": "All calls begin with AI disclosure as required by law",
+            "completed": True,  # Auto-enforced by platform
+            "required": True,
+            "action": None
+        },
+        {
+            "id": "internal_dnc",
+            "title": "Internal DNC List",
+            "description": "Opt-outs are automatically added to your DNC list",
+            "completed": True,  # Auto-managed
+            "required": True,
+            "action": None
+        },
+        {
+            "id": "litigator_list",
+            "title": "TCPA Litigator Protection",
+            "description": f"Block known TCPA plaintiffs ({litigator_count} numbers loaded)",
+            "completed": litigator_count > 0,
+            "required": False,
+            "action": "upload_litigators"
+        }
+    ]
+    
+    b2c_checklist = b2b_checklist + [
+        {
+            "id": "ftc_registration",
+            "title": "FTC DNC Registry Registration",
+            "description": "Register at telemarketing.donotcall.gov and obtain your SAN",
+            "completed": bool(current_user.get("ftc_san")),
+            "required": True,
+            "action": "ftc_register"
+        },
+        {
+            "id": "dnc_upload",
+            "title": "Upload FTC DNC Data",
+            "description": f"Upload National DNC data ({dnc_count:,} numbers loaded)",
+            "completed": dnc_count > 0,
+            "required": True,
+            "action": "upload_dnc"
+        },
+        {
+            "id": "dnc_refresh",
+            "title": "DNC Data Current (31-day refresh)",
+            "description": "FTC requires refresh every 31 days for safe harbor",
+            "completed": dnc_current,
+            "required": True,
+            "action": "refresh_dnc"
+        }
+    ]
+    
+    checklist = b2c_checklist if calling_mode == "b2c" else b2b_checklist
+    
+    return {
+        "calling_mode": calling_mode,
+        "acknowledged": user_acknowledged,
+        "checklist": checklist,
+        "completion_percentage": int(
+            sum(1 for item in checklist if item["completed"]) / len(checklist) * 100
+        ),
+        "can_make_calls": user_acknowledged,
+        "guides": {
+            "b2b": {
+                "title": "B2B Calling (Business-to-Business)",
+                "description": "Calls to business landlines are exempt from National DNC Registry requirements",
+                "requirements": [
+                    "Calls must be to business phone numbers (not personal cell phones)",
+                    "You are still responsible for honoring opt-out requests",
+                    "Calling hours (8am-9pm local time) still apply",
+                    "AI disclosure is required on all calls"
+                ]
+            },
+            "b2c": {
+                "title": "B2C Calling (Business-to-Consumer)",
+                "description": "Calls to consumers require full TCPA/DNC compliance",
+                "requirements": [
+                    "Must register with FTC and obtain Subscription Account Number (SAN)",
+                    "Must download and upload FTC DNC data (fee: $82/area code, max $22k nationwide)",
+                    "Must refresh DNC data every 31 days for safe harbor protection",
+                    "Prior express written consent required for autodialed calls to cell phones",
+                    "All TCPA rules and state-specific regulations apply"
+                ]
+            }
+        },
+        "resources": [
+            {
+                "title": "FTC Do Not Call Registry",
+                "url": "https://telemarketing.donotcall.gov",
+                "description": "Register and download DNC data"
+            },
+            {
+                "title": "FTC Telemarketing Sales Rule",
+                "url": "https://www.ftc.gov/business-guidance/resources/complying-telemarketing-sales-rule",
+                "description": "Official FTC compliance guide"
+            },
+            {
+                "title": "TCPA Overview",
+                "url": "https://www.fcc.gov/consumers/guides/stop-unwanted-robocalls-and-texts",
+                "description": "FCC consumer protection rules"
+            }
+        ]
+    }
+
 @api_router.post("/compliance/national-dnc/upload")
 async def upload_national_dnc_list(
     file: UploadFile,
@@ -6954,6 +7218,90 @@ async def remove_litigator(
         raise HTTPException(status_code=404, detail="Litigator not found")
     
     return {"success": True, "message": "Litigator removed"}
+
+@api_router.get("/compliance/litigators/info")
+async def get_litigator_info(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get information about TCPA litigators and how to build a protection list.
+    """
+    return {
+        "overview": {
+            "title": "TCPA Litigator Protection",
+            "description": "Professional TCPA plaintiffs actively seek telemarketing violations to file lawsuits. Adding their phone numbers to your blocklist protects your business.",
+            "risk": "$500-$1,500 per call in damages, plus legal fees"
+        },
+        "tcpa_hotspots_2025": {
+            "description": "Top states/districts for TCPA litigation in 2025",
+            "locations": [
+                {"state": "California", "note": "Central District CA - highest volume"},
+                {"state": "Florida", "note": "Serial plaintiff activity"},
+                {"state": "Texas", "note": "Western District TX - 68% of cases from one firm"},
+                {"state": "Illinois", "note": "Chicago area litigation"},
+                {"state": "New York", "note": "Class action friendly"}
+            ]
+        },
+        "known_plaintiff_firms": {
+            "note": "These firms are known for high-volume TCPA plaintiff representation. Research their cases to identify repeat plaintiffs.",
+            "firms": [
+                "Kaufman PA (Avi Kaufman) - Top TCPA plaintiff firm",
+                "Watstein Terepka LLP - Nationwide TCPA class actions",
+                "Anderson + Wanca - TCPA class action specialists",
+                "Terrell Marshall Law Group - Consumer class actions",
+                "Greenwald Davidson Radbil - TCPA/FDCPA focus"
+            ]
+        },
+        "how_to_build_list": {
+            "title": "How to Build Your Litigator Blocklist",
+            "steps": [
+                {
+                    "step": 1,
+                    "title": "Search PACER",
+                    "description": "Search federal court records (pacer.uscourts.gov) for TCPA cases and identify repeat plaintiffs"
+                },
+                {
+                    "step": 2,
+                    "title": "Monitor Legal News",
+                    "description": "Follow tcpaworld.com and WebRecon for updates on serial TCPA filers"
+                },
+                {
+                    "step": 3,
+                    "title": "Purchase Commercial Lists",
+                    "description": "Services like Blacklist Alliance and WebRecon sell pre-compiled litigator lists"
+                },
+                {
+                    "step": 4,
+                    "title": "Industry Networks",
+                    "description": "Join telemarketing industry groups that share litigator intelligence"
+                }
+            ]
+        },
+        "commercial_services": [
+            {
+                "name": "Blacklist Alliance",
+                "url": "https://www.blacklistalliance.com",
+                "description": "Real-time litigator scrubbing service"
+            },
+            {
+                "name": "WebRecon",
+                "url": "https://www.webrecon.com",
+                "description": "TCPA plaintiff intelligence and monitoring"
+            },
+            {
+                "name": "Contact Center Compliance (DNC.com)",
+                "url": "https://www.dnc.com",
+                "description": "Enterprise compliance suite with litigator data"
+            }
+        ],
+        "best_practices": [
+            "Block any number that has previously filed a TCPA lawsuit",
+            "Block numbers associated with plaintiff law firms",
+            "Immediately add any number that threatens litigation during a call",
+            "Review your internal DNC list for patterns (multiple complaints from same area codes)",
+            "Consider commercial litigator scrubbing for high-volume calling"
+        ]
+    }
 
 @api_router.get("/compliance/dnc/refresh-reminder")
 async def get_dnc_refresh_reminder(

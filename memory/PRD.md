@@ -367,9 +367,31 @@ A vertical-agnostic B2B SaaS platform that:
   - POST /api/compliance/litigators/add - Add single litigator
   - GET /api/compliance/litigators - List all litigators
   - DELETE /api/compliance/litigators/{phone} - Remove litigator
+  - GET /api/compliance/litigators/info - Litigator protection guide
   - Automatic blocking of calls to known TCPA plaintiffs
 - **FTC Data Instructions Tab** - Step-by-step guide to download free FTC DNC data
 - **Cost**: $0/month (uses free FTC data + Twilio Lookup already included)
+
+### Session 15 (December 2025): Compliance Setup & Acknowledgment System
+- **Compliance Setup Page** (`/app/compliance`) - Guided onboarding for TCPA compliance:
+  - B2B vs B2C calling mode selection with clear cost differences
+  - B2B: $0 cost, no FTC registration (recommended)
+  - B2C: FTC registration required, DNC data purchase ($82-$22k/year)
+  - 4 acknowledgment checkboxes (DNC responsibility, TCPA rules, calling hours, litigator risk)
+  - Progress tracking (0-100%)
+  - Compliance checklist with actionable items
+- **User Compliance Fields** added to User model:
+  - compliance_acknowledged (bool)
+  - compliance_acknowledged_at (timestamp)
+  - compliance_acknowledged_version (string)
+  - ftc_san (FTC Subscription Account Number for B2C)
+  - calling_mode ("b2b" or "b2c")
+- **Compliance Endpoints**:
+  - GET /api/compliance/acknowledgment - Get acknowledgment status
+  - POST /api/compliance/acknowledge - Submit acknowledgment
+  - GET /api/compliance/setup-guide - Get checklist and guides
+- **Compliance Audit Trail** - All acknowledgments logged for legal protection
+- **Resources Section** - FAQ accordion with B2B/B2C explanation, penalties, AI disclosure info
 
 ## Prioritized Backlog
 

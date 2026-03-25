@@ -57,7 +57,7 @@ const LoginPage = () => {
     setLoading(true);
     try {
       await register(registerForm.email, registerForm.password, registerForm.name);
-      toast.success("Account created! Welcome to ColdCall.ai");
+      toast.success("Account created! Welcome to DialGenix.ai");
       navigate("/app", { replace: true });
     } catch (error) {
       console.error("Registration failed:", error);
@@ -85,7 +85,7 @@ const LoginPage = () => {
           <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-xl flex items-center justify-center">
             <Phone className="w-6 h-6 text-white" />
           </div>
-          <span className="text-2xl font-bold text-white">ColdCall.ai</span>
+          <span className="text-2xl font-bold text-white">DialGenix.ai</span>
         </div>
 
         <Card className="bg-white/5 border-white/10 backdrop-blur-xl">

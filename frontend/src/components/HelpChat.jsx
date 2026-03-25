@@ -11,7 +11,7 @@ const HelpChat = ({ currentPage = "dashboard" }) => {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Hi! I'm your ColdCall.ai assistant. I can help you:\n\n• Set up your first campaign\n• Find high-intent leads\n• Configure AI calling scripts\n• Understand your analytics\n\nWhat would you like help with?"
+      content: "Hi! I'm your DialGenix.ai assistant. I can help you:\n\n• Set up your first campaign\n• Find high-intent leads\n• Configure AI calling scripts\n• Understand your analytics\n\nWhat would you like help with?"
     }
   ]);
   const [input, setInput] = useState("");
@@ -96,7 +96,7 @@ const HelpChat = ({ currentPage = "dashboard" }) => {
               <Bot className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-white font-semibold">ColdCall Assistant</h3>
+              <h3 className="text-white font-semibold">DialGenix Assistant</h3>
               <p className="text-cyan-100 text-xs">Ask me anything about the platform</p>
             </div>
           </div>

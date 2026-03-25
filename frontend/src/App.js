@@ -73,7 +73,7 @@ const Sidebar = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              ColdCall.ai
+              DialGenix.ai
             </h1>
             <p className="text-xs text-gray-500">AI Sales Automation</p>
           </div>

@@ -16,7 +16,7 @@ const OnboardingGuide = ({ user, onComplete, onNavigate }) => {
   const steps = [
     {
       id: "welcome",
-      title: "Welcome to ColdCall.ai!",
+      title: "Welcome to DialGenix.ai!",
       description: "Let's get you set up to find high-intent leads and book meetings with AI-powered calls.",
       icon: Sparkles,
       color: "from-amber-400 to-orange-500",

@@ -1,4 +1,4 @@
-# ColdCall.ai - AI Cold Calling SaaS Platform
+# DialGenix.ai - AI Cold Calling SaaS Platform
 
 ## Original Problem Statement
 Build an AI cold calling machine that calls businesses, qualifies them, and routes qualified leads to different sales agents for payment processing.

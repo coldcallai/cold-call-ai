@@ -41,7 +41,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Configuration
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'coldcallai_default_secret_key')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key')
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
@@ -729,12 +729,12 @@ class NotificationService:
                 </div>
                 
                 <div style="margin-top: 20px; text-align: center;">
-                    <p style="color: #6b7280; font-size: 14px;">This lead is ready for booking! Log in to ColdCall.ai to assign an agent.</p>
+                    <p style="color: #6b7280; font-size: 14px;">This lead is ready for booking! Log in to DialGenix.ai to assign an agent.</p>
                 </div>
             </div>
             
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
-                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by ColdCall.ai - AI Sales Automation</p>
+                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by DialGenix.ai - AI Sales Automation</p>
             </div>
         </div>
         """
@@ -817,7 +817,7 @@ class NotificationService:
             </div>
             
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
-                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by ColdCall.ai - AI Sales Automation</p>
+                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by DialGenix.ai - AI Sales Automation</p>
             </div>
         </div>
         """
@@ -843,7 +843,7 @@ class NotificationService:
             logger.info("Email notifications not configured - skipping low balance notification")
             return None
         
-        subject = "⚠️ Low Credit Balance Alert - ColdCall.ai"
+        subject = "⚠️ Low Credit Balance Alert - DialGenix.ai"
         
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -854,7 +854,7 @@ class NotificationService:
             <div style="background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
                 <p style="color: #1f2937; font-size: 16px;">Hi {user_name},</p>
                 
-                <p style="color: #4b5563;">Your ColdCall.ai credit balance is running low. Here's your current status:</p>
+                <p style="color: #4b5563;">Your DialGenix.ai credit balance is running low. Here's your current status:</p>
                 
                 <div style="display: flex; gap: 20px; margin: 20px 0;">
                     <div style="flex: 1; background: {'#FEF3C7' if lead_credits <= 20 else '#ECFDF5'}; padding: 15px; border-radius: 8px; text-align: center;">
@@ -880,7 +880,7 @@ class NotificationService:
             </div>
             
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
-                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by ColdCall.ai - AI Sales Automation</p>
+                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by DialGenix.ai - AI Sales Automation</p>
             </div>
         </div>
         """
@@ -1107,7 +1107,7 @@ calendly_service = CalendlyService()
 
 # Object Storage Configuration
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-APP_NAME = "coldcall-ai"
+APP_NAME = "dialgenix-ai"
 storage_key = None
 
 def init_storage():
@@ -2637,7 +2637,7 @@ class CRMIntegrationService:
     
     def __init__(self):
         # Generate encryption key from JWT secret for secure credential storage
-        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'coldcallai_default_secret_key')
+        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key')
         # Use a consistent key derivation
         key_bytes = jwt_secret.encode()[:32].ljust(32, b'0')
         self.cipher = Fernet(base64.urlsafe_b64encode(key_bytes))
@@ -2886,7 +2886,7 @@ class CRMIntegrationService:
                     "email": lead.get("email", ""),
                     "phone": lead.get("phone", ""),
                     "companyName": lead.get("business_name", ""),
-                    "source": "ColdCall.ai",
+                    "source": "DialGenix.ai",
                     "tags": ["qualified-lead", "ai-cold-call"],
                 }
                 
@@ -2932,7 +2932,7 @@ class CRMIntegrationService:
                     "Email": lead.get("email", ""),
                     "Phone": lead.get("phone", ""),
                     "Company": lead.get("business_name", "Unknown Company"),
-                    "LeadSource": "ColdCall.ai",
+                    "LeadSource": "DialGenix.ai",
                     "Status": "Open - Not Contacted",
                     "Rating": "Warm",
                     "Industry": lead.get("industry", ""),
@@ -4234,10 +4234,10 @@ async def help_chat(
 ):
     """AI-powered help chat that guides users through the system"""
     
-    system_prompt = """You are ColdCall.ai's helpful assistant. You guide sales agents through using the AI cold calling platform.
+    system_prompt = """You are DialGenix.ai's helpful assistant. You guide sales agents through using the AI cold calling platform.
 
 PLATFORM OVERVIEW:
-ColdCall.ai is a B2B SaaS that:
+DialGenix.ai is a B2B SaaS that:
 1. Discovers high-intent leads using AI (businesses actively searching for solutions)
 2. Makes AI-powered cold calls to qualify leads
 3. Books meetings with qualified prospects

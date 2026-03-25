@@ -288,7 +288,7 @@ const ComplianceSetupPage = () => {
                 I am responsible for Do Not Call compliance
               </Label>
               <p className="text-sm text-gray-500 mt-1">
-                I understand that ColdCall.ai provides compliance tools, but I am solely responsible for 
+                I understand that DialGenix.ai provides compliance tools, but I am solely responsible for 
                 maintaining my own DNC lists and scrubbing call lists against the National DNC Registry 
                 if required for my calling activities.
               </p>
@@ -331,7 +331,7 @@ const ComplianceSetupPage = () => {
                 I will only call during legal hours (8am-9pm local time)
               </Label>
               <p className="text-sm text-gray-500 mt-1">
-                I understand that ColdCall.ai enforces calling hour restrictions, and I will not attempt 
+                I understand that DialGenix.ai enforces calling hour restrictions, and I will not attempt 
                 to circumvent these protections. Some states have stricter hours (e.g., Texas 9am-9pm).
               </p>
             </div>
@@ -484,7 +484,7 @@ const ComplianceSetupPage = () => {
             <AccordionItem value="ai-disclosure">
               <AccordionTrigger>Is AI disclosure required?</AccordionTrigger>
               <AccordionContent className="text-gray-600">
-                <p>Yes. FTC guidelines and many state laws require disclosure when using AI or automated voices. ColdCall.ai automatically includes AI disclosure at the start of every call.</p>
+                <p>Yes. FTC guidelines and many state laws require disclosure when using AI or automated voices. DialGenix.ai automatically includes AI disclosure at the start of every call.</p>
               </AccordionContent>
             </AccordionItem>
           </Accordion>

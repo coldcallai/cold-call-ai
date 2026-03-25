@@ -182,7 +182,7 @@ const LandingPage = () => {
               <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white">ColdCall.ai</span>
+              <span className="text-xl font-semibold text-white">DialGenix.ai</span>
             </div>
             
             <div className="hidden md:flex items-center gap-8">
@@ -240,7 +240,7 @@ const LandingPage = () => {
               Get a demo
             </Button>
             <Button variant="outline" className="rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent px-8 py-6 text-base">
-              Learn more about ColdCall.ai
+              Learn more about DialGenix.ai
             </Button>
           </div>
 
@@ -435,7 +435,7 @@ const LandingPage = () => {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Your plays, your way</h2>
             <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-              With ColdCall.ai, the orchestration of tasks for both AI Agents and human reps happens in a single workflow.
+              With DialGenix.ai, the orchestration of tasks for both AI Agents and human reps happens in a single workflow.
             </p>
           </div>
 
@@ -491,7 +491,7 @@ const LandingPage = () => {
       <section className="bg-gray-50 py-24 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">ColdCall.ai vs. Hiring SDRs</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">DialGenix.ai vs. Hiring SDRs</h2>
             <p className="text-gray-600 text-lg">See why AI-powered calling makes sense</p>
           </div>
 
@@ -502,7 +502,7 @@ const LandingPage = () => {
                 <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-2">
                   <Phone className="w-5 h-5 text-white" />
                 </div>
-                <p className="font-semibold text-gray-900">ColdCall.ai</p>
+                <p className="font-semibold text-gray-900">DialGenix.ai</p>
               </div>
               <div className="p-6">
                 <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center mx-auto mb-2">
@@ -648,7 +648,7 @@ const LandingPage = () => {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Need more help?</h2>
           <p className="text-gray-400 text-lg mb-8 max-w-xl mx-auto">
-            Ready to automate your outbound? Get a personalized demo and see ColdCall.ai in action.
+            Ready to automate your outbound? Get a personalized demo and see DialGenix.ai in action.
           </p>
 
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
@@ -679,7 +679,7 @@ const LandingPage = () => {
               <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-4 h-4 text-white" />
               </div>
-              <span className="font-semibold text-white">ColdCall.ai</span>
+              <span className="font-semibold text-white">DialGenix.ai</span>
             </div>
 
             <div className="flex items-center gap-8 text-sm text-gray-400">
@@ -688,7 +688,7 @@ const LandingPage = () => {
               <a href="#" className="hover:text-white transition-colors">Contact</a>
             </div>
 
-            <p className="text-sm text-gray-500">© 2025 ColdCall.ai. All rights reserved.</p>
+            <p className="text-sm text-gray-500">© 2025 DialGenix.ai. All rights reserved.</p>
           </div>
         </div>
       </footer>

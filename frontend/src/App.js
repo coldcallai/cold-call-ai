@@ -2150,14 +2150,23 @@ const Agents = () => {
 
 // Call History Page
 const CallHistory = () => {
+  const { token } = useAuth();
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCall, setSelectedCall] = useState(null);
+  const [subscriptionFeatures, setSubscriptionFeatures] = useState(null);
+  const [playingAudio, setPlayingAudio] = useState(null);
+  const [loadingTranscript, setLoadingTranscript] = useState(false);
+  const [transcriptData, setTranscriptData] = useState(null);
 
   const fetchCalls = async () => {
     try {
-      const response = await axios.get(`${API}/calls`);
-      setCalls(response.data);
+      const [callsRes, featuresRes] = await Promise.all([
+        axios.get(`${API}/calls`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/subscription/features`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      setCalls(callsRes.data);
+      setSubscriptionFeatures(featuresRes.data.features);
     } catch (error) {
       toast.error("Failed to load calls");
     } finally {
@@ -2167,15 +2176,142 @@ const CallHistory = () => {
 
   useEffect(() => {
     fetchCalls();
-  }, []);
+  }, [token]);
+
+  const playRecording = async (call) => {
+    if (!subscriptionFeatures?.call_recording) {
+      toast.error("Call recording requires Starter plan or higher");
+      return;
+    }
+    
+    if (!call.recording_url) {
+      toast.error("No recording available for this call");
+      return;
+    }
+
+    try {
+      // Get audio stream
+      const response = await axios.get(
+        `${API}/calls/${call.id}/recording/stream`,
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+      
+      const audioUrl = URL.createObjectURL(response.data);
+      const audio = new Audio(audioUrl);
+      
+      // Stop any currently playing audio
+      if (playingAudio) {
+        playingAudio.pause();
+      }
+      
+      setPlayingAudio(audio);
+      audio.play();
+      
+      audio.onended = () => {
+        setPlayingAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      toast.success("Playing recording...");
+    } catch (error) {
+      if (error.response?.status === 403) {
+        toast.error("Recording access requires a higher subscription tier");
+      } else {
+        toast.error("Failed to play recording");
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    if (playingAudio) {
+      playingAudio.pause();
+      setPlayingAudio(null);
+    }
+  };
+
+  const loadTranscript = async (call) => {
+    if (!subscriptionFeatures?.call_transcription) {
+      toast.error("Transcription requires Professional plan or higher");
+      return;
+    }
+
+    setLoadingTranscript(true);
+    try {
+      const response = await axios.get(
+        `${API}/calls/${call.id}/transcript`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setTranscriptData(response.data);
+    } catch (error) {
+      if (error.response?.status === 403) {
+        toast.error("Transcription requires Professional plan or higher");
+      } else if (error.response?.status === 404) {
+        toast.info("No transcript available. Request one below.");
+      } else {
+        toast.error("Failed to load transcript");
+      }
+    } finally {
+      setLoadingTranscript(false);
+    }
+  };
+
+  const requestTranscription = async (call) => {
+    try {
+      await axios.post(
+        `${API}/calls/${call.id}/transcribe`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Transcription requested! Check back in a minute.");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to request transcription");
+    }
+  };
+
+  const openCallDetails = async (call) => {
+    setSelectedCall(call);
+    setTranscriptData(null);
+    
+    // Auto-load transcript if user has access and call has one
+    if (subscriptionFeatures?.call_transcription && call.full_transcript) {
+      loadTranscript(call);
+    }
+  };
 
   return (
     <div className="p-6 md:p-8 space-y-6" data-testid="call-history-page">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-          Call History
-        </h1>
-        <p className="text-gray-500 mt-1">View transcripts and qualification results</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Call History
+          </h1>
+          <p className="text-gray-500 mt-1">View recordings, transcripts, and qualification results</p>
+        </div>
+        
+        {/* Feature badges */}
+        <div className="flex items-center gap-2">
+          {subscriptionFeatures?.call_recording ? (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <CheckCircle className="w-3 h-3 mr-1" /> Recordings
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-gray-50 text-gray-500">
+              Recordings (Starter+)
+            </Badge>
+          )}
+          {subscriptionFeatures?.call_transcription ? (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <CheckCircle className="w-3 h-3 mr-1" /> Transcripts
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-gray-50 text-gray-500">
+              Transcripts (Pro+)
+            </Badge>
+          )}
+        </div>
       </div>
 
       <Card className="bg-white border border-gray-200 shadow-sm">
@@ -2196,6 +2332,7 @@ const CallHistory = () => {
                   <TableHead>Call ID</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Duration</TableHead>
+                  <TableHead>Recording</TableHead>
                   <TableHead>Qualification</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -2209,6 +2346,32 @@ const CallHistory = () => {
                       <StatusBadge status={call.status} />
                     </TableCell>
                     <TableCell>{call.duration_seconds}s</TableCell>
+                    <TableCell>
+                      {call.recording_url ? (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={() => playingAudio ? stopRecording() : playRecording(call)}
+                            disabled={!subscriptionFeatures?.call_recording}
+                          >
+                            {playingAudio ? (
+                              <Pause className="w-4 h-4 text-blue-600" />
+                            ) : (
+                              <Play className="w-4 h-4 text-blue-600" />
+                            )}
+                          </Button>
+                          {call.full_transcript && (
+                            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
+                              Transcript
+                            </Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {call.qualification_result ? (
                         <div className="flex items-center gap-2">
@@ -2233,7 +2396,7 @@ const CallHistory = () => {
                         size="sm"
                         variant="outline"
                         data-testid={`view-call-${call.id}`}
-                        onClick={() => setSelectedCall(call)}
+                        onClick={() => openCallDetails(call)}
                       >
                         View Details
                       </Button>
@@ -2246,9 +2409,9 @@ const CallHistory = () => {
         </CardContent>
       </Card>
 
-      {/* Call Details Dialog */}
-      <Dialog open={!!selectedCall} onOpenChange={() => setSelectedCall(null)}>
-        <DialogContent className="max-w-2xl">
+      {/* Call Details Dialog - Enhanced with Recording & Transcript */}
+      <Dialog open={!!selectedCall} onOpenChange={() => { setSelectedCall(null); setTranscriptData(null); stopRecording(); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               Call Details
@@ -2256,18 +2419,61 @@ const CallHistory = () => {
           </DialogHeader>
           
           {selectedCall && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg">
                   <p className="text-xs text-gray-500">Status</p>
                   <StatusBadge status={selectedCall.status} />
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg">
                   <p className="text-xs text-gray-500">Duration</p>
-                  <p className="font-semibold">{selectedCall.duration_seconds} seconds</p>
+                  <p className="font-semibold">{selectedCall.duration_seconds}s</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500">Answered By</p>
+                  <p className="font-semibold capitalize">{selectedCall.answered_by || "Unknown"}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500">Date</p>
+                  <p className="font-semibold">{new Date(selectedCall.created_at).toLocaleString()}</p>
                 </div>
               </div>
 
+              {/* Recording Player */}
+              {selectedCall.recording_url && subscriptionFeatures?.call_recording && (
+                <div className="p-4 border border-blue-200 rounded-lg bg-blue-50/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-full">
+                        <Phone className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">Call Recording</p>
+                        <p className="text-sm text-gray-500">
+                          {selectedCall.recording_duration_seconds || selectedCall.duration_seconds}s duration
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => playingAudio ? stopRecording() : playRecording(selectedCall)}
+                      className="gap-2"
+                    >
+                      {playingAudio ? (
+                        <>
+                          <Pause className="w-4 h-4" /> Stop
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" /> Play Recording
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Qualification Result */}
               {selectedCall.qualification_result && (
                 <div className="p-4 border border-gray-200 rounded-lg">
                   <h4 className="font-semibold mb-3">Qualification Result</h4>
@@ -2297,9 +2503,91 @@ const CallHistory = () => {
                 </div>
               )}
 
+              {/* Full Transcript (Whisper) */}
+              {subscriptionFeatures?.call_transcription && (
+                <div className="border border-purple-200 rounded-lg overflow-hidden">
+                  <div className="p-4 bg-purple-50 border-b border-purple-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-purple-900">Full Transcript</h4>
+                        {selectedCall.transcription_status === "processing" && (
+                          <Badge className="bg-yellow-100 text-yellow-800">Processing...</Badge>
+                        )}
+                      </div>
+                      {!transcriptData && !loadingTranscript && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => loadTranscript(selectedCall)}
+                            disabled={!selectedCall.full_transcript}
+                          >
+                            Load Transcript
+                          </Button>
+                          {!selectedCall.full_transcript && selectedCall.recording_url && (
+                            <Button
+                              size="sm"
+                              onClick={() => requestTranscription(selectedCall)}
+                            >
+                              Request Transcription
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 bg-white">
+                    {loadingTranscript ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-4 w-5/6" />
+                      </div>
+                    ) : transcriptData ? (
+                      <div className="space-y-4">
+                        {/* Full text */}
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                            {transcriptData.full_transcript}
+                          </p>
+                        </div>
+                        
+                        {/* Timestamped segments */}
+                        {transcriptData.segments && transcriptData.segments.length > 0 && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2">Timestamped Segments</p>
+                            <ScrollArea className="h-[150px] border rounded-lg p-2">
+                              <div className="space-y-2">
+                                {transcriptData.segments.map((segment, idx) => (
+                                  <div key={idx} className="flex gap-3 text-sm">
+                                    <span className="text-gray-400 font-mono w-20 flex-shrink-0">
+                                      {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
+                                    </span>
+                                    <span className="text-gray-700">{segment.text}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedCall.full_transcript ? (
+                      <p className="text-sm text-gray-500">Click "Load Transcript" to view.</p>
+                    ) : (
+                      <p className="text-sm text-gray-500">
+                        No transcript available. 
+                        {selectedCall.recording_url ? " Click 'Request Transcription' to generate one." : " No recording found."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* AI Conversation Transcript (existing) */}
               {selectedCall.transcript && selectedCall.transcript.length > 0 && (
                 <div>
-                  <h4 className="font-semibold mb-3">Transcript</h4>
+                  <h4 className="font-semibold mb-3">AI Conversation Log</h4>
                   <ScrollArea className="h-[200px] border border-gray-200 rounded-lg p-4">
                     <div className="space-y-3">
                       {selectedCall.transcript.map((msg, idx) => (

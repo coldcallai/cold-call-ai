@@ -29,7 +29,8 @@ from elevenlabs.types import VoiceSettings
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 from twilio.rest import Client as TwilioClient
 from twilio.twiml.voice_response import VoiceResponse, Gather, Say, Connect, Stream
-import requests  # For Calendly API calls
+import requests  # For Calendly API calls and object storage
+from emergentintegrations.llm.openai import OpenAISpeechToText
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -257,12 +258,20 @@ class Call(BaseModel):
     agent_id: Optional[str] = None
     status: CallStatus = CallStatus.PENDING
     duration_seconds: int = 0
-    transcript: List[Dict[str, str]] = []
+    transcript: List[Dict[str, str]] = []  # Conversation transcript (AI-generated)
     qualification_result: Optional[Dict[str, Any]] = None
     # AMD tracking
     answered_by: Optional[str] = None  # "human", "machine_start", "machine_end_beep", "machine_end_silence", "fax", "unknown"
     voicemail_dropped: bool = False
     amd_status: Optional[str] = None  # Raw AMD status from Twilio
+    # Call Recording & Transcription
+    recording_url: Optional[str] = None  # Object storage path for audio file
+    recording_sid: Optional[str] = None  # Twilio recording SID
+    recording_duration_seconds: Optional[int] = None  # Recording duration
+    full_transcript: Optional[str] = None  # Full text transcript from Whisper
+    transcript_segments: Optional[List[Dict[str, Any]]] = None  # Timestamped segments
+    transcription_status: Optional[str] = None  # "pending", "processing", "completed", "failed"
+    # Timestamps
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -1064,6 +1073,270 @@ class CalendlyService:
             return False
 
 calendly_service = CalendlyService()
+
+# ============== CALL RECORDING & TRANSCRIPTION SERVICE ==============
+
+# Object Storage Configuration
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+APP_NAME = "coldcall-ai"
+storage_key = None
+
+def init_storage():
+    """Initialize object storage - call once at startup"""
+    global storage_key
+    if storage_key:
+        return storage_key
+    
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not emergent_key:
+        logger.warning("EMERGENT_LLM_KEY not set - call recording storage disabled")
+        return None
+    
+    try:
+        resp = requests.post(
+            f"{STORAGE_URL}/init",
+            json={"emergent_key": emergent_key},
+            timeout=30
+        )
+        resp.raise_for_status()
+        storage_key = resp.json()["storage_key"]
+        logger.info("Object storage initialized successfully")
+        return storage_key
+    except Exception as e:
+        logger.error(f"Failed to initialize storage: {e}")
+        return None
+
+def put_object(path: str, data: bytes, content_type: str) -> Optional[Dict]:
+    """Upload file to object storage"""
+    key = init_storage()
+    if not key:
+        return None
+    
+    try:
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data,
+            timeout=120
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error(f"Failed to upload to storage: {e}")
+        return None
+
+def get_object(path: str) -> Optional[tuple]:
+    """Download file from object storage. Returns (content_bytes, content_type)"""
+    key = init_storage()
+    if not key:
+        return None
+    
+    try:
+        resp = requests.get(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key},
+            timeout=60
+        )
+        resp.raise_for_status()
+        return resp.content, resp.headers.get("Content-Type", "audio/mpeg")
+    except Exception as e:
+        logger.error(f"Failed to download from storage: {e}")
+        return None
+
+
+class CallRecordingService:
+    """
+    Service for managing call recordings and transcriptions.
+    - Downloads recordings from Twilio
+    - Uploads to object storage
+    - Transcribes using Whisper API
+    """
+    
+    def __init__(self):
+        self.emergent_key = os.environ.get("EMERGENT_LLM_KEY")
+        self.twilio_account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+        self.twilio_auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
+        
+        self.storage_enabled = bool(self.emergent_key)
+        self.transcription_enabled = bool(self.emergent_key)
+        
+        if self.transcription_enabled:
+            self.stt = OpenAISpeechToText(api_key=self.emergent_key)
+            logger.info("Call recording & transcription service initialized")
+        else:
+            self.stt = None
+            logger.warning("Transcription disabled - EMERGENT_LLM_KEY not set")
+    
+    async def download_twilio_recording(self, recording_sid: str) -> Optional[bytes]:
+        """Download recording audio from Twilio"""
+        if not self.twilio_account_sid or not self.twilio_auth_token:
+            logger.error("Twilio credentials not configured")
+            return None
+        
+        try:
+            # Twilio recording URL format
+            recording_url = f"https://api.twilio.com/2010-04-01/Accounts/{self.twilio_account_sid}/Recordings/{recording_sid}.mp3"
+            
+            response = await asyncio.to_thread(
+                requests.get,
+                recording_url,
+                auth=(self.twilio_account_sid, self.twilio_auth_token),
+                timeout=60
+            )
+            response.raise_for_status()
+            
+            logger.info(f"Downloaded Twilio recording {recording_sid}: {len(response.content)} bytes")
+            return response.content
+            
+        except Exception as e:
+            logger.error(f"Failed to download Twilio recording {recording_sid}: {e}")
+            return None
+    
+    async def store_recording(self, user_id: str, call_id: str, audio_data: bytes) -> Optional[str]:
+        """Store recording in object storage. Returns storage path."""
+        if not self.storage_enabled:
+            return None
+        
+        try:
+            # Generate storage path
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+            path = f"{APP_NAME}/recordings/{user_id}/{timestamp}/{call_id}.mp3"
+            
+            result = await asyncio.to_thread(
+                put_object,
+                path,
+                audio_data,
+                "audio/mpeg"
+            )
+            
+            if result:
+                logger.info(f"Stored recording at {path}")
+                return result.get("path", path)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to store recording: {e}")
+            return None
+    
+    async def transcribe_recording(self, audio_data: bytes, language: str = "en") -> Optional[Dict]:
+        """Transcribe audio using Whisper API. Returns transcript data."""
+        if not self.transcription_enabled or not self.stt:
+            return None
+        
+        try:
+            # Create a file-like object for the audio data
+            import io
+            audio_file = io.BytesIO(audio_data)
+            audio_file.name = "recording.mp3"
+            
+            # Transcribe with timestamps
+            response = await self.stt.transcribe(
+                file=audio_file,
+                model="whisper-1",
+                response_format="verbose_json",
+                language=language,
+                timestamp_granularities=["segment"]
+            )
+            
+            # Extract transcript and segments
+            result = {
+                "text": response.text,
+                "segments": []
+            }
+            
+            if hasattr(response, 'segments'):
+                for segment in response.segments:
+                    result["segments"].append({
+                        "start": segment.start,
+                        "end": segment.end,
+                        "text": segment.text
+                    })
+            
+            logger.info(f"Transcribed recording: {len(response.text)} chars, {len(result['segments'])} segments")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to transcribe recording: {e}")
+            return None
+    
+    async def process_call_recording(
+        self,
+        call_id: str,
+        user_id: str,
+        recording_sid: str,
+        features: Dict
+    ) -> Dict:
+        """
+        Full pipeline: Download from Twilio -> Store -> Transcribe
+        Respects user's tier features.
+        """
+        result = {
+            "recording_url": None,
+            "full_transcript": None,
+            "transcript_segments": None,
+            "status": "pending"
+        }
+        
+        # Check if user has recording feature
+        if not features.get("call_recording"):
+            result["status"] = "feature_not_available"
+            return result
+        
+        try:
+            # Update status to processing
+            await db.calls.update_one(
+                {"id": call_id},
+                {"$set": {"transcription_status": "processing"}}
+            )
+            
+            # Step 1: Download from Twilio
+            audio_data = await self.download_twilio_recording(recording_sid)
+            if not audio_data:
+                result["status"] = "download_failed"
+                return result
+            
+            # Step 2: Store in object storage
+            storage_path = await self.store_recording(user_id, call_id, audio_data)
+            if storage_path:
+                result["recording_url"] = storage_path
+            
+            # Step 3: Transcribe (if user has transcription feature)
+            if features.get("call_transcription"):
+                transcript_data = await self.transcribe_recording(audio_data)
+                if transcript_data:
+                    result["full_transcript"] = transcript_data["text"]
+                    result["transcript_segments"] = transcript_data["segments"]
+            
+            result["status"] = "completed"
+            
+            # Update call record with recording data
+            update_data = {
+                "recording_url": result["recording_url"],
+                "transcription_status": result["status"]
+            }
+            
+            if result["full_transcript"]:
+                update_data["full_transcript"] = result["full_transcript"]
+                update_data["transcript_segments"] = result["transcript_segments"]
+            
+            await db.calls.update_one(
+                {"id": call_id},
+                {"$set": update_data}
+            )
+            
+            logger.info(f"Processed recording for call {call_id}: {result['status']}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error processing call recording: {e}")
+            result["status"] = "failed"
+            await db.calls.update_one(
+                {"id": call_id},
+                {"$set": {"transcription_status": "failed"}}
+            )
+            return result
+
+recording_service = CallRecordingService()
 
 # ============== ICP SCORING SERVICE ==============
 class ICPScoringService:
@@ -1892,6 +2165,10 @@ TIER_FEATURES = {
         "max_campaigns": 1,
         "max_agents": 1,
         "max_team_seats": 1,
+        # Recording & Transcription
+        "call_recording": False,
+        "recording_retention_days": 0,
+        "call_transcription": False,
     },
     "starter": {
         "max_leads_per_month": 250,
@@ -1908,6 +2185,10 @@ TIER_FEATURES = {
         "max_campaigns": 3,
         "max_agents": 3,
         "max_team_seats": 1,
+        # Recording & Transcription - Basic
+        "call_recording": True,
+        "recording_retention_days": 7,
+        "call_transcription": False,
     },
     "professional": {
         "max_leads_per_month": 1000,
@@ -1924,6 +2205,10 @@ TIER_FEATURES = {
         "max_campaigns": 10,
         "max_agents": 10,
         "max_team_seats": 5,
+        # Recording & Transcription - Full
+        "call_recording": True,
+        "recording_retention_days": 30,
+        "call_transcription": True,
     },
     "unlimited": {
         "max_leads_per_month": 5000,
@@ -1940,6 +2225,10 @@ TIER_FEATURES = {
         "max_campaigns": -1,  # Unlimited
         "max_agents": -1,  # Unlimited
         "max_team_seats": 5,
+        # Recording & Transcription - Premium
+        "call_recording": True,
+        "recording_retention_days": 90,
+        "call_transcription": True,
     },
     "byl": {  # Bring Your List
         "max_leads_per_month": 0,  # They bring their own
@@ -1956,6 +2245,10 @@ TIER_FEATURES = {
         "max_campaigns": 5,
         "max_agents": 10,
         "max_team_seats": 3,
+        # Recording & Transcription - Full
+        "call_recording": True,
+        "recording_retention_days": 30,
+        "call_transcription": True,
     },
 }
 
@@ -5088,23 +5381,214 @@ async def get_call_amd_status(
         "amd_duration_ms": call.get("amd_duration_ms")
     }
 
+# ============== CALL RECORDING & TRANSCRIPTION ENDPOINTS ==============
+
+@api_router.get("/calls/{call_id}/recording")
+async def get_call_recording(
+    call_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get call recording details and playback URL.
+    Requires Starter tier or higher.
+    """
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("call_recording"):
+        raise HTTPException(
+            status_code=403,
+            detail="Call recording requires Starter plan or higher."
+        )
+    
+    # Get call (with user ownership verification)
+    call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    if not call.get("recording_url"):
+        raise HTTPException(status_code=404, detail="No recording available for this call")
+    
+    return {
+        "call_id": call_id,
+        "recording_url": call.get("recording_url"),
+        "recording_duration_seconds": call.get("recording_duration_seconds"),
+        "recording_sid": call.get("recording_sid"),
+        "transcription_status": call.get("transcription_status"),
+        "has_transcript": bool(call.get("full_transcript"))
+    }
+
+@api_router.get("/calls/{call_id}/transcript")
+async def get_call_transcript(
+    call_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get call transcript (full text and timestamped segments).
+    Requires Professional tier or higher.
+    """
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("call_transcription"):
+        raise HTTPException(
+            status_code=403,
+            detail="Call transcription requires Professional plan or higher."
+        )
+    
+    # Get call (with user ownership verification)
+    call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    if not call.get("full_transcript"):
+        if call.get("transcription_status") == "processing":
+            return {
+                "call_id": call_id,
+                "status": "processing",
+                "message": "Transcript is being generated. Please check back shortly."
+            }
+        elif call.get("transcription_status") == "failed":
+            raise HTTPException(status_code=500, detail="Transcription failed. Please try again.")
+        else:
+            raise HTTPException(status_code=404, detail="No transcript available for this call")
+    
+    return {
+        "call_id": call_id,
+        "full_transcript": call.get("full_transcript"),
+        "segments": call.get("transcript_segments", []),
+        "duration_seconds": call.get("duration_seconds"),
+        "status": "completed"
+    }
+
+@api_router.post("/calls/{call_id}/transcribe")
+async def request_transcription(
+    call_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Request transcription for a call recording.
+    Useful if automatic transcription failed or was not triggered.
+    """
+    features = get_tier_features(current_user)
+    if not features.get("call_transcription"):
+        raise HTTPException(
+            status_code=403,
+            detail="Call transcription requires Professional plan or higher."
+        )
+    
+    call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    if not call.get("recording_sid"):
+        raise HTTPException(status_code=400, detail="No recording available for this call")
+    
+    if call.get("transcription_status") == "processing":
+        return {"message": "Transcription already in progress", "status": "processing"}
+    
+    # Process in background
+    background_tasks.add_task(
+        recording_service.process_call_recording,
+        call_id,
+        current_user["user_id"],
+        call["recording_sid"],
+        features
+    )
+    
+    return {
+        "message": "Transcription requested",
+        "call_id": call_id,
+        "status": "queued"
+    }
+
+@api_router.get("/calls/{call_id}/recording/stream")
+async def stream_call_recording(
+    call_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Stream call recording audio for playback.
+    Returns audio file directly.
+    """
+    features = get_tier_features(current_user)
+    if not features.get("call_recording"):
+        raise HTTPException(
+            status_code=403,
+            detail="Call recording requires Starter plan or higher."
+        )
+    
+    call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    recording_path = call.get("recording_url")
+    if not recording_path:
+        raise HTTPException(status_code=404, detail="No recording available")
+    
+    # Get from object storage
+    result = await asyncio.to_thread(get_object, recording_path)
+    if not result:
+        raise HTTPException(status_code=404, detail="Recording file not found")
+    
+    audio_data, content_type = result
+    
+    return StreamingResponse(
+        io.BytesIO(audio_data),
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{call_id}.mp3"',
+            "Accept-Ranges": "bytes"
+        }
+    )
+
 @api_router.post("/twilio/recording")
-async def twilio_recording_webhook(request: Request):
-    """Handle recording status updates from Twilio"""
+async def twilio_recording_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Handle recording status updates from Twilio.
+    Automatically triggers storage and transcription based on user's tier.
+    """
     form_data = await request.form()
     call_sid = form_data.get("CallSid", "")
-    recording_url = form_data.get("RecordingUrl", "")
     recording_sid = form_data.get("RecordingSid", "")
+    recording_duration = form_data.get("RecordingDuration", "0")
+    recording_status = form_data.get("RecordingStatus", "")
     
-    if call_sid and recording_url:
-        await db.calls.update_one(
-            {"twilio_sid": call_sid},
-            {"$set": {
-                "recording_url": recording_url,
-                "recording_sid": recording_sid
-            }}
-        )
-        logger.info(f"Recording saved for call {call_sid}: {recording_url}")
+    logger.info(f"Twilio recording webhook: call={call_sid}, status={recording_status}, sid={recording_sid}")
+    
+    if recording_status == "completed" and recording_sid:
+        # Find the call by Twilio SID
+        call = await db.calls.find_one({"twilio_sid": call_sid}, {"_id": 0})
+        
+        if call:
+            # Update call with recording info
+            await db.calls.update_one(
+                {"twilio_sid": call_sid},
+                {"$set": {
+                    "recording_sid": recording_sid,
+                    "recording_duration_seconds": int(recording_duration),
+                    "transcription_status": "pending"
+                }}
+            )
+            
+            # Get user to check tier features
+            user = await db.users.find_one({"user_id": call.get("user_id")}, {"_id": 0})
+            if user:
+                features = get_tier_features(user)
+                
+                # Process recording in background (store + transcribe based on tier)
+                background_tasks.add_task(
+                    recording_service.process_call_recording,
+                    call["id"],
+                    call["user_id"],
+                    recording_sid,
+                    features
+                )
+            
+            logger.info(f"Recording queued for processing: call={call['id']}, sid={recording_sid}")
+        else:
+            logger.warning(f"Call not found for Twilio SID: {call_sid}")
+    
+    return {"status": "received"}
     
     return {"status": "ok"}
 

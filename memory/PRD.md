@@ -247,6 +247,29 @@ A vertical-agnostic B2B SaaS platform that:
 - **Enhanced BookingDialog** - Shows personalized link preview with pre-filled lead data
 - **New navigation item** - Bookings page added to sidebar
 
+### Session 10 (December 2025): Call Recording & Transcription
+- **CallRecordingService** - Full service for recording storage and Whisper transcription
+- **Object Storage Integration** - Uses Emergent object storage for audio file storage
+- **Whisper Transcription** - OpenAI Whisper API for accurate speech-to-text
+- **Call Model Enhanced** - Added recording_url, recording_sid, full_transcript, transcript_segments, transcription_status
+- **Tiered Feature Access**:
+  - Free: No recordings
+  - Starter ($199): Recordings, 7-day retention, no transcription
+  - Professional ($399): Recordings, 30-day retention, full transcription
+  - Unlimited ($699): Recordings, 90-day retention, full transcription
+- **Recording Endpoints**:
+  - GET /api/calls/{id}/recording - Get recording details
+  - GET /api/calls/{id}/recording/stream - Stream audio for playback
+  - GET /api/calls/{id}/transcript - Get full transcript with timestamps
+  - POST /api/calls/{id}/transcribe - Request transcription for a call
+  - POST /api/twilio/recording - Enhanced webhook for auto-processing recordings
+- **Enhanced Call History UI**:
+  - Play/Pause recording buttons in table
+  - Recording badge indicator
+  - Feature availability badges (Recordings, Transcripts)
+  - Full transcript view with timestamped segments
+  - Request transcription button
+
 ## Prioritized Backlog
 
 ### P0 - Critical

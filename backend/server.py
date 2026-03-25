@@ -4222,6 +4222,134 @@ async def complete_onboarding(current_user: Dict = Depends(get_current_user)):
     )
     return {"message": "Onboarding completed"}
 
+@api_router.post("/user/setup-wizard-complete")
+async def complete_setup_wizard(current_user: Dict = Depends(get_current_user)):
+    """Mark user's setup wizard as completed"""
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {
+            "setup_wizard_completed": True,
+            "setup_wizard_completed_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    return {"message": "Setup wizard completed"}
+
+@api_router.get("/setup/status")
+async def get_setup_status(current_user: Dict = Depends(get_current_user)):
+    """
+    Get comprehensive setup status for the user.
+    Returns completion status for all required setup steps.
+    """
+    user_id = current_user["user_id"]
+    
+    # Check Twilio configuration from settings
+    settings = await db.settings.find_one({}, {"_id": 0})
+    twilio_configured = settings.get("twilio_configured", False) if settings else False
+    
+    # Also check if Twilio env vars are set
+    twilio_account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    twilio_auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    twilio_phone_number = os.environ.get("TWILIO_PHONE_NUMBER")
+    twilio_env_configured = all([twilio_account_sid, twilio_auth_token, twilio_phone_number])
+    
+    # Check if user has any agents with Calendly links
+    agents_with_calendly = await db.agents.count_documents({
+        "user_id": user_id,
+        "calendly_link": {"$exists": True, "$ne": "", "$ne": None}
+    })
+    calendly_configured = agents_with_calendly > 0
+    
+    # Check compliance status
+    compliance_acknowledged = current_user.get("compliance_acknowledged", False)
+    
+    # Check if user has any agents
+    agent_count = await db.agents.count_documents({"user_id": user_id})
+    has_agent = agent_count > 0
+    
+    # Check if user has any campaigns
+    campaign_count = await db.campaigns.count_documents({"user_id": user_id})
+    has_campaign = campaign_count > 0
+    
+    # Check CRM status (optional)
+    crm_connected = await db.crm_credentials.count_documents({
+        "user_id": user_id,
+        "is_connected": True
+    }) > 0
+    
+    # Build steps list
+    steps = [
+        {
+            "id": "twilio",
+            "title": "Connect Twilio Voice",
+            "completed": twilio_configured or twilio_env_configured,
+            "required": True
+        },
+        {
+            "id": "calendly",
+            "title": "Set Up Calendly Booking",
+            "completed": calendly_configured,
+            "required": True
+        },
+        {
+            "id": "compliance",
+            "title": "Complete Compliance Setup",
+            "completed": compliance_acknowledged,
+            "required": True
+        },
+        {
+            "id": "agent",
+            "title": "Create Your First Agent",
+            "completed": has_agent,
+            "required": True
+        },
+        {
+            "id": "campaign",
+            "title": "Create a Campaign",
+            "completed": has_campaign,
+            "required": True
+        },
+        {
+            "id": "crm",
+            "title": "Connect CRM (Optional)",
+            "completed": crm_connected,
+            "required": False
+        }
+    ]
+    
+    # Calculate completion
+    required_steps = [s for s in steps if s["required"]]
+    completed_required = [s for s in required_steps if s["completed"]]
+    all_required_complete = len(completed_required) == len(required_steps)
+    
+    total_completed = len([s for s in steps if s["completed"]])
+    completion_percentage = round((total_completed / len(steps)) * 100)
+    
+    return {
+        "steps": steps,
+        "completion_percentage": completion_percentage,
+        "all_required_complete": all_required_complete,
+        "required_complete_count": len(completed_required),
+        "required_total_count": len(required_steps),
+        "setup_wizard_completed": current_user.get("setup_wizard_completed", False),
+        "can_make_calls": all_required_complete
+    }
+
+@api_router.get("/setup/can-call")
+async def check_can_call(current_user: Dict = Depends(get_current_user)):
+    """
+    Quick check if user can make calls (all required setup complete).
+    Used to gate calling features.
+    """
+    setup_status = await get_setup_status(current_user)
+    return {
+        "can_make_calls": setup_status["all_required_complete"],
+        "missing_steps": [
+            s["title"] for s in setup_status["steps"] 
+            if s["required"] and not s["completed"]
+        ]
+    }
+
 # ----- AI Help Chat -----
 class HelpChatRequest(BaseModel):
     message: str

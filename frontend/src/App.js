@@ -10,7 +10,7 @@ import {
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
   ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
   CreditCard, Package, ShoppingCart, LogOut, BarChart3, X, Edit3, Tags, RefreshCw,
-  Database, Shield
+  Database, Shield, Rocket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -34,8 +34,10 @@ import BookingsPage from "@/pages/BookingsPage";
 import CRMIntegrationsPage from "@/pages/CRMIntegrationsPage";
 import DNCManagementPage from "@/pages/DNCManagementPage";
 import ComplianceSetupPage from "@/pages/ComplianceSetupPage";
+import GettingStartedPage from "@/pages/GettingStartedPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
+import SetupWizard from "@/components/SetupWizard";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -46,6 +48,7 @@ const Sidebar = () => {
   const { user, logout } = useAuth();
   
   const navItems = [
+    { path: "/app/getting-started", icon: Rocket, label: "Getting Started" },
     { path: "/app", icon: Filter, label: "Funnel" },
     { path: "/app/usage", icon: BarChart3, label: "Usage" },
     { path: "/app/leads", icon: Search, label: "Lead Discovery" },
@@ -198,19 +201,24 @@ const FunnelPage = () => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedLead, setSelectedLead] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState("");
+  const [setupStatus, setSetupStatus] = useState(null);
+  const navigate = useNavigate();
 
   const fetchData = useCallback(async () => {
     try {
-      const [leadsRes, statsRes, agentsRes, campaignsRes] = await Promise.all([
+      const token = localStorage.getItem('session_token');
+      const [leadsRes, statsRes, agentsRes, campaignsRes, setupRes] = await Promise.all([
         axios.get(`${API}/leads`),
         axios.get(`${API}/dashboard/stats`),
         axios.get(`${API}/agents`),
-        axios.get(`${API}/campaigns`)
+        axios.get(`${API}/campaigns`),
+        axios.get(`${API}/setup/status`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: { can_make_calls: true } }))
       ]);
       setLeads(leadsRes.data);
       setStats(statsRes.data);
       setAgents(agentsRes.data.filter(a => a.is_active));
       setCampaigns(campaignsRes.data.filter(c => c.status === 'active'));
+      setSetupStatus(setupRes.data);
     } catch (error) {
       console.error("Failed to fetch data:", error);
       toast.error("Failed to load funnel data");
@@ -226,6 +234,18 @@ const FunnelPage = () => {
   }, [fetchData]);
 
   const simulateCall = async (leadId) => {
+    // Check if setup is complete before allowing calls
+    if (setupStatus && !setupStatus.can_make_calls) {
+      toast.error("Complete your setup first to make calls", {
+        description: "Go to Getting Started to finish setup",
+        action: {
+          label: "Go to Setup",
+          onClick: () => navigate("/app/getting-started")
+        }
+      });
+      return;
+    }
+    
     if (!selectedCampaign) {
       toast.error("Please select a campaign first");
       return;
@@ -487,6 +507,7 @@ const FunnelPage = () => {
 // Lead Discovery Page
 const LeadDiscovery = () => {
   const { refreshUser } = useAuth();
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
@@ -498,6 +519,7 @@ const LeadDiscovery = () => {
   const [selectedLead, setSelectedLead] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState("");
   const [activeTab, setActiveTab] = useState("discover");
+  const [setupStatus, setSetupStatus] = useState(null);
   
   // Custom keywords state
   const [customKeywords, setCustomKeywords] = useState([]);
@@ -636,10 +658,23 @@ const LeadDiscovery = () => {
     }
   };
 
+  const fetchSetupStatus = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await axios.get(`${API}/setup/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSetupStatus(response.data);
+    } catch (error) {
+      console.error("Failed to fetch setup status:", error);
+    }
+  };
+
   useEffect(() => {
     fetchLeads();
     fetchCampaigns();
     loadSavedKeywords();
+    fetchSetupStatus();
   }, []);
 
   const discoverLeads = async () => {
@@ -709,6 +744,18 @@ const LeadDiscovery = () => {
   };
 
   const simulateCall = async (leadId) => {
+    // Check if setup is complete before allowing calls
+    if (setupStatus && !setupStatus.can_make_calls) {
+      toast.error("Complete your setup first to make calls", {
+        description: "Go to Getting Started to finish setup",
+        action: {
+          label: "Go to Setup",
+          onClick: () => navigate("/app/getting-started")
+        }
+      });
+      return;
+    }
+    
     if (!selectedCampaign) {
       toast.error("Please select a campaign first");
       return;
@@ -3416,12 +3463,12 @@ const AppRouter = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
   
-  // Check if user needs onboarding
+  // Check if user needs setup wizard (first time login, setup not complete)
   useEffect(() => {
-    if (user && !user.onboarding_completed && location.pathname.startsWith('/app')) {
-      setShowOnboarding(true);
+    if (user && !user.setup_wizard_completed && location.pathname.startsWith('/app')) {
+      setShowSetupWizard(true);
     }
   }, [user, location.pathname]);
 
@@ -3446,6 +3493,7 @@ const AppRouter = () => {
               <main className="flex-1 min-h-screen">
                 <Routes>
                   <Route path="/" element={<FunnelPage />} />
+                  <Route path="/getting-started" element={<GettingStartedPage />} />
                   <Route path="/usage" element={<UsageDashboard />} />
                   <Route path="/leads" element={<LeadDiscovery />} />
                   <Route path="/campaigns" element={<Campaigns />} />
@@ -3464,14 +3512,13 @@ const AppRouter = () => {
               <HelpChat currentPage={location.pathname} />
             </div>
             
-            {/* Onboarding Guide - Shows for new users */}
-            {showOnboarding && (
-              <OnboardingGuide 
+            {/* Setup Wizard - Shows for new users who haven't completed setup */}
+            {showSetupWizard && (
+              <SetupWizard 
                 user={user}
-                onComplete={() => setShowOnboarding(false)}
+                onComplete={() => setShowSetupWizard(false)}
                 onNavigate={(path) => {
                   navigate(path);
-                  setShowOnboarding(false);
                 }}
               />
             )}

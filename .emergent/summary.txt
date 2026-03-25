@@ -1,150 +1,143 @@
-<analysis>Here is the handover summary for the next agent:
-
-**original_problem_statement**:
+<analysis>**original_problem_statement**: 
 Question, could you build an Ai cold calling machine that calls businesses, quality them and then send to different agents for payment processing?
 
-PRODUCT REQUIREMENTS: A vertical-agnostic B2B SaaS platform that performs high-intent lead discovery via GPT-5.2, executes fully compliant AI cold calls (Synthflow-style real-time two-way conversations) to qualify leads, and books them. Includes subscription tiers (99/99/99), usage tracking, credit deduction, a compliance layer (DNC, AI disclosure), Twilio outbound dialing, and Stripe monetization. Subsequent user requests added CRM integrations, call recording, transcription, and a pay-as-you-go pricing model.
+PRODUCT REQUIREMENTS: A vertical-agnostic B2B SaaS platform (now rebranded to **DialGenix.ai**) that performs high-intent lead discovery via GPT-5.2, executes fully compliant AI cold calls (real-time two-way conversations) to qualify leads, and books them via Calendly. Includes subscription tiers, usage tracking, a robust compliance layer (TCPA calling hours, internal/external DNC checks, B2B/B2C onboarding), Twilio outbound dialing, CRM integrations (GoHighLevel, Salesforce, HubSpot), and CSV export with phone type (mobile/landline) detection.
 
 **User's preferred language**: English (INSTRUCT NEXT AGENT: You MUST respond to the user in English only).
 
-**what currently exists?**
-A comprehensive full-stack AI Cold Calling SaaS platform. The application is secure with completed multi-tenant data isolation. It features a full subscription system with enforcement for , , , and  (Bring Your List) tiers, plus a  (PAYG) model for low-volume users.
-
-Core features include:
-- **Authentication**: JWT & Google OAuth.
-- **Lead & Call Management**: AI-powered lead discovery, CSV uploads, ICP scoring, real-time AI calls via Twilio/GPT-5.2/ElevenLabs, and AMD with voicemail drop.
-- **Monetization & Billing**: Enforced subscription tiers, PAYG credit packs (Stripe checkout is currently mocked).
-- **Integrations**:
-    - **Calendly**: For auto-booking qualified leads with personalized links.
-    - **Call Recording & Transcription**: Implemented with tiered access (Professional+), using object storage for recordings and Whisper API for transcripts.
-- **UI**: A landing page with a dynamic pricing table, and a user dashboard with dedicated pages for campaigns, agents, calls, and bookings.
+**what currently exists?** 
+A comprehensive full-stack AI Cold Calling SaaS platform named **DialGenix.ai** (previously ColdCall.ai). Features include JWT/Google Auth, multi-tenant data isolation, subscription tiers, and Pay-as-you-go. Core operational components include an AI voice pipeline (Twilio + GPT-5.2 + ElevenLabs), auto-booking via Calendly, CRM push for qualified leads, tiered call recording/transcription, and robust zero-cost TCPA/DNC compliance mechanisms (Calling hours enforcement, FTC list uploads, litigator tracking). All Emergent branding has been removed.
 
 **Last working item**:
-- **Last item agent was working**: The user requested CRM integrations for GoHighLevel, Salesforce, and HubSpot. The agent's last action was to retrieve the integration playbooks for all three services.
-- **Status**: NOT STARTED
+- **Last item agent was working**: Auditing the application's onboarding and setup instructions. The user asked, are there clear instructions for each setup task from start to finish? The agent began reviewing  and  to determine if a global, step-by-step setup guide exists for new agents.
+- **Status**: IN PROGRESS
 - **Agent Testing Done**: N
-- **Which testing method agent to use?**: backend testing agent. The agent should write tests that mock the external CRM APIs to verify that qualified leads are correctly pushed to a user's configured CRM. The tests should also validate that the feature is properly gated by subscription tier.
+- **Which testing method agent to use?**: screenshot tool (for validating any new UI wizard/checklist), and frontend testing agent if building a comprehensive multi-step UI component.
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-There are no pending or blocking issues.
+None currently broken. 
 
 **In progress Task List**:
-There are no tasks currently in progress.
+Task 1: Audit and implement clear start-to-finish setup instructions.
+- Where to resume: Agent just executed  on  to look for existing onboarding UI. You need to analyze the current setup flows, answer the user's question, and likely build a global Setup Checklist or Onboarding Wizard UI that guides agents through Twilio, Calendly, CRM, and Compliance setups sequentially.
+- What will be achieved with this?: Gives new users a frictionless onboarding experience.
+- Status: IN PROGRESS
+- Should Test frontend/backend/both after fix?: Frontend
+- Blocked on something: None.
 
-**Upcoming and Future Tasks**
-
+**Upcoming and Future Tasks**:
 Upcoming Tasks:
-- **(P0) Implement CRM Integrations (GHL, Salesforce, HubSpot)**: Using the retrieved playbooks, create a generic CRM service that allows users to securely connect their CRM. The  event should trigger a data push to the user's configured CRM. This feature should be gated and available only to  tier users and above.
-- **(P1) Stripe Checkout for PAYG**: The backend endpoints () and UI exist but are simulated. This needs to be connected to a real Stripe checkout flow to allow users to purchase PAYG credit packs.
-- **(P2) Frontend Verification for Bookings UI**: The Bookings Dashboard UI () has been created, but automated visual verification failed due to screenshot tool login issues. A quick manual check or a targeted screenshot is needed to confirm it renders correctly.
+- **(P0) Setup Instructions/Onboarding Checklist**: Complete the current query by building/enhancing the step-by-step UI setup instructions for agents.
+- **(P1) Stripe Live Checkout for PAYG**: Connect real Stripe live keys for purchasing credit packs (currently using test keys).
+- **(P2) Phone Verify Button in UI**: Add a manual verify button on the frontend Lead dashboard so users can trigger Twilio Lookup to identify mobile vs. landline directly from the UI.
 
 Future Tasks:
-- Team seat management for multi-user accounts.
-- Parallel Dialing (Orum-style) to increase call connection rates.
-- A dedicated Call Analytics Dashboard for reporting on call outcomes and conversion funnels.
-- A/B testing for call scripts.
-- Live call monitoring for managers.
-- Refactor the monolithic  and  files into smaller modules.
+- **(P3) Multi-language Support**: Allow agents to call in 50+ languages.
+- **(P3) Team Seat Management**: Allow multi-user agency accounts.
+- **(P3) Refactor Monoliths**: Break down  (>8600 lines) and  (>3500 lines) into modular files (routes, controllers, separate component files).
+- **(P3) Domain Setup**: Assist the user in pointing dialgenix.ai to the deployment.
 
-**Completed work in this session**
-- **Multi-Tenant Data Isolation**: Completed and verified with 31 backend tests.
-- **Subscription Tier Enforcement**: Implemented and verified with 16 backend tests. Corrected a route ordering bug ( vs ).
-- **Calendly Integration**: Implemented for auto-booking qualified leads with personalized links.
-- **Call Recording & Transcription**: Implemented with a tiered access model (Professional+).
-- **Pay-as-you-go (PAYG) Tier**: Added a new pricing model for low-volume users, including backend credit pack logic and UI updates.
-- **Bookings Dashboard UI**: Created a new page () and added it to the application's navigation and routing.
+**Completed work in this session**:
+- CRM Integrations (GoHighLevel, Salesforce, HubSpot) (DONE)
+- TCPA Compliance (Timezone-based calling hours enforcement) (DONE)
+- Zero-cost DNC Compliance (Admin upload for FTC lists, litigator list management) (DONE)
+- Compliance Onboarding UI (B2B vs B2C mode selection, agent acknowledgment) (DONE)
+- Mobile/Landline CSV Export (Added line_type and carrier detection via Twilio) (DONE)
+- App Rebranding (Renamed to DialGenix.ai, removed Made with Emergent badge) (DONE)
 
-**Earlier issues found/mentioned but not fixed**
+**Earlier issues found/mentioned but not fixed**:
 None.
 
-**Known issue recurrence from previous fork**
-- **Issue recurrence in previous fork**: None.
-- **Recurrence count**: 0
-- **Status**: NA
+**Known issue recurrence from previous fork**:
+- Issue recurrence in previous fork: None.
+- Recurrence count: 0
+- Status: NA
 
-**Code Architecture**
+**Code Architecture**:
 
 
-**Key Technical Concepts**
+**Key Technical Concepts**:
 - **Backend**: FastAPI, Motor (Async MongoDB), WebSockets
-- **Frontend**: React, Tailwind CSS, Shadcn UI, React Router
-- **Voice Pipeline**: Twilio (API, Media Streams, AMD) -> FastAPI -> GPT-5.2 -> ElevenLabs TTS
-- **Data & Features**: Multi-tenancy (user_id), Subscription Gating, Object Storage, API-based Transcription (Whisper)
+- **Frontend**: React, Tailwind CSS, Shadcn UI
+- **Voice Pipeline**: Twilio Media Streams -> FastAPI WebSocket -> GPT-5.2 -> ElevenLabs TTS
+- **Compliance**: Area code timezone mapping for TCPA, Twilio Lookup API for line detection, Internal DNC/Litigator list checking.
 
-**key DB schema**
-- : {user_id, email, subscription_tier, saved_keywords, onboarding_completed}
-- : {id, user_id, business_name, phone, status, icp_score}
-- : {id, user_id, name, ai_script, icp_config}
-- : {id, user_id, name, calendly_link, **calendly_access_token**}
-- : {id, user_id, lead_id, status, **recording_url**, **transcript_status**, **transcript**}
-- : {id, user_id, lead_id, agent_id, status, **booking_link**, **calendly_event_uri**}
+**key DB schema**:
+- : {user_id, email, subscription_tier, role, onboarding_completed, calling_mode}
+- : {id, user_id, phone, status, **line_type**, **carrier**} *(Updated this session)*
+- , , , 
+- , ,  *(New this session)*
 
-**changes in tech stack**
--  library was added and used for Object Storage and OpenAI Whisper Transcription.
+**changes in tech stack**:
+None, but heavy expansion of  logic and internal array-based compliance checks.
 
-**All files of reference**
-- : Main backend file, heavily modified with new services and endpoints.
-- : Main authenticated UI file, updated with new navigation and components for bookings and call history.
-- : New file for the bookings dashboard.
-- : Updated to include the new Pay-as-you-go pricing option.
-- : New test file for tier enforcement.
+**All files of reference**:
+- : Main backend. Heavily modified with ,  updates, and  logic.
+- : Updated with new sidebar routes for CRM and Compliance.
+- : New component for GHL/SF/HubSpot OAuth connects.
+- : New Admin component for uploading FTC DNC lists.
+- : New Agent onboarding checklist for B2B/B2C calling modes.
+- : Removed Emergent badge script, updated title tags.
+- : Master feature tracker, up-to-date.
 
 **Areas that need refactoring**:
--  (>6000 lines) and  (>3400 lines) are becoming unmanageable. They are the top priority for refactoring into a modular structure (e.g., , ,  for backend; page-specific components for frontend).
+-  (>8600 lines). Highly critical tech debt.
+-  (>3500 lines).
 
-**key api endpoints**
-- : Purchase a PAYG credit pack (simulated).
-- : Get features and usage for the current user's tier.
-- : Create a booking for a qualified lead.
-- : Get all bookings for the current user.
-- : Stream a call recording.
-- : Get a call transcript.
-- : Webhook to process completed Twilio call recordings.
-
-**Critical Info for New Agent**
-- **Your immediate task is CRM integration.** Use the playbooks already in context to build services for GoHighLevel, Salesforce, and HubSpot.
-- **Plan for generic CRM handling.** The user should be able to select their CRM and provide credentials, which must be stored securely.
-- **Gate CRM features.** This functionality should only be available to  and  tier subscribers.
-- **Trigger on qualification.** The CRM push should happen automatically when a lead's status changes to qualified.
-- The Stripe checkout for PAYG credit purchases is currently mocked in the backend; do not attempt to fix this unless requested by the user.
-
-**documents and test reports created in this job**
--  (updated with all new features)
--  (multi-tenancy test results)
+**key api endpoints**:
+-  & 
 - 
+-  (New)
+-  & 
 - 
 
-**Last 10 User Messages and any pending HUMAN messages**
-The user has been actively guiding the development, asking for competitive analysis, pricing breakdowns, and then approving the implementation of new features based on those discussions.
-- User requested CRM integration for GHL, Salesforce, and HubSpot. (PENDING IMPLEMENTATION)
-- Agent retrieved integration playbooks.
-- User confirmed to proceed with the implementation.
+**Critical Info for New Agent**:
+- **Brand Name**: The platform is strictly **DialGenix.ai** now. Do not use ColdCall.ai or mention Emergent.
+- **Compliance Model**: The platform uses a /bin/bash/month B2B-focused model where B2B calls are exempt from FTC registry fees, but cell phones require consent. If agents want B2C, they are responsible for their own FTC SAN registration. A setup wizard tracks user acknowledgments.
+- **CRM Integrations**: Built generically. Pushing leads happens automatically on the  endpoint when status becomes 'qualified'.
+- **Stripe**: Still mocked/using test keys. The user asked how to get live keys, and the agent explained it.
+
+**documents and test reports created in this job**:
+-  (Updated)
+-  (CRM integration test)
+-  (TCPA Compliance test)
+
+**Last 10 User Messages and any pending HUMAN messages**:
+1. (Latest) User: Question only, are there clear instructions for each setup task from start to finish? *(Pending AI Response & Action)*
+2. User: Change software name to DialGenix.ai
+3. User: Please reverify how to obtain real stripe and get necessary api keys
+4. User: Please remove made with emergent logo anywhere on site
+5. User: Question, many leads will be mobile phones. Can we extract the mobile list in csv file for another project?
+6. User: Proceed and add compliance tools to help agents setup properly with instructions and add compliance checkbox
+7. User: Is this normal for the platform to make agents responsible for etc and dnc compliance
+8. User: Simple answer, how does Synthflow do this
+9. User: Question, considering this is nationwide calling, I can't afford 22k to register. What do you recommend
+10. User: Question, does the company need to register or the agents?
 
 **Project Health Check:**
-- **Broken**: No features are currently broken.
-- **Mocked**: The Stripe payment flow for purchasing Pay-as-you-go credit packs is mocked. The API call simulates a successful transaction without processing a real payment.
+- Broken: None.
+- Mocked: Stripe checkout payment processing ( key in ).
 
-**3rd Party Integrations**
-- **OpenAI GPT-5.2** (Lead Discovery, Conversation, ICP Scoring) — uses Emergent LLM Key
-- **Twilio** (Voice, SMS, Lookup, AMD) — requires User API Key
-- **ElevenLabs** (Text-to-Speech) — requires User API Key
-- **Stripe** (Payments) — requires User API Key
-- **Resend** (Email Notifications) — requires User API Key
-- **Calendly** (Scheduling) — requires User API Key
-- **Emergent Object Storage** (Call Recordings) — uses Emergent LLM Key
-- **OpenAI Whisper** (Transcription) — uses Emergent LLM Key
-- **Upcoming**: GoHighLevel, Salesforce, HubSpot — will require User API Keys / OAuth
+**3rd Party Integrations**:
+- OpenAI GPT-5.2 (Lead Discovery/Convo) — uses Emergent LLM Key
+- Twilio (Voice, Lookup, AMD) — requires User API Key
+- ElevenLabs (TTS) — requires User API Key
+- Stripe (Payments) — requires User API Key (Currently using Test Key)
+- Calendly (Scheduling) — requires User API Key
+- CRM (GoHighLevel, Salesforce, HubSpot) — requires User API Keys
+- Emergent Object Storage (Call Recordings) — uses Emergent LLM Key
+- OpenAI Whisper (Transcription) — uses Emergent LLM Key
 
-**Testing status**
-- **Testing agent used after significant changes**: YES (for multi-tenancy).
-- **Troubleshoot agent used after agent stuck in loop**: NO
-- **Test files created**: 
-- **Known regressions**: None. The agent successfully ran regression tests for multi-tenancy after implementing subscription features.
+**Testing status**:
+- Testing agent used after significant changes: YES (for CRM and TCPA).
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: None this session (subagent handled).
+- Known regressions: None.
 
 **Credentials to test flow:**
-- **Email**: 
-- **Password**: 
+- Email: 
+- Password: 
 
-**What agent forgot to execute**
-The agent executed all user requests systematically. The only minor pending verification is for the Bookings Dashboard UI, which was not confirmed via screenshot due to a login timeout issue with the tool, though the backend APIs are confirmed to be working.</analysis>
+**What agent forgot to execute**:
+The agent did not finalize an answer or build for the final user question regarding clear instructions for each setup task from start to finish as context ran out while auditing . This is the immediate next step.</analysis>

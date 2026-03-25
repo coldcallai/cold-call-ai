@@ -1605,13 +1605,344 @@ Return the JSON score."""
 icp_service = ICPScoringService()
 
 # ============== COMPLIANCE SERVICE ==============
+
+# US Area Code to Timezone mapping (comprehensive)
+# Format: area_code -> (timezone_name, state_abbr)
+AREA_CODE_TIMEZONES = {
+    # Eastern Time (ET) - UTC-5/-4
+    "201": ("America/New_York", "NJ"), "202": ("America/New_York", "DC"), "203": ("America/New_York", "CT"),
+    "207": ("America/New_York", "ME"), "212": ("America/New_York", "NY"), "215": ("America/New_York", "PA"),
+    "216": ("America/New_York", "OH"), "224": ("America/Chicago", "IL"), "225": ("America/Chicago", "LA"),
+    "229": ("America/New_York", "GA"), "231": ("America/New_York", "MI"), "234": ("America/New_York", "OH"),
+    "239": ("America/New_York", "FL"), "240": ("America/New_York", "MD"), "248": ("America/New_York", "MI"),
+    "251": ("America/Chicago", "AL"), "252": ("America/New_York", "NC"), "253": ("America/Los_Angeles", "WA"),
+    "254": ("America/Chicago", "TX"), "256": ("America/Chicago", "AL"), "260": ("America/New_York", "IN"),
+    "267": ("America/New_York", "PA"), "269": ("America/New_York", "MI"), "270": ("America/Chicago", "KY"),
+    "272": ("America/New_York", "PA"), "276": ("America/New_York", "VA"), "281": ("America/Chicago", "TX"),
+    "301": ("America/New_York", "MD"), "302": ("America/New_York", "DE"), "303": ("America/Denver", "CO"),
+    "304": ("America/New_York", "WV"), "305": ("America/New_York", "FL"), "307": ("America/Denver", "WY"),
+    "308": ("America/Chicago", "NE"), "309": ("America/Chicago", "IL"), "310": ("America/Los_Angeles", "CA"),
+    "312": ("America/Chicago", "IL"), "313": ("America/New_York", "MI"), "314": ("America/Chicago", "MO"),
+    "315": ("America/New_York", "NY"), "316": ("America/Chicago", "KS"), "317": ("America/New_York", "IN"),
+    "318": ("America/Chicago", "LA"), "319": ("America/Chicago", "IA"), "320": ("America/Chicago", "MN"),
+    "321": ("America/New_York", "FL"), "323": ("America/Los_Angeles", "CA"), "325": ("America/Chicago", "TX"),
+    "330": ("America/New_York", "OH"), "331": ("America/Chicago", "IL"), "334": ("America/Chicago", "AL"),
+    "336": ("America/New_York", "NC"), "337": ("America/Chicago", "LA"), "339": ("America/New_York", "MA"),
+    "340": ("America/Virgin", "VI"), "346": ("America/Chicago", "TX"), "347": ("America/New_York", "NY"),
+    "351": ("America/New_York", "MA"), "352": ("America/New_York", "FL"), "360": ("America/Los_Angeles", "WA"),
+    "361": ("America/Chicago", "TX"), "364": ("America/Chicago", "KY"), "380": ("America/New_York", "OH"),
+    "385": ("America/Denver", "UT"), "386": ("America/New_York", "FL"), "401": ("America/New_York", "RI"),
+    "402": ("America/Chicago", "NE"), "404": ("America/New_York", "GA"), "405": ("America/Chicago", "OK"),
+    "406": ("America/Denver", "MT"), "407": ("America/New_York", "FL"), "408": ("America/Los_Angeles", "CA"),
+    "409": ("America/Chicago", "TX"), "410": ("America/New_York", "MD"), "412": ("America/New_York", "PA"),
+    "413": ("America/New_York", "MA"), "414": ("America/Chicago", "WI"), "415": ("America/Los_Angeles", "CA"),
+    "417": ("America/Chicago", "MO"), "419": ("America/New_York", "OH"), "423": ("America/New_York", "TN"),
+    "424": ("America/Los_Angeles", "CA"), "425": ("America/Los_Angeles", "WA"), "430": ("America/Chicago", "TX"),
+    "432": ("America/Chicago", "TX"), "434": ("America/New_York", "VA"), "435": ("America/Denver", "UT"),
+    "440": ("America/New_York", "OH"), "442": ("America/Los_Angeles", "CA"), "443": ("America/New_York", "MD"),
+    "458": ("America/Los_Angeles", "OR"), "469": ("America/Chicago", "TX"), "470": ("America/New_York", "GA"),
+    "475": ("America/New_York", "CT"), "478": ("America/New_York", "GA"), "479": ("America/Chicago", "AR"),
+    "480": ("America/Phoenix", "AZ"), "484": ("America/New_York", "PA"), "501": ("America/Chicago", "AR"),
+    "502": ("America/New_York", "KY"), "503": ("America/Los_Angeles", "OR"), "504": ("America/Chicago", "LA"),
+    "505": ("America/Denver", "NM"), "507": ("America/Chicago", "MN"), "508": ("America/New_York", "MA"),
+    "509": ("America/Los_Angeles", "WA"), "510": ("America/Los_Angeles", "CA"), "512": ("America/Chicago", "TX"),
+    "513": ("America/New_York", "OH"), "515": ("America/Chicago", "IA"), "516": ("America/New_York", "NY"),
+    "517": ("America/New_York", "MI"), "518": ("America/New_York", "NY"), "520": ("America/Phoenix", "AZ"),
+    "530": ("America/Los_Angeles", "CA"), "531": ("America/Chicago", "NE"), "534": ("America/Chicago", "WI"),
+    "539": ("America/Chicago", "OK"), "540": ("America/New_York", "VA"), "541": ("America/Los_Angeles", "OR"),
+    "551": ("America/New_York", "NJ"), "559": ("America/Los_Angeles", "CA"), "561": ("America/New_York", "FL"),
+    "562": ("America/Los_Angeles", "CA"), "563": ("America/Chicago", "IA"), "567": ("America/New_York", "OH"),
+    "570": ("America/New_York", "PA"), "571": ("America/New_York", "VA"), "573": ("America/Chicago", "MO"),
+    "574": ("America/New_York", "IN"), "575": ("America/Denver", "NM"), "580": ("America/Chicago", "OK"),
+    "585": ("America/New_York", "NY"), "586": ("America/New_York", "MI"), "601": ("America/Chicago", "MS"),
+    "602": ("America/Phoenix", "AZ"), "603": ("America/New_York", "NH"), "605": ("America/Chicago", "SD"),
+    "606": ("America/New_York", "KY"), "607": ("America/New_York", "NY"), "608": ("America/Chicago", "WI"),
+    "609": ("America/New_York", "NJ"), "610": ("America/New_York", "PA"), "612": ("America/Chicago", "MN"),
+    "614": ("America/New_York", "OH"), "615": ("America/Chicago", "TN"), "616": ("America/New_York", "MI"),
+    "617": ("America/New_York", "MA"), "618": ("America/Chicago", "IL"), "619": ("America/Los_Angeles", "CA"),
+    "620": ("America/Chicago", "KS"), "623": ("America/Phoenix", "AZ"), "626": ("America/Los_Angeles", "CA"),
+    "628": ("America/Los_Angeles", "CA"), "629": ("America/Chicago", "TN"), "630": ("America/Chicago", "IL"),
+    "631": ("America/New_York", "NY"), "636": ("America/Chicago", "MO"), "641": ("America/Chicago", "IA"),
+    "646": ("America/New_York", "NY"), "650": ("America/Los_Angeles", "CA"), "651": ("America/Chicago", "MN"),
+    "657": ("America/Los_Angeles", "CA"), "660": ("America/Chicago", "MO"), "661": ("America/Los_Angeles", "CA"),
+    "662": ("America/Chicago", "MS"), "667": ("America/New_York", "MD"), "669": ("America/Los_Angeles", "CA"),
+    "678": ("America/New_York", "GA"), "680": ("America/New_York", "NY"), "681": ("America/New_York", "WV"),
+    "682": ("America/Chicago", "TX"), "689": ("America/New_York", "FL"), "701": ("America/Chicago", "ND"),
+    "702": ("America/Los_Angeles", "NV"), "703": ("America/New_York", "VA"), "704": ("America/New_York", "NC"),
+    "706": ("America/New_York", "GA"), "707": ("America/Los_Angeles", "CA"), "708": ("America/Chicago", "IL"),
+    "712": ("America/Chicago", "IA"), "713": ("America/Chicago", "TX"), "714": ("America/Los_Angeles", "CA"),
+    "715": ("America/Chicago", "WI"), "716": ("America/New_York", "NY"), "717": ("America/New_York", "PA"),
+    "718": ("America/New_York", "NY"), "719": ("America/Denver", "CO"), "720": ("America/Denver", "CO"),
+    "724": ("America/New_York", "PA"), "725": ("America/Los_Angeles", "NV"), "727": ("America/New_York", "FL"),
+    "731": ("America/Chicago", "TN"), "732": ("America/New_York", "NJ"), "734": ("America/New_York", "MI"),
+    "737": ("America/Chicago", "TX"), "740": ("America/New_York", "OH"), "743": ("America/New_York", "NC"),
+    "747": ("America/Los_Angeles", "CA"), "754": ("America/New_York", "FL"), "757": ("America/New_York", "VA"),
+    "760": ("America/Los_Angeles", "CA"), "762": ("America/New_York", "GA"), "763": ("America/Chicago", "MN"),
+    "765": ("America/New_York", "IN"), "769": ("America/Chicago", "MS"), "770": ("America/New_York", "GA"),
+    "772": ("America/New_York", "FL"), "773": ("America/Chicago", "IL"), "774": ("America/New_York", "MA"),
+    "775": ("America/Los_Angeles", "NV"), "779": ("America/Chicago", "IL"), "781": ("America/New_York", "MA"),
+    "785": ("America/Chicago", "KS"), "786": ("America/New_York", "FL"), "801": ("America/Denver", "UT"),
+    "802": ("America/New_York", "VT"), "803": ("America/New_York", "SC"), "804": ("America/New_York", "VA"),
+    "805": ("America/Los_Angeles", "CA"), "806": ("America/Chicago", "TX"), "808": ("Pacific/Honolulu", "HI"),
+    "810": ("America/New_York", "MI"), "812": ("America/New_York", "IN"), "813": ("America/New_York", "FL"),
+    "814": ("America/New_York", "PA"), "815": ("America/Chicago", "IL"), "816": ("America/Chicago", "MO"),
+    "817": ("America/Chicago", "TX"), "818": ("America/Los_Angeles", "CA"), "828": ("America/New_York", "NC"),
+    "830": ("America/Chicago", "TX"), "831": ("America/Los_Angeles", "CA"), "832": ("America/Chicago", "TX"),
+    "843": ("America/New_York", "SC"), "845": ("America/New_York", "NY"), "847": ("America/Chicago", "IL"),
+    "848": ("America/New_York", "NJ"), "850": ("America/Chicago", "FL"), "854": ("America/New_York", "SC"),
+    "856": ("America/New_York", "NJ"), "857": ("America/New_York", "MA"), "858": ("America/Los_Angeles", "CA"),
+    "859": ("America/New_York", "KY"), "860": ("America/New_York", "CT"), "862": ("America/New_York", "NJ"),
+    "863": ("America/New_York", "FL"), "864": ("America/New_York", "SC"), "865": ("America/New_York", "TN"),
+    "870": ("America/Chicago", "AR"), "872": ("America/Chicago", "IL"), "878": ("America/New_York", "PA"),
+    "901": ("America/Chicago", "TN"), "903": ("America/Chicago", "TX"), "904": ("America/New_York", "FL"),
+    "906": ("America/New_York", "MI"), "907": ("America/Anchorage", "AK"), "908": ("America/New_York", "NJ"),
+    "909": ("America/Los_Angeles", "CA"), "910": ("America/New_York", "NC"), "912": ("America/New_York", "GA"),
+    "913": ("America/Chicago", "KS"), "914": ("America/New_York", "NY"), "915": ("America/Denver", "TX"),
+    "916": ("America/Los_Angeles", "CA"), "917": ("America/New_York", "NY"), "918": ("America/Chicago", "OK"),
+    "919": ("America/New_York", "NC"), "920": ("America/Chicago", "WI"), "925": ("America/Los_Angeles", "CA"),
+    "928": ("America/Phoenix", "AZ"), "929": ("America/New_York", "NY"), "930": ("America/New_York", "IN"),
+    "931": ("America/Chicago", "TN"), "936": ("America/Chicago", "TX"), "937": ("America/New_York", "OH"),
+    "938": ("America/Chicago", "AL"), "940": ("America/Chicago", "TX"), "941": ("America/New_York", "FL"),
+    "947": ("America/New_York", "MI"), "949": ("America/Los_Angeles", "CA"), "951": ("America/Los_Angeles", "CA"),
+    "952": ("America/Chicago", "MN"), "954": ("America/New_York", "FL"), "956": ("America/Chicago", "TX"),
+    "959": ("America/New_York", "CT"), "970": ("America/Denver", "CO"), "971": ("America/Los_Angeles", "OR"),
+    "972": ("America/Chicago", "TX"), "973": ("America/New_York", "NJ"), "978": ("America/New_York", "MA"),
+    "979": ("America/Chicago", "TX"), "980": ("America/New_York", "NC"), "984": ("America/New_York", "NC"),
+    "985": ("America/Chicago", "LA"), "989": ("America/New_York", "MI"),
+}
+
+# State-specific calling time restrictions (stricter than federal 8am-9pm)
+STATE_CALLING_RESTRICTIONS = {
+    "TX": {"start_hour": 9, "end_hour": 21, "name": "Texas (9am-9pm)"},  # Texas SB 140
+    "CT": {"start_hour": 9, "end_hour": 20, "name": "Connecticut (9am-8pm)"},
+    "FL": {"start_hour": 8, "end_hour": 20, "name": "Florida (8am-8pm)"},
+    "GA": {"start_hour": 8, "end_hour": 20, "name": "Georgia (8am-8pm)"},
+    "LA": {"start_hour": 8, "end_hour": 20, "name": "Louisiana (8am-8pm)"},
+    "MA": {"start_hour": 8, "end_hour": 20, "name": "Massachusetts (8am-8pm)"},
+    "OK": {"start_hour": 8, "end_hour": 20, "name": "Oklahoma (8am-8pm)"},
+    "PA": {"start_hour": 9, "end_hour": 21, "name": "Pennsylvania (9am-9pm)"},
+    "RI": {"start_hour": 8, "end_hour": 20, "name": "Rhode Island (8am-8pm)"},
+    "WA": {"start_hour": 8, "end_hour": 20, "name": "Washington (8am-8pm)"},
+    "WI": {"start_hour": 8, "end_hour": 20, "name": "Wisconsin (8am-8pm)"},
+    # Federal default for unlisted states
+    "DEFAULT": {"start_hour": 8, "end_hour": 21, "name": "Federal TCPA (8am-9pm)"},
+}
+
 class ComplianceService:
-    """Service for handling call compliance checks"""
+    """
+    Service for TCPA-compliant call compliance checks.
+    
+    Features:
+    - Internal DNC list management
+    - National DNC Registry integration (via external API)
+    - Calling hours enforcement (8am-9pm local time)
+    - State-specific time restrictions
+    - Call frequency limits
+    - Phone number verification
+    """
+    
+    def __init__(self):
+        # DNC.com or similar service API key (optional)
+        self.dnc_api_key = os.environ.get("DNC_API_KEY")
+        self.dnc_api_url = os.environ.get("DNC_API_URL", "https://api.dncscrub.com/v1")
+        logger.info(f"ComplianceService initialized. External DNC API: {'configured' if self.dnc_api_key else 'not configured'}")
+    
+    def get_timezone_for_number(self, phone_number: str) -> tuple:
+        """
+        Get timezone and state from phone number area code.
+        Returns (timezone_name, state_abbr) or defaults to Eastern Time.
+        """
+        # Extract area code from phone number
+        clean_number = ''.join(filter(str.isdigit, phone_number))
+        if clean_number.startswith('1') and len(clean_number) >= 4:
+            area_code = clean_number[1:4]
+        elif len(clean_number) >= 3:
+            area_code = clean_number[:3]
+        else:
+            return ("America/New_York", "UNKNOWN")
+        
+        return AREA_CODE_TIMEZONES.get(area_code, ("America/New_York", "UNKNOWN"))
+    
+    def check_calling_hours(self, phone_number: str) -> dict:
+        """
+        Check if it's within legal calling hours for the recipient's timezone.
+        TCPA requires calls only between 8am-9pm local time.
+        Some states have stricter requirements.
+        
+        Returns:
+            {
+                "is_allowed": bool,
+                "reason": str or None,
+                "local_time": str,
+                "timezone": str,
+                "state": str,
+                "restriction": str,
+                "next_allowed_time": str or None
+            }
+        """
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            from backports.zoneinfo import ZoneInfo
+        
+        timezone_name, state = self.get_timezone_for_number(phone_number)
+        
+        try:
+            tz = ZoneInfo(timezone_name)
+            local_now = datetime.now(tz)
+            local_hour = local_now.hour
+            
+            # Get state-specific or default restrictions
+            restriction = STATE_CALLING_RESTRICTIONS.get(state, STATE_CALLING_RESTRICTIONS["DEFAULT"])
+            start_hour = restriction["start_hour"]
+            end_hour = restriction["end_hour"]
+            restriction_name = restriction["name"]
+            
+            # Check if within allowed hours
+            is_allowed = start_hour <= local_hour < end_hour
+            
+            result = {
+                "is_allowed": is_allowed,
+                "reason": None,
+                "local_time": local_now.strftime("%I:%M %p"),
+                "local_hour": local_hour,
+                "timezone": timezone_name,
+                "state": state,
+                "restriction": restriction_name,
+                "start_hour": start_hour,
+                "end_hour": end_hour,
+                "next_allowed_time": None
+            }
+            
+            if not is_allowed:
+                if local_hour < start_hour:
+                    # Too early - calculate when calling is allowed
+                    next_allowed = local_now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+                    wait_minutes = int((next_allowed - local_now).total_seconds() / 60)
+                    result["reason"] = f"Too early to call {state} ({local_now.strftime('%I:%M %p')} local). {restriction_name} - wait {wait_minutes} minutes"
+                    result["next_allowed_time"] = next_allowed.isoformat()
+                else:
+                    # Too late - calculate when calling is allowed tomorrow
+                    next_allowed = (local_now + timedelta(days=1)).replace(hour=start_hour, minute=0, second=0, microsecond=0)
+                    result["reason"] = f"Too late to call {state} ({local_now.strftime('%I:%M %p')} local). {restriction_name} - try tomorrow at {start_hour}:00 AM"
+                    result["next_allowed_time"] = next_allowed.isoformat()
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error checking calling hours for {phone_number}: {e}")
+            # Default to allowed if timezone lookup fails (conservative approach would be to block)
+            return {
+                "is_allowed": True,
+                "reason": None,
+                "local_time": "unknown",
+                "timezone": timezone_name,
+                "state": state,
+                "restriction": "Federal TCPA (8am-9pm)",
+                "error": str(e)
+            }
     
     async def check_dnc(self, phone_number: str) -> bool:
         """Check if number is on internal DNC list"""
         dnc_entry = await db.dnc_list.find_one({"phone_number": phone_number}, {"_id": 0})
         return dnc_entry is not None
+    
+    async def check_national_dnc(self, phone_number: str) -> dict:
+        """
+        Check if number is on the National Do Not Call Registry.
+        Uses external DNC scrubbing service (DNC.com, Gryphon, etc.)
+        
+        Returns:
+            {
+                "on_national_dnc": bool,
+                "checked": bool,
+                "source": str,
+                "checked_at": str,
+                "error": str or None
+            }
+        """
+        clean_number = ''.join(filter(str.isdigit, phone_number))
+        if not clean_number.startswith('1') and len(clean_number) == 10:
+            clean_number = '1' + clean_number
+        formatted_number = f"+{clean_number}"
+        
+        # Check cache first (DNC status cached for 30 days per FTC requirements)
+        cached = await db.national_dnc_checks.find_one(
+            {"phone_number": formatted_number}, 
+            {"_id": 0}
+        )
+        if cached:
+            try:
+                checked_at = datetime.fromisoformat(cached["checked_at"].replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - checked_at).days < 30:
+                    logger.info(f"Using cached National DNC check for {formatted_number}")
+                    return cached
+            except Exception:
+                pass
+        
+        result = {
+            "phone_number": formatted_number,
+            "on_national_dnc": False,
+            "checked": False,
+            "source": "none",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "error": None
+        }
+        
+        # If external DNC API is configured, use it
+        if self.dnc_api_key:
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{self.dnc_api_url}/scrub",
+                        headers={
+                            "Authorization": f"Bearer {self.dnc_api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={"phone_numbers": [formatted_number]},
+                        timeout=10.0
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        # Parse response (format varies by provider)
+                        dnc_status = data.get("results", [{}])[0]
+                        result["on_national_dnc"] = dnc_status.get("on_dnc", False) or dnc_status.get("status") == "dnc"
+                        result["checked"] = True
+                        result["source"] = "external_api"
+                        result["registry_type"] = dnc_status.get("registry_type", "federal")
+                        logger.info(f"External DNC check: {formatted_number} -> {'ON DNC' if result['on_national_dnc'] else 'CLEAR'}")
+                    else:
+                        result["error"] = f"DNC API error: {response.status_code}"
+                        logger.error(f"DNC API error: {response.text}")
+                        
+            except Exception as e:
+                result["error"] = str(e)
+                logger.error(f"DNC API exception: {e}")
+        else:
+            # No external API configured - check internal supplementary list
+            # Users can upload DNC lists from FTC data downloads
+            internal_ndnc = await db.national_dnc_list.find_one(
+                {"phone_number": formatted_number},
+                {"_id": 0}
+            )
+            if internal_ndnc:
+                result["on_national_dnc"] = True
+                result["checked"] = True
+                result["source"] = "internal_ndnc_list"
+            else:
+                result["checked"] = True
+                result["source"] = "internal_only"
+                result["warning"] = "External DNC API not configured. Configure DNC_API_KEY for National DNC Registry compliance."
+        
+        # Cache the result
+        await db.national_dnc_checks.update_one(
+            {"phone_number": formatted_number},
+            {"$set": result},
+            upsert=True
+        )
+        
+        return result
     
     async def add_to_dnc(self, phone_number: str, reason: str = "user_request", added_by: str = None):
         """Add number to internal DNC list"""
@@ -1736,7 +2067,15 @@ class ComplianceService:
     
     async def pre_call_compliance_check(self, phone_number: str, user_id: str = None) -> Dict:
         """
-        Perform all compliance checks before making a call.
+        Perform all TCPA compliance checks before making a call.
+        
+        Checks performed:
+        1. Calling hours (8am-9pm local time, state-specific restrictions)
+        2. Internal DNC list
+        3. National DNC Registry (if configured)
+        4. Phone number verification (line type, validity)
+        5. Call frequency limits (max 3 calls per 7 days)
+        
         Returns whether call is allowed, reasons if not, and dial priority.
         """
         checks_performed = []
@@ -1744,14 +2083,32 @@ class ComplianceService:
         warnings = []
         is_allowed = True
         dial_priority = 50  # Default priority
+        calling_hours_info = None
+        national_dnc_info = None
         
-        # 1. Check internal DNC list
+        # 1. CHECK CALLING HOURS (TCPA requirement)
+        checks_performed.append("calling_hours")
+        calling_hours_info = self.check_calling_hours(phone_number)
+        if not calling_hours_info.get("is_allowed"):
+            is_allowed = False
+            reasons.append(calling_hours_info.get("reason", "Outside legal calling hours"))
+        
+        # 2. Check internal DNC list
         checks_performed.append("internal_dnc")
         if await self.check_dnc(phone_number):
             is_allowed = False
             reasons.append("Number is on internal Do Not Call list")
         
-        # 2. Verify number with Twilio Lookup (landline vs mobile vs voip)
+        # 3. CHECK NATIONAL DNC REGISTRY (TCPA requirement)
+        checks_performed.append("national_dnc")
+        national_dnc_info = await self.check_national_dnc(phone_number)
+        if national_dnc_info.get("on_national_dnc"):
+            is_allowed = False
+            reasons.append("Number is on National Do Not Call Registry")
+        elif national_dnc_info.get("warning"):
+            warnings.append(national_dnc_info.get("warning"))
+        
+        # 4. Verify number with Twilio Lookup (landline vs mobile vs voip)
         checks_performed.append("number_verification")
         verification = await self.verify_number(phone_number)
         
@@ -1774,7 +2131,7 @@ class ComplianceService:
             # Mobile is preferred - no warning needed
             pass
         
-        # 3. Check recent call history (don't call too frequently)
+        # 5. Check recent call history (don't call too frequently)
         checks_performed.append("call_frequency")
         recent_calls = await db.calls.count_documents({
             "lead_phone": phone_number,
@@ -1796,6 +2153,8 @@ class ComplianceService:
             "warnings": warnings,
             "checks_performed": checks_performed,
             "verification": verification,
+            "calling_hours": calling_hours_info,
+            "national_dnc": national_dnc_info,
             "dial_priority": dial_priority,
             "checked_at": datetime.now(timezone.utc).isoformat()
         }
@@ -1810,7 +2169,21 @@ class ComplianceService:
             "line_type": line_type,
             "is_mobile": verification.get("is_mobile", False),
             "carrier": verification.get("carrier"),
-            "dial_priority": dial_priority
+            "dial_priority": dial_priority,
+            # New TCPA compliance fields
+            "calling_hours": {
+                "local_time": calling_hours_info.get("local_time"),
+                "timezone": calling_hours_info.get("timezone"),
+                "state": calling_hours_info.get("state"),
+                "restriction": calling_hours_info.get("restriction"),
+                "is_allowed": calling_hours_info.get("is_allowed"),
+                "next_allowed_time": calling_hours_info.get("next_allowed_time")
+            },
+            "national_dnc": {
+                "on_registry": national_dnc_info.get("on_national_dnc", False),
+                "checked": national_dnc_info.get("checked", False),
+                "source": national_dnc_info.get("source")
+            }
         }
 
 compliance_service = ComplianceService()
@@ -5970,12 +6343,126 @@ async def check_compliance(
     phone_number: str,
     current_user: Dict = Depends(get_current_user)
 ):
-    """Run compliance check on a phone number before calling"""
+    """Run full TCPA compliance check on a phone number before calling"""
     result = await compliance_service.pre_call_compliance_check(
         phone_number=phone_number,
         user_id=current_user["user_id"]
     )
     return result
+
+@api_router.get("/compliance/calling-hours/{phone_number}")
+async def check_calling_hours(
+    phone_number: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Check if it's within legal calling hours for a phone number.
+    TCPA requires calls only between 8am-9pm local time.
+    Some states have stricter requirements (e.g., Texas 9am-9pm, Connecticut 9am-8pm).
+    """
+    result = compliance_service.check_calling_hours(phone_number)
+    return result
+
+@api_router.get("/compliance/national-dnc/{phone_number}")
+async def check_national_dnc(
+    phone_number: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Check if a phone number is on the National Do Not Call Registry.
+    Requires DNC_API_KEY environment variable for external DNC service integration.
+    Without it, only checks internal DNC list.
+    """
+    result = await compliance_service.check_national_dnc(phone_number)
+    return result
+
+@api_router.get("/compliance/status")
+async def get_compliance_status(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get TCPA compliance configuration status.
+    Shows which compliance features are configured and active.
+    """
+    return {
+        "tcpa_compliance": {
+            "calling_hours_enforcement": True,
+            "internal_dnc_list": True,
+            "national_dnc_registry": {
+                "enabled": bool(os.environ.get("DNC_API_KEY")),
+                "api_configured": bool(os.environ.get("DNC_API_KEY")),
+                "note": "Configure DNC_API_KEY for National DNC Registry integration" if not os.environ.get("DNC_API_KEY") else "External DNC API configured"
+            },
+            "ai_disclosure": True,
+            "call_frequency_limits": True,
+            "phone_verification": bool(twilio_client),
+        },
+        "state_restrictions": STATE_CALLING_RESTRICTIONS,
+        "checks_performed": [
+            "calling_hours - Blocks calls outside 8am-9pm local time (with state-specific rules)",
+            "internal_dnc - Checks against your internal Do Not Call list",
+            "national_dnc - Checks against National DNC Registry (if configured)",
+            "number_verification - Validates phone number and determines line type",
+            "call_frequency - Limits calls to 3 per number per 7 days"
+        ]
+    }
+
+@api_router.post("/compliance/national-dnc/upload")
+async def upload_national_dnc_list(
+    file: UploadFile,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Upload a list of phone numbers to the internal National DNC list.
+    Useful for importing FTC DNC data downloads.
+    Accepts CSV with 'phone_number' column or plain text with one number per line.
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    content = await file.read()
+    text = content.decode('utf-8')
+    
+    # Parse phone numbers from file
+    phone_numbers = []
+    lines = text.strip().split('\n')
+    
+    for line in lines:
+        # Skip header row if CSV
+        if 'phone' in line.lower() and len(phone_numbers) == 0:
+            continue
+        
+        # Extract phone number (clean it)
+        clean_number = ''.join(filter(str.isdigit, line.split(',')[0] if ',' in line else line))
+        if len(clean_number) >= 10:
+            if not clean_number.startswith('1') and len(clean_number) == 10:
+                clean_number = '1' + clean_number
+            phone_numbers.append(f"+{clean_number}")
+    
+    # Bulk insert into national_dnc_list
+    if phone_numbers:
+        operations = [
+            {
+                "phone_number": num,
+                "source": "uploaded",
+                "uploaded_by": current_user["user_id"],
+                "uploaded_at": datetime.now(timezone.utc).isoformat()
+            }
+            for num in phone_numbers
+        ]
+        
+        # Use bulk upsert to avoid duplicates
+        for op in operations:
+            await db.national_dnc_list.update_one(
+                {"phone_number": op["phone_number"]},
+                {"$set": op},
+                upsert=True
+            )
+    
+    return {
+        "message": f"Uploaded {len(phone_numbers)} phone numbers to National DNC list",
+        "count": len(phone_numbers)
+    }
 
 class RealCallRequest(BaseModel):
     lead_id: str

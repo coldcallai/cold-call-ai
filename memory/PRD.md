@@ -317,6 +317,30 @@ A vertical-agnostic B2B SaaS platform that:
   - Upgrade prompt for non-Professional users
 - **Tests**: 16 CRM integration tests passing (`/app/backend/tests/test_crm_integration.py`)
 
+### Session 13 (December 2025): Enhanced TCPA Compliance
+- **Calling Hours Enforcement** - TCPA-compliant 8am-9pm local time restriction:
+  - Area code to timezone mapping for 200+ US area codes
+  - State identification from phone number
+  - Automatic local time calculation
+  - Clear "next allowed time" when blocked
+- **State-Specific Restrictions** - Stricter than federal requirements:
+  - Texas: 9am-9pm (SB 140)
+  - Connecticut: 9am-8pm
+  - Florida, Georgia, Louisiana, Massachusetts, Oklahoma, Rhode Island, Washington, Wisconsin: 8am-8pm
+  - Pennsylvania: 9am-9pm
+- **National DNC Registry Integration**:
+  - External DNC API integration ready (configure DNC_API_KEY)
+  - Internal DNC list fallback
+  - 30-day caching per FTC requirements
+  - Bulk upload endpoint for FTC data imports
+- **Enhanced Compliance Endpoints**:
+  - GET /api/compliance/status - TCPA configuration overview
+  - GET /api/compliance/calling-hours/{phone} - Check calling window
+  - GET /api/compliance/national-dnc/{phone} - Check National DNC
+  - POST /api/compliance/national-dnc/upload - Bulk DNC list import
+- **5 Pre-Call Checks**: calling_hours, internal_dnc, national_dnc, number_verification, call_frequency
+- **Tests**: 24 TCPA compliance tests passing (`/app/backend/tests/test_tcpa_compliance.py`)
+
 ## Prioritized Backlog
 
 ### P0 - Critical
@@ -354,8 +378,9 @@ A vertical-agnostic B2B SaaS platform that:
 - Multi-tenant isolation tests: `/app/backend/tests/test_multi_tenant_isolation.py` (31 tests)
 - Subscription tier tests: `/app/backend/tests/test_subscription_tiers.py` (16 tests)
 - CRM integration tests: `/app/backend/tests/test_crm_integration.py` (16 tests)
+- TCPA compliance tests: `/app/backend/tests/test_tcpa_compliance.py` (24 tests)
 - Auth testing playbook: `/app/auth_testing.md`
-- Test reports: `/app/test_reports/iteration_1.json`, `/app/test_reports/iteration_2.json`, `/app/test_reports/iteration_3.json`
+- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_4.json`
 - Test users:
   - User A (admin): test@example.com / Test123!
   - User B (free): test_user_b@example.com / Test456!

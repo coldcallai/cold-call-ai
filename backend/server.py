@@ -177,6 +177,10 @@ class Lead(BaseModel):
     qualification_score: Optional[int] = None
     is_decision_maker: Optional[bool] = None
     interest_level: Optional[int] = None
+    # Phone verification fields
+    line_type: Optional[str] = None  # "mobile", "landline", "voip", "unknown"
+    carrier: Optional[str] = None  # Phone carrier name
+    phone_verified: bool = False  # Whether phone was verified via Twilio Lookup
     # ICP Scoring fields
     icp_score: Optional[int] = None  # 0-100 overall ICP fit score
     icp_breakdown: Optional[Dict[str, Any]] = None  # Detailed scoring breakdown
@@ -4521,8 +4525,17 @@ async def get_leads(
     return leads
 
 @api_router.get("/leads/export-csv")
-async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Dict = Depends(get_current_user)):
-    """Export leads to CSV (only user's own leads)"""
+async def export_leads_csv(
+    status: Optional[LeadStatus] = None, 
+    line_type: Optional[str] = Query(default=None, description="Filter by line type: mobile, landline, voip"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Export leads to CSV (only user's own leads).
+    Optional filters:
+    - status: Filter by lead status (new, contacted, qualified, etc.)
+    - line_type: Filter by phone line type (mobile, landline, voip)
+    """
     # Check feature access - CSV export requires Starter+
     features = get_tier_features(current_user)
     if not features.get("csv_export"):
@@ -4534,15 +4547,17 @@ async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Di
     query = {"user_id": current_user["user_id"]}
     if status:
         query["status"] = status
+    if line_type:
+        query["line_type"] = line_type
     
     leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
     
     if not leads:
-        raise HTTPException(status_code=404, detail="No leads to export")
+        raise HTTPException(status_code=404, detail="No leads found matching filters")
     
     # Create CSV in memory
     output = io.StringIO()
-    fieldnames = ['business_name', 'contact_name', 'phone', 'email', 'status', 'source', 'intent_signals', 'qualification_score', 'created_at']
+    fieldnames = ['business_name', 'contact_name', 'phone', 'email', 'status', 'line_type', 'carrier', 'source', 'intent_signals', 'qualification_score', 'created_at']
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     
@@ -4553,6 +4568,8 @@ async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Di
             'phone': lead.get('phone', ''),
             'email': lead.get('email', ''),
             'status': lead.get('status', ''),
+            'line_type': lead.get('line_type', ''),
+            'carrier': lead.get('carrier', ''),
             'source': lead.get('source', ''),
             'intent_signals': '; '.join(lead.get('intent_signals', [])),
             'qualification_score': lead.get('qualification_score', ''),
@@ -4561,11 +4578,123 @@ async def export_leads_csv(status: Optional[LeadStatus] = None, current_user: Di
     
     output.seek(0)
     
+    # Generate filename based on filters
+    filename_parts = ["leads"]
+    if line_type:
+        filename_parts.append(line_type)
+    if status:
+        filename_parts.append(status)
+    filename_parts.append(datetime.now().strftime('%Y%m%d_%H%M%S'))
+    filename = "_".join(filename_parts) + ".csv"
+    
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@api_router.get("/leads/export-mobile-csv")
+async def export_mobile_leads_csv(
+    status: Optional[LeadStatus] = None,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Export only mobile phone leads to CSV.
+    Perfect for SMS campaigns or other mobile-specific projects.
+    """
+    # Check feature access
+    features = get_tier_features(current_user)
+    if not features.get("csv_export"):
+        raise HTTPException(
+            status_code=403, 
+            detail="CSV export is not available on your plan. Upgrade to Starter or higher."
+        )
+    
+    query = {"user_id": current_user["user_id"], "line_type": "mobile"}
+    if status:
+        query["status"] = status
+    
+    leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
+    
+    if not leads:
+        raise HTTPException(status_code=404, detail="No mobile leads found")
+    
+    # Create CSV optimized for SMS/mobile campaigns
+    output = io.StringIO()
+    fieldnames = ['phone', 'business_name', 'contact_name', 'email', 'carrier', 'status', 'qualification_score']
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    
+    for lead in leads:
+        writer.writerow({
+            'phone': lead.get('phone', ''),
+            'business_name': lead.get('business_name', ''),
+            'contact_name': lead.get('contact_name', ''),
+            'email': lead.get('email', ''),
+            'carrier': lead.get('carrier', ''),
+            'status': lead.get('status', ''),
+            'qualification_score': lead.get('qualification_score', '')
+        })
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=mobile_leads_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+    )
+
+@api_router.get("/leads/phone-stats")
+async def get_lead_phone_stats(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get statistics about lead phone types (mobile vs landline vs VoIP).
+    """
+    user_id = current_user["user_id"]
+    
+    # Count by line type
+    pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$group": {
+            "_id": "$line_type",
+            "count": {"$sum": 1}
+        }}
+    ]
+    
+    results = await db.leads.aggregate(pipeline).to_list(100)
+    
+    stats = {
+        "mobile": 0,
+        "landline": 0,
+        "voip": 0,
+        "unknown": 0,
+        "total": 0
+    }
+    
+    for r in results:
+        line_type = r["_id"] or "unknown"
+        if line_type in stats:
+            stats[line_type] = r["count"]
+        else:
+            stats["unknown"] += r["count"]
+        stats["total"] += r["count"]
+    
+    return {
+        "stats": stats,
+        "percentages": {
+            "mobile": round(stats["mobile"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0,
+            "landline": round(stats["landline"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0,
+            "voip": round(stats["voip"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0,
+            "unknown": round(stats["unknown"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0
+        },
+        "export_urls": {
+            "all_leads": "/api/leads/export-csv",
+            "mobile_only": "/api/leads/export-mobile-csv",
+            "landline_only": "/api/leads/export-csv?line_type=landline",
+            "voip_only": "/api/leads/export-csv?line_type=voip"
+        }
+    }
 
 @api_router.get("/leads/{lead_id}", response_model=Lead)
 async def get_lead(lead_id: str, current_user: Dict = Depends(get_current_user)):
@@ -4581,6 +4710,141 @@ async def create_lead(lead: LeadCreate, current_user: Dict = Depends(get_current
     lead_obj = Lead(**lead.model_dump(), user_id=current_user["user_id"])
     await db.leads.insert_one(lead_obj.model_dump())
     return lead_obj
+
+@api_router.post("/leads/{lead_id}/verify-phone")
+async def verify_lead_phone(
+    lead_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Verify a lead's phone number and update with line type (mobile/landline/VoIP).
+    Uses Twilio Lookup to determine phone type and carrier.
+    """
+    user_id = current_user["user_id"]
+    
+    lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    phone = lead.get("phone")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Lead has no phone number")
+    
+    # Perform verification
+    verification = await compliance_service.verify_number(phone)
+    
+    # Update lead with phone info
+    update_data = {
+        "line_type": verification.get("line_type", "unknown"),
+        "carrier": verification.get("carrier"),
+        "phone_verified": verification.get("is_valid", False),
+        "dial_priority": verification.get("dial_priority", 50),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.leads.update_one(
+        {"id": lead_id, "user_id": user_id},
+        {"$set": update_data}
+    )
+    
+    return {
+        "lead_id": lead_id,
+        "phone": phone,
+        "verification": {
+            "line_type": verification.get("line_type"),
+            "is_mobile": verification.get("is_mobile", False),
+            "is_landline": verification.get("is_landline", False),
+            "is_voip": verification.get("is_voip", False),
+            "carrier": verification.get("carrier"),
+            "is_valid": verification.get("is_valid", True),
+            "dial_priority": verification.get("dial_priority", 50)
+        }
+    }
+
+@api_router.post("/leads/verify-phones-bulk")
+async def verify_leads_phones_bulk(
+    lead_ids: Optional[List[str]] = None,
+    verify_all_unverified: bool = False,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Bulk verify phone numbers for multiple leads.
+    - lead_ids: List of specific lead IDs to verify
+    - verify_all_unverified: If true, verify all leads that haven't been verified yet
+    
+    Note: Uses Twilio Lookup which has per-lookup costs.
+    """
+    user_id = current_user["user_id"]
+    
+    query = {"user_id": user_id}
+    
+    if lead_ids:
+        query["id"] = {"$in": lead_ids}
+    elif verify_all_unverified:
+        query["phone_verified"] = {"$ne": True}
+    else:
+        raise HTTPException(
+            status_code=400, 
+            detail="Provide lead_ids or set verify_all_unverified=true"
+        )
+    
+    leads = await db.leads.find(query, {"_id": 0}).to_list(500)  # Limit to 500 at a time
+    
+    if not leads:
+        return {"message": "No leads to verify", "verified": 0}
+    
+    results = {
+        "total": len(leads),
+        "verified": 0,
+        "mobile": 0,
+        "landline": 0,
+        "voip": 0,
+        "unknown": 0,
+        "failed": 0
+    }
+    
+    for lead in leads:
+        phone = lead.get("phone")
+        if not phone:
+            results["failed"] += 1
+            continue
+        
+        try:
+            verification = await compliance_service.verify_number(phone)
+            
+            line_type = verification.get("line_type", "unknown")
+            update_data = {
+                "line_type": line_type,
+                "carrier": verification.get("carrier"),
+                "phone_verified": verification.get("is_valid", False),
+                "dial_priority": verification.get("dial_priority", 50),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            await db.leads.update_one(
+                {"id": lead["id"], "user_id": user_id},
+                {"$set": update_data}
+            )
+            
+            results["verified"] += 1
+            if line_type in ["mobile", "cellphone", "wireless"]:
+                results["mobile"] += 1
+            elif line_type in ["landline", "fixedline", "fixed"]:
+                results["landline"] += 1
+            elif line_type in ["voip", "non-fixed voip", "virtual"]:
+                results["voip"] += 1
+            else:
+                results["unknown"] += 1
+                
+        except Exception as e:
+            logger.error(f"Failed to verify phone for lead {lead['id']}: {e}")
+            results["failed"] += 1
+    
+    return {
+        "message": f"Verified {results['verified']} of {results['total']} leads",
+        "results": results,
+        "export_mobile_url": "/api/leads/export-mobile-csv"
+    }
 
 @api_router.put("/leads/{lead_id}", response_model=Lead)
 async def update_lead(

@@ -290,6 +290,33 @@ A vertical-agnostic B2B SaaS platform that:
 - **Landing Page Updated** - PAYG option prominently displayed with "No Commitment" badge
 - **Competitive Positioning**: Now competes with Bland AI for low-volume users
 
+### Session 12 (December 2025): CRM Integrations
+- **CRMIntegrationService** - Universal CRM service supporting 3 providers:
+  - GoHighLevel (GHL)
+  - Salesforce
+  - HubSpot
+- **Secure Credential Storage** - API keys encrypted using Fernet encryption from JWT secret
+- **Feature Access**:
+  - Free/Starter/PAYG: No CRM access
+  - Professional/Unlimited/BYL: Full CRM integration
+- **Auto-Push on Qualification** - When a lead status changes to "qualified", automatically pushed to all connected CRMs as background task
+- **New Database Collections**:
+  - crm_credentials: Stores encrypted API keys per user/provider
+  - crm_lead_push_logs: Audit trail of all CRM pushes
+- **CRM API Endpoints**:
+  - GET /api/crm/status - Get all CRM connection statuses
+  - POST /api/crm/connect - Connect CRM with API key
+  - POST /api/crm/disconnect/{provider} - Disconnect a CRM
+  - GET /api/crm/push-logs - Get CRM push history
+  - POST /api/crm/push-lead/{provider} - Manual lead push
+  - GET /api/crm/oauth/callback - OAuth callback handler
+- **CRM Integrations UI Page** (`/app/integrations`):
+  - 3 provider cards with status, connect/disconnect buttons
+  - "How it works" info banner
+  - Recent Lead Syncs table with push history
+  - Upgrade prompt for non-Professional users
+- **Tests**: 16 CRM integration tests passing (`/app/backend/tests/test_crm_integration.py`)
+
 ## Prioritized Backlog
 
 ### P0 - Critical
@@ -307,9 +334,11 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~Low balance notification system~~ ✅ DONE (December 2025)
 - [x] ~~ICP configuration UI in campaign form~~ ✅ DONE (December 2025)
 - [x] ~~Calendar/Calendly integration for auto-booking~~ ✅ DONE (December 2025)
+- [x] ~~CRM Integrations (GoHighLevel, Salesforce, HubSpot)~~ ✅ DONE (December 2025)
 - [ ] Improve STT accuracy - Consider Deepgram for lower latency
 
 ### P2 - Medium Priority
+- [ ] Connect real Stripe checkout for PAYG credit packs (currently mocked)
 - [ ] Low-balance email notifications
 - [ ] Auto-suggest plan upgrades based on top-up purchases
 - [ ] Stripe recurring subscriptions (currently one-time payments)
@@ -324,11 +353,13 @@ A vertical-agnostic B2B SaaS platform that:
 - Backend: pytest suite at `/app/backend/tests/test_auth_and_api.py`
 - Multi-tenant isolation tests: `/app/backend/tests/test_multi_tenant_isolation.py` (31 tests)
 - Subscription tier tests: `/app/backend/tests/test_subscription_tiers.py` (16 tests)
+- CRM integration tests: `/app/backend/tests/test_crm_integration.py` (16 tests)
 - Auth testing playbook: `/app/auth_testing.md`
-- Test reports: `/app/test_reports/iteration_1.json`, `/app/test_reports/iteration_2.json`
+- Test reports: `/app/test_reports/iteration_1.json`, `/app/test_reports/iteration_2.json`, `/app/test_reports/iteration_3.json`
 - Test users:
   - User A (admin): test@example.com / Test123!
   - User B (free): test_user_b@example.com / Test456!
+  - Starter user: test_starter_1ea49b76@example.com / Test123!
 
 ## 3rd Party Integrations Status
 | Service | Status | Notes |
@@ -340,3 +371,6 @@ A vertical-agnostic B2B SaaS platform that:
 | Stripe | ✅ Active | Test keys, checkout working |
 | Twilio | ✅ Active | Live outbound calls + Media Streams |
 | Resend | ⚠️ Requires Key | Email notifications |
+| GoHighLevel | ✅ Ready | CRM integration - requires user API key |
+| Salesforce | ✅ Ready | CRM integration - requires user API key |
+| HubSpot | ✅ Ready | CRM integration - requires user API key |

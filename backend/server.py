@@ -1952,7 +1952,7 @@ class ComplianceService:
                 result["error"] = str(e)
                 logger.error(f"DNC API exception: {e}")
         else:
-            # No external API configured - check internal supplementary list
+            # No external API configured - check internal FTC DNC list and litigator list
             # Users can upload DNC lists from FTC data downloads
             internal_ndnc = await db.national_dnc_list.find_one(
                 {"phone_number": formatted_number},
@@ -1961,11 +1961,25 @@ class ComplianceService:
             if internal_ndnc:
                 result["on_national_dnc"] = True
                 result["checked"] = True
-                result["source"] = "internal_ndnc_list"
+                result["source"] = "ftc_dnc_upload"
             else:
                 result["checked"] = True
-                result["source"] = "internal_only"
-                result["warning"] = "External DNC API not configured. Configure DNC_API_KEY for National DNC Registry compliance."
+                result["source"] = "internal_lists"
+        
+        # Always check internal litigator list (even if external API is used)
+        litigator = await db.tcpa_litigators.find_one(
+            {"phone_number": formatted_number},
+            {"_id": 0}
+        )
+        if litigator:
+            result["is_litigator"] = True
+            result["litigator_info"] = {
+                "name": litigator.get("name"),
+                "firm": litigator.get("firm"),
+                "notes": litigator.get("notes"),
+                "risk_level": litigator.get("risk_level", "high")
+            }
+            logger.warning(f"TCPA LITIGATOR DETECTED: {formatted_number}")
         
         # Cache the result
         await db.national_dnc_checks.update_one(
@@ -6600,6 +6614,417 @@ async def upload_national_dnc_list(
         "message": f"Uploaded {len(phone_numbers)} phone numbers to National DNC list",
         "count": len(phone_numbers)
     }
+
+# ============== FTC DNC DATA MANAGEMENT ==============
+
+@api_router.get("/compliance/dnc/stats")
+async def get_dnc_stats(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get DNC database statistics including last refresh date and counts.
+    """
+    # Get counts
+    national_dnc_count = await db.national_dnc_list.count_documents({})
+    litigator_count = await db.tcpa_litigators.count_documents({})
+    internal_dnc_count = await db.dnc_list.count_documents({})
+    
+    # Get last refresh info
+    refresh_info = await db.dnc_refresh_log.find_one(
+        {"type": "national_dnc"},
+        {"_id": 0},
+        sort=[("refreshed_at", -1)]
+    )
+    
+    litigator_refresh = await db.dnc_refresh_log.find_one(
+        {"type": "litigator_list"},
+        {"_id": 0},
+        sort=[("refreshed_at", -1)]
+    )
+    
+    # Calculate days since last refresh
+    days_since_refresh = None
+    refresh_status = "never"
+    if refresh_info:
+        try:
+            last_refresh = datetime.fromisoformat(refresh_info["refreshed_at"].replace("Z", "+00:00"))
+            days_since_refresh = (datetime.now(timezone.utc) - last_refresh).days
+            if days_since_refresh <= 30:
+                refresh_status = "current"
+            elif days_since_refresh <= 60:
+                refresh_status = "due_soon"
+            elif days_since_refresh <= 90:
+                refresh_status = "overdue"
+            else:
+                refresh_status = "critical"
+        except Exception:
+            pass
+    
+    return {
+        "national_dnc": {
+            "count": national_dnc_count,
+            "last_refresh": refresh_info.get("refreshed_at") if refresh_info else None,
+            "days_since_refresh": days_since_refresh,
+            "refresh_status": refresh_status,
+            "source": refresh_info.get("source") if refresh_info else None,
+            "next_refresh_due": "Quarterly refresh required by FTC"
+        },
+        "litigator_list": {
+            "count": litigator_count,
+            "last_refresh": litigator_refresh.get("refreshed_at") if litigator_refresh else None,
+            "source": litigator_refresh.get("source") if litigator_refresh else None
+        },
+        "internal_dnc": {
+            "count": internal_dnc_count,
+            "description": "Numbers added via opt-out requests during calls"
+        },
+        "compliance_note": "FTC requires National DNC list refresh every 31 days for safe harbor protection"
+    }
+
+@api_router.post("/compliance/dnc/upload-ftc")
+async def upload_ftc_dnc_data(
+    file: UploadFile,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Upload FTC National DNC Registry data file.
+    
+    Download data from: https://telemarketing.donotcall.gov
+    Supports FTC's standard format (area code files or full data files).
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        content = await file.read()
+        # Try UTF-8 first, fall back to latin-1
+        try:
+            text = content.decode('utf-8')
+        except UnicodeDecodeError:
+            text = content.decode('latin-1')
+        
+        phone_numbers = []
+        lines = text.strip().split('\n')
+        skipped = 0
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Skip header rows
+            if any(h in line.lower() for h in ['phone', 'number', 'area', 'header']):
+                continue
+            
+            # FTC format is typically just phone numbers, one per line
+            # Could be 10 digits or formatted
+            clean_number = ''.join(filter(str.isdigit, line.split(',')[0] if ',' in line else line))
+            
+            if len(clean_number) == 10:
+                phone_numbers.append(f"+1{clean_number}")
+            elif len(clean_number) == 11 and clean_number.startswith('1'):
+                phone_numbers.append(f"+{clean_number}")
+            else:
+                skipped += 1
+        
+        if not phone_numbers:
+            raise HTTPException(status_code=400, detail="No valid phone numbers found in file")
+        
+        # Batch insert for performance (1000 at a time)
+        batch_size = 1000
+        inserted = 0
+        
+        for i in range(0, len(phone_numbers), batch_size):
+            batch = phone_numbers[i:i + batch_size]
+            operations = []
+            for num in batch:
+                operations.append({
+                    "phone_number": num,
+                    "source": "ftc_dnc",
+                    "uploaded_by": current_user["user_id"],
+                    "uploaded_at": datetime.now(timezone.utc).isoformat()
+                })
+            
+            # Bulk upsert
+            for op in operations:
+                await db.national_dnc_list.update_one(
+                    {"phone_number": op["phone_number"]},
+                    {"$set": op},
+                    upsert=True
+                )
+            inserted += len(batch)
+        
+        # Log the refresh
+        await db.dnc_refresh_log.insert_one({
+            "type": "national_dnc",
+            "source": "ftc_upload",
+            "filename": file.filename,
+            "count": len(phone_numbers),
+            "skipped": skipped,
+            "refreshed_at": datetime.now(timezone.utc).isoformat(),
+            "refreshed_by": current_user["user_id"]
+        })
+        
+        return {
+            "success": True,
+            "message": f"Successfully imported {len(phone_numbers):,} phone numbers from FTC DNC data",
+            "details": {
+                "total_processed": len(lines),
+                "valid_numbers": len(phone_numbers),
+                "skipped": skipped,
+                "filename": file.filename
+            },
+            "next_steps": "FTC requires refresh every 31 days for safe harbor protection"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"FTC DNC upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+@api_router.post("/compliance/litigators/upload")
+async def upload_litigator_list(
+    file: UploadFile,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Upload TCPA litigator phone numbers list.
+    These are numbers associated with known TCPA plaintiffs/serial litigators.
+    Calls to these numbers will be blocked with high-risk warning.
+    
+    Format: CSV or TXT with phone numbers (one per line)
+    Optional columns: phone_number, name, firm, notes, risk_level
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        content = await file.read()
+        try:
+            text = content.decode('utf-8')
+        except UnicodeDecodeError:
+            text = content.decode('latin-1')
+        
+        lines = text.strip().split('\n')
+        litigators = []
+        
+        # Check if CSV with headers
+        has_headers = any(h in lines[0].lower() for h in ['phone', 'name', 'firm']) if lines else False
+        start_idx = 1 if has_headers else 0
+        
+        for line in lines[start_idx:]:
+            line = line.strip()
+            if not line:
+                continue
+            
+            parts = line.split(',') if ',' in line else [line]
+            phone = ''.join(filter(str.isdigit, parts[0]))
+            
+            if len(phone) >= 10:
+                if len(phone) == 10:
+                    phone = f"+1{phone}"
+                elif len(phone) == 11 and phone.startswith('1'):
+                    phone = f"+{phone}"
+                else:
+                    continue
+                
+                litigator = {
+                    "phone_number": phone,
+                    "name": parts[1].strip() if len(parts) > 1 else None,
+                    "firm": parts[2].strip() if len(parts) > 2 else None,
+                    "notes": parts[3].strip() if len(parts) > 3 else None,
+                    "risk_level": "high",
+                    "source": "uploaded",
+                    "added_by": current_user["user_id"],
+                    "added_at": datetime.now(timezone.utc).isoformat()
+                }
+                litigators.append(litigator)
+        
+        if not litigators:
+            raise HTTPException(status_code=400, detail="No valid phone numbers found in file")
+        
+        # Upsert litigators
+        for lit in litigators:
+            await db.tcpa_litigators.update_one(
+                {"phone_number": lit["phone_number"]},
+                {"$set": lit},
+                upsert=True
+            )
+        
+        # Log the refresh
+        await db.dnc_refresh_log.insert_one({
+            "type": "litigator_list",
+            "source": "upload",
+            "filename": file.filename,
+            "count": len(litigators),
+            "refreshed_at": datetime.now(timezone.utc).isoformat(),
+            "refreshed_by": current_user["user_id"]
+        })
+        
+        return {
+            "success": True,
+            "message": f"Successfully imported {len(litigators)} TCPA litigator numbers",
+            "count": len(litigators)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Litigator list upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+@api_router.post("/compliance/litigators/add")
+async def add_litigator(
+    phone_number: str,
+    name: Optional[str] = None,
+    firm: Optional[str] = None,
+    notes: Optional[str] = None,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Add a single phone number to the TCPA litigator list."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    clean_number = ''.join(filter(str.isdigit, phone_number))
+    if len(clean_number) == 10:
+        clean_number = f"+1{clean_number}"
+    elif len(clean_number) == 11 and clean_number.startswith('1'):
+        clean_number = f"+{clean_number}"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid phone number format")
+    
+    litigator = {
+        "phone_number": clean_number,
+        "name": name,
+        "firm": firm,
+        "notes": notes,
+        "risk_level": "high",
+        "source": "manual",
+        "added_by": current_user["user_id"],
+        "added_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.tcpa_litigators.update_one(
+        {"phone_number": clean_number},
+        {"$set": litigator},
+        upsert=True
+    )
+    
+    return {"success": True, "message": f"Added {clean_number} to litigator list"}
+
+@api_router.get("/compliance/litigators")
+async def get_litigators(
+    limit: int = Query(default=100, le=500),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get list of known TCPA litigators."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    cursor = db.tcpa_litigators.find({}, {"_id": 0}).limit(limit)
+    litigators = await cursor.to_list(length=limit)
+    
+    return {
+        "litigators": litigators,
+        "count": len(litigators),
+        "total": await db.tcpa_litigators.count_documents({})
+    }
+
+@api_router.delete("/compliance/litigators/{phone_number}")
+async def remove_litigator(
+    phone_number: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Remove a phone number from the TCPA litigator list."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Try different formats
+    formats_to_try = [phone_number]
+    clean = ''.join(filter(str.isdigit, phone_number))
+    if len(clean) == 10:
+        formats_to_try.append(f"+1{clean}")
+    elif len(clean) == 11:
+        formats_to_try.append(f"+{clean}")
+    
+    result = await db.tcpa_litigators.delete_one({"phone_number": {"$in": formats_to_try}})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Litigator not found")
+    
+    return {"success": True, "message": "Litigator removed"}
+
+@api_router.get("/compliance/dnc/refresh-reminder")
+async def get_dnc_refresh_reminder(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Check if DNC data needs refresh and return reminder status.
+    FTC safe harbor requires refresh every 31 days.
+    """
+    refresh_info = await db.dnc_refresh_log.find_one(
+        {"type": "national_dnc"},
+        {"_id": 0},
+        sort=[("refreshed_at", -1)]
+    )
+    
+    if not refresh_info:
+        return {
+            "needs_refresh": True,
+            "urgency": "critical",
+            "message": "National DNC data has never been loaded. Upload FTC DNC data immediately for TCPA compliance.",
+            "action_url": "https://telemarketing.donotcall.gov",
+            "days_overdue": None
+        }
+    
+    try:
+        last_refresh = datetime.fromisoformat(refresh_info["refreshed_at"].replace("Z", "+00:00"))
+        days_since = (datetime.now(timezone.utc) - last_refresh).days
+        
+        if days_since <= 25:
+            return {
+                "needs_refresh": False,
+                "urgency": "none",
+                "message": f"DNC data is current. Last refreshed {days_since} days ago.",
+                "last_refresh": refresh_info["refreshed_at"],
+                "days_until_due": 31 - days_since
+            }
+        elif days_since <= 31:
+            return {
+                "needs_refresh": True,
+                "urgency": "warning",
+                "message": f"DNC refresh due soon. Last refreshed {days_since} days ago. FTC requires refresh every 31 days.",
+                "last_refresh": refresh_info["refreshed_at"],
+                "days_until_due": 31 - days_since,
+                "action_url": "https://telemarketing.donotcall.gov"
+            }
+        elif days_since <= 60:
+            return {
+                "needs_refresh": True,
+                "urgency": "high",
+                "message": f"DNC data is OVERDUE for refresh ({days_since} days old). Safe harbor protection may be compromised.",
+                "last_refresh": refresh_info["refreshed_at"],
+                "days_overdue": days_since - 31,
+                "action_url": "https://telemarketing.donotcall.gov"
+            }
+        else:
+            return {
+                "needs_refresh": True,
+                "urgency": "critical",
+                "message": f"DNC data is CRITICALLY OUTDATED ({days_since} days old). Immediate refresh required!",
+                "last_refresh": refresh_info["refreshed_at"],
+                "days_overdue": days_since - 31,
+                "action_url": "https://telemarketing.donotcall.gov"
+            }
+    except Exception as e:
+        logger.error(f"Error checking DNC refresh: {e}")
+        return {
+            "needs_refresh": True,
+            "urgency": "unknown",
+            "message": "Unable to determine DNC refresh status. Please verify manually.",
+            "error": str(e)
+        }
 
 class RealCallRequest(BaseModel):
     lead_id: str

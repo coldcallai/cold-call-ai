@@ -1,0 +1,242 @@
+# DialGenix.ai - Complete VPS Deployment Guide
+# =============================================
+# Save this file and follow step by step
+
+## PREREQUISITES
+- Namecheap VPS with Ubuntu 22.04
+- SSH access to your server  
+- Domain: dialgenix.ai
+- Your VPS IP address
+
+---
+
+## STEP 1: SSH INTO YOUR SERVER
+
+ssh root@YOUR_VPS_IP
+
+---
+
+## STEP 2: RUN THIS ENTIRE BLOCK (Copy & Paste)
+
+# Update system and install everything
+sudo apt update && sudo apt upgrade -y && \
+sudo apt install -y curl git build-essential nginx certbot python3-certbot-nginx && \
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && \
+sudo apt install -y nodejs python3.11 python3.11-venv python3-pip && \
+sudo npm install -g pm2
+
+---
+
+## STEP 3: INSTALL MONGODB
+
+curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor && \
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list && \
+sudo apt update && \
+sudo apt install -y mongodb-org && \
+sudo systemctl start mongod && \
+sudo systemctl enable mongod
+
+---
+
+## STEP 4: CLONE YOUR CODE
+
+sudo mkdir -p /var/www/dialgenix && \
+cd /var/www/dialgenix && \
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
+
+** IMPORTANT: Replace YOUR_USERNAME/YOUR_REPO with your actual GitHub repo **
+
+---
+
+## STEP 5: SETUP BACKEND
+
+cd /var/www/dialgenix/backend && \
+python3.11 -m venv venv && \
+source venv/bin/activate && \
+pip install --upgrade pip && \
+pip install -r requirements.txt && \
+pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+
+---
+
+## STEP 6: CREATE BACKEND .env FILE
+
+cat > /var/www/dialgenix/backend/.env << 'ENVFILE'
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=dialgenix_prod
+EMERGENT_API_KEY=your_emergent_key_here
+TWILIO_ACCOUNT_SID=your_twilio_sid
+TWILIO_AUTH_TOKEN=your_twilio_token
+TWILIO_PHONE_NUMBER=+1234567890
+ELEVENLABS_API_KEY=your_elevenlabs_key
+STRIPE_SECRET_KEY=your_stripe_live_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
+JWT_SECRET=change_this_to_random_64_characters
+ENVFILE
+
+** IMPORTANT: Edit this file with your real API keys **
+nano /var/www/dialgenix/backend/.env
+
+---
+
+## STEP 7: SETUP FRONTEND
+
+cd /var/www/dialgenix/frontend && \
+echo "REACT_APP_BACKEND_URL=https://dialgenix.ai" > .env && \
+npm install --legacy-peer-deps && \
+npm run build
+
+---
+
+## STEP 8: CONFIGURE NGINX
+
+sudo tee /etc/nginx/sites-available/dialgenix << 'NGINXCONF'
+server {
+    listen 80;
+    server_name dialgenix.ai www.dialgenix.ai;
+
+    location / {
+        root /var/www/dialgenix/frontend/build;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
+    }
+}
+NGINXCONF
+
+sudo ln -sf /etc/nginx/sites-available/dialgenix /etc/nginx/sites-enabled/ && \
+sudo rm -f /etc/nginx/sites-enabled/default && \
+sudo nginx -t && \
+sudo systemctl restart nginx
+
+---
+
+## STEP 9: POINT DOMAIN TO SERVER
+
+In Namecheap DNS Settings:
+1. Go to: Domain List > dialgenix.ai > Manage > Advanced DNS
+2. Add these A records:
+
+   Type: A    Host: @      Value: YOUR_VPS_IP    TTL: Automatic
+   Type: A    Host: www    Value: YOUR_VPS_IP    TTL: Automatic
+
+Wait 5-30 minutes for DNS to propagate.
+
+---
+
+## STEP 10: SETUP SSL (HTTPS)
+
+sudo certbot --nginx -d dialgenix.ai -d www.dialgenix.ai
+
+Follow prompts: enter email, agree to terms, select "redirect HTTP to HTTPS"
+
+---
+
+## STEP 11: START BACKEND WITH PM2
+
+cd /var/www/dialgenix/backend && \
+source venv/bin/activate && \
+cat > ecosystem.config.js << 'PM2CONF'
+module.exports = {
+  apps: [{
+    name: 'dialgenix-backend',
+    script: 'venv/bin/uvicorn',
+    args: 'server:app --host 0.0.0.0 --port 8001',
+    cwd: '/var/www/dialgenix/backend',
+    interpreter: 'none',
+    env: {
+      PATH: '/var/www/dialgenix/backend/venv/bin:' + process.env.PATH
+    }
+  }]
+};
+PM2CONF
+
+pm2 start ecosystem.config.js && \
+pm2 save && \
+pm2 startup
+
+** Run the command that pm2 startup outputs! **
+
+---
+
+## STEP 12: CONFIGURE STRIPE WEBHOOK
+
+1. Go to: https://dashboard.stripe.com/webhooks
+2. Add endpoint: https://dialgenix.ai/api/stripe/webhook
+3. Select events: checkout.session.completed, customer.subscription.*
+4. Copy webhook signing secret
+5. Update STRIPE_WEBHOOK_SECRET in /var/www/dialgenix/backend/.env
+6. Run: pm2 restart dialgenix-backend
+
+---
+
+## STEP 13: CONFIGURE TWILIO WEBHOOKS
+
+1. Go to: https://console.twilio.com > Phone Numbers > Your Number
+2. Voice webhook: https://dialgenix.ai/api/twilio/voice
+3. Status callback: https://dialgenix.ai/api/twilio/status
+
+---
+
+## VERIFY DEPLOYMENT
+
+pm2 status
+curl https://dialgenix.ai/api/
+
+Visit https://dialgenix.ai in your browser!
+
+---
+
+## USEFUL COMMANDS FOR LATER
+
+# View logs
+pm2 logs dialgenix-backend
+
+# Restart after code changes
+cd /var/www/dialgenix && git pull && pm2 restart dialgenix-backend
+
+# Rebuild frontend
+cd /var/www/dialgenix/frontend && npm run build
+
+# Renew SSL
+sudo certbot renew
+
+---
+
+## YOUR API KEYS TO FILL IN
+
+1. EMERGENT_API_KEY: (from Emergent dashboard)
+2. TWILIO_ACCOUNT_SID: (from twilio.com/console)
+3. TWILIO_AUTH_TOKEN: (from twilio.com/console)
+4. TWILIO_PHONE_NUMBER: (your Twilio number)
+5. ELEVENLABS_API_KEY: (from elevenlabs.io)
+6. STRIPE_SECRET_KEY: (from stripe.com/dashboard - use LIVE key)
+7. STRIPE_WEBHOOK_SECRET: (created in step 12)
+
+---
+
+## NEED HELP?
+
+Return to the Emergent platform and continue this conversation.
+Your project is saved and you can pick up where you left off!

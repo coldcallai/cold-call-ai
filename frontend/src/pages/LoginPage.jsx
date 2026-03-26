@@ -275,7 +275,7 @@ const LoginPage = () => {
 
         {/* Free trial note */}
         <p className="text-center text-gray-500 text-sm mt-6">
-          Start with 50 free lead credits and 50 AI calls. No credit card required.
+          Start with 15 free minutes of AI calling. No credit card required.
         </p>
       </div>
     </div>

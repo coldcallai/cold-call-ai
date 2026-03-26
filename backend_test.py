@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 # Use the public backend URL from frontend .env
-BACKEND_URL = "https://onboard-dialgenix.preview.emergentagent.com"
+BACKEND_URL = "https://voice-dialer-staging.preview.emergentagent.com"
 API_BASE = f"{BACKEND_URL}/api"
 
 class APITester:

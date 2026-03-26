@@ -121,6 +121,10 @@ class User(BaseModel):
     team_seat_count: int = 1
     saved_keywords: List[str] = []  # User's saved intent keywords (up to 100)
     onboarding_completed: bool = False  # Track if user completed onboarding
+    # Synthflow-style free trial: 15 minutes of call time (no credit card required)
+    trial_minutes_total: float = 15.0  # Total trial minutes granted
+    trial_seconds_used: float = 0.0  # Seconds of call time used during trial
+    trial_expired: bool = False  # True when trial minutes exhausted
     # Compliance acknowledgment
     compliance_acknowledged: bool = False  # Must acknowledge before making calls
     compliance_acknowledged_at: Optional[str] = None
@@ -158,6 +162,10 @@ class PasswordUser(BaseModel):
     monthly_lead_allowance: int = 0
     monthly_call_allowance: int = 0
     team_seat_count: int = 1
+    # Synthflow-style free trial: 15 minutes of call time
+    trial_minutes_total: float = 15.0
+    trial_seconds_used: float = 0.0
+    trial_expired: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -3430,6 +3438,89 @@ async def check_low_balance_and_notify(user: Dict):
             except Exception as e:
                 logger.error(f"Failed to send low balance notification: {e}")
 
+def get_trial_status(user: Dict) -> Dict:
+    """
+    Get Synthflow-style trial status for a user.
+    Returns trial remaining time, usage stats, and whether trial is expired.
+    """
+    subscription_tier = user.get("subscription_tier")
+    
+    # Paid users don't have trial limits
+    if subscription_tier and subscription_tier not in [None, "free", "free_trial"]:
+        return {
+            "is_trial": False,
+            "trial_active": False,
+            "trial_expired": False,
+            "minutes_total": 0,
+            "seconds_used": 0,
+            "minutes_remaining": -1,  # -1 indicates unlimited (paid tier)
+            "seconds_remaining": -1,
+            "usage_percent": 0,
+            "can_make_calls": True
+        }
+    
+    # Free trial users
+    trial_minutes_total = user.get("trial_minutes_total", 15.0)
+    trial_seconds_used = user.get("trial_seconds_used", 0.0)
+    trial_expired = user.get("trial_expired", False)
+    
+    total_seconds = trial_minutes_total * 60
+    seconds_remaining = max(0, total_seconds - trial_seconds_used)
+    minutes_remaining = seconds_remaining / 60
+    usage_percent = min(100, (trial_seconds_used / total_seconds) * 100) if total_seconds > 0 else 100
+    
+    # Trial is expired if all time used OR explicitly marked expired
+    is_expired = trial_expired or seconds_remaining <= 0
+    
+    return {
+        "is_trial": True,
+        "trial_active": not is_expired,
+        "trial_expired": is_expired,
+        "minutes_total": trial_minutes_total,
+        "seconds_used": trial_seconds_used,
+        "minutes_remaining": round(minutes_remaining, 2),
+        "seconds_remaining": round(seconds_remaining, 0),
+        "usage_percent": round(usage_percent, 1),
+        "can_make_calls": not is_expired
+    }
+
+async def deduct_trial_time(user_id: str, seconds: float) -> Dict:
+    """
+    Deduct call time from user's trial.
+    Returns updated trial status.
+    """
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        return {"error": "User not found"}
+    
+    trial_status = get_trial_status(user)
+    
+    # Skip if not a trial user
+    if not trial_status["is_trial"]:
+        return trial_status
+    
+    # Skip if trial already expired
+    if trial_status["trial_expired"]:
+        return trial_status
+    
+    new_seconds_used = user.get("trial_seconds_used", 0.0) + seconds
+    total_seconds = user.get("trial_minutes_total", 15.0) * 60
+    is_now_expired = new_seconds_used >= total_seconds
+    
+    # Update user's trial usage
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "trial_seconds_used": new_seconds_used,
+            "trial_expired": is_now_expired,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Get updated status
+    updated_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return get_trial_status(updated_user)
+
 # ============== API ROUTES ==============
 
 @api_router.get("/")
@@ -3457,12 +3548,16 @@ async def register(user_data: UserCreate):
         "password_hash": password_hash,
         "role": UserRole.USER.value,
         "subscription_tier": None,
-        "subscription_status": "inactive",
-        "lead_credits_remaining": 50,  # Free trial credits
-        "call_credits_remaining": 50,
+        "subscription_status": "trialing",
+        "lead_credits_remaining": 0,  # No lead credits in free trial
+        "call_credits_remaining": 0,  # No call credits in free trial
         "monthly_lead_allowance": 0,
         "monthly_call_allowance": 0,
         "team_seat_count": 1,
+        # Synthflow-style 15-minute free trial
+        "trial_minutes_total": 15.0,
+        "trial_seconds_used": 0.0,
+        "trial_expired": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
@@ -3571,12 +3666,16 @@ async def exchange_session_id(request: Request, response: Response):
             "picture": auth_data.get("picture"),
             "role": UserRole.USER.value,
             "subscription_tier": None,
-            "subscription_status": "inactive",
-            "lead_credits_remaining": 50,  # Free trial credits
-            "call_credits_remaining": 50,
+            "subscription_status": "trialing",
+            "lead_credits_remaining": 0,  # No lead credits in free trial
+            "call_credits_remaining": 0,  # No call credits in free trial
             "monthly_lead_allowance": 0,
             "monthly_call_allowance": 0,
             "team_seat_count": 1,
+            # Synthflow-style 15-minute free trial
+            "trial_minutes_total": 15.0,
+            "trial_seconds_used": 0.0,
+            "trial_expired": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
@@ -3629,6 +3728,10 @@ async def get_me(current_user: Dict = Depends(get_current_user)):
     # Check for low balance and potentially send notification
     await check_low_balance_and_notify(current_user)
     
+    # Add trial status to response
+    trial_status = get_trial_status(current_user)
+    current_user["trial_status"] = trial_status
+    
     return current_user
 
 @api_router.get("/subscription/features")
@@ -3666,6 +3769,22 @@ async def get_subscription_features(current_user: Dict = Depends(get_current_use
         }
     
     return response
+
+@api_router.get("/user/trial-status")
+async def get_user_trial_status(current_user: Dict = Depends(get_current_user)):
+    """
+    Get Synthflow-style trial status for the current user.
+    Returns remaining trial time, usage percentage, and whether user can make calls.
+    """
+    trial_status = get_trial_status(current_user)
+    
+    return {
+        **trial_status,
+        "user_id": current_user["user_id"],
+        "subscription_tier": current_user.get("subscription_tier"),
+        "subscription_status": current_user.get("subscription_status", "trialing"),
+        "upgrade_url": "/app/packs"
+    }
 
 # ============== CRM INTEGRATION ENDPOINTS ==============
 
@@ -4257,7 +4376,7 @@ async def get_setup_status(current_user: Dict = Depends(get_current_user)):
     # Check if user has any agents with Calendly links
     agents_with_calendly = await db.agents.count_documents({
         "user_id": user_id,
-        "calendly_link": {"$exists": True, "$ne": "", "$ne": None}
+        "calendly_link": {"$exists": True, "$nin": ["", None]}
     })
     calendly_configured = agents_with_calendly > 0
     
@@ -5671,15 +5790,44 @@ async def simulate_call(
     background_tasks: BackgroundTasks,
     current_user: Dict = Depends(get_current_user)
 ):
-    """Simulate an AI cold call (MOCKED - real calls require Twilio credentials). Deducts 1 call credit."""
+    """Simulate an AI cold call (MOCKED - real calls require Twilio credentials). Deducts from trial time or call credits."""
     user_id = current_user["user_id"]
-    calls_remaining = current_user.get("call_credits_remaining", 0)
     
-    # Check if user has call credits
-    if calls_remaining < 1:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Insufficient call credits. You have {calls_remaining} credits. Please purchase more credits to make calls."
+    # Check trial status first
+    trial_status = get_trial_status(current_user)
+    
+    if trial_status["is_trial"]:
+        # Trial user - check if they have time remaining
+        if trial_status["trial_expired"] or not trial_status["can_make_calls"]:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Your free trial has expired. You used {trial_status['minutes_total']} minutes of call time. Please upgrade to continue making calls."
+            )
+    else:
+        # Paid user - check call credits
+        calls_remaining = current_user.get("call_credits_remaining", 0)
+        if calls_remaining < 1:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient call credits. You have {calls_remaining} credits. Please purchase more credits to make calls."
+            )
+        
+        # Deduct 1 call credit for paid users
+        new_balance = calls_remaining - 1
+        await db.users.update_one(
+            {"user_id": user_id},
+            {
+                "$inc": {"call_credits_remaining": -1},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+        
+        # Log usage event for analytics
+        await log_usage_event(
+            user_id=user_id,
+            event_type="call_made",
+            amount=1,
+            credits_after=new_balance
         )
     
     # Get lead and campaign (with user ownership verification)
@@ -5690,24 +5838,6 @@ async def simulate_call(
     campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": user_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # Deduct 1 call credit
-    new_balance = calls_remaining - 1
-    await db.users.update_one(
-        {"user_id": user_id},
-        {
-            "$inc": {"call_credits_remaining": -1},
-            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
-        }
-    )
-    
-    # Log usage event for analytics
-    await log_usage_event(
-        user_id=user_id,
-        event_type="call_made",
-        amount=1,
-        credits_after=new_balance
-    )
     
     # Create call record with user_id for multi-tenancy
     call = Call(
@@ -5722,13 +5852,19 @@ async def simulate_call(
     # Simulate the call in background (pass user_id for proper webhook filtering)
     background_tasks.add_task(process_simulated_call, call.id, lead, campaign, user_id)
     
-    return {
+    response_data = {
         "message": "Call started", 
         "call_id": call.id, 
-        "status": "in_progress",
-        "credits_used": 1,
-        "credits_remaining": new_balance
+        "status": "in_progress"
     }
+    
+    if trial_status["is_trial"]:
+        response_data["trial_minutes_remaining"] = trial_status["minutes_remaining"]
+    else:
+        response_data["credits_used"] = 1
+        response_data["credits_remaining"] = current_user.get("call_credits_remaining", 0) - 1
+    
+    return response_data
 
 async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_id: str = None):
     """Process simulated call in background"""
@@ -7786,6 +7922,8 @@ async def initiate_real_call(
     """
     Initiate a REAL AI call via Twilio (requires Twilio credentials).
     Includes full compliance checks before calling.
+    Trial users: deducts from trial time (tracked on call completion).
+    Paid users: deducts call credits upfront.
     """
     if not twilio_service.is_configured:
         raise HTTPException(
@@ -7793,12 +7931,38 @@ async def initiate_real_call(
             detail="Twilio not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to .env"
         )
     
-    # Check call credits
-    calls_remaining = current_user.get("call_credits_remaining", 0)
-    if calls_remaining < 1:
-        raise HTTPException(status_code=402, detail="Insufficient call credits")
-    
     user_id = current_user["user_id"]
+    
+    # Check trial status first
+    trial_status = get_trial_status(current_user)
+    
+    if trial_status["is_trial"]:
+        # Trial user - check if they have time remaining
+        if trial_status["trial_expired"] or not trial_status["can_make_calls"]:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Your free trial has expired. You used {trial_status['minutes_total']} minutes of call time. Please upgrade to continue making calls."
+            )
+        # Trial users don't pay upfront - time is deducted on call completion
+    else:
+        # Paid user - check call credits
+        calls_remaining = current_user.get("call_credits_remaining", 0)
+        if calls_remaining < 1:
+            raise HTTPException(status_code=402, detail="Insufficient call credits")
+        
+        # Deduct call credit for paid users
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"call_credits_remaining": -1}}
+        )
+        
+        # Log usage event
+        await log_usage_event(
+            user_id=user_id,
+            event_type="call_made",
+            amount=1,
+            credits_after=calls_remaining - 1
+        )
     
     # Get lead (with user ownership verification)
     lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
@@ -7821,25 +7985,17 @@ async def initiate_real_call(
     )
     
     if not compliance_result["is_allowed"]:
+        # Refund credit if paid user and call blocked
+        if not trial_status["is_trial"]:
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$inc": {"call_credits_remaining": 1}}
+            )
         return {
             "status": "blocked",
             "message": "Call blocked by compliance checks",
             "reasons": compliance_result["reasons"]
         }
-    
-    # Deduct call credit
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$inc": {"call_credits_remaining": -1}}
-    )
-    
-    # Log usage event
-    await log_usage_event(
-        user_id=user_id,
-        event_type="call_made",
-        amount=1,
-        credits_after=calls_remaining - 1
-    )
     
     # Create call record with user_id
     call = Call(
@@ -7885,21 +8041,29 @@ async def initiate_real_call(
             }}
         )
         
-        return {
+        response_data = {
             "status": "initiated",
             "call_id": call.id,
             "twilio_sid": twilio_result["call_sid"],
             "message": "Call initiated successfully",
-            "amd_enabled": use_amd,
-            "credits_remaining": calls_remaining - 1
+            "amd_enabled": use_amd
         }
         
+        if trial_status["is_trial"]:
+            response_data["trial_minutes_remaining"] = trial_status["minutes_remaining"]
+            response_data["is_trial"] = True
+        else:
+            response_data["credits_remaining"] = current_user.get("call_credits_remaining", 0) - 1
+        
+        return response_data
+        
     except Exception as e:
-        # Refund the credit if call failed to initiate
-        await db.users.update_one(
-            {"user_id": current_user["user_id"]},
-            {"$inc": {"call_credits_remaining": 1}}
-        )
+        # Refund the credit if call failed to initiate (paid users only)
+        if not trial_status["is_trial"]:
+            await db.users.update_one(
+                {"user_id": current_user["user_id"]},
+                {"$inc": {"call_credits_remaining": 1}}
+            )
         await db.calls.update_one(
             {"id": call.id},
             {"$set": {"status": CallStatus.FAILED.value, "error": str(e)}}
@@ -8086,10 +8250,11 @@ async def twilio_status_webhook(request: Request):
     }
     
     new_status = status_map.get(call_status, CallStatus.FAILED.value)
+    call_duration_seconds = int(duration) if duration else 0
     
     update_data = {
         "status": new_status,
-        "duration": int(duration) if duration else 0,
+        "duration": call_duration_seconds,
         "ended_at": datetime.now(timezone.utc).isoformat() if call_status in ["completed", "busy", "no-answer", "canceled", "failed"] else None
     }
     
@@ -8097,6 +8262,19 @@ async def twilio_status_webhook(request: Request):
         {"twilio_sid": call_sid},
         {"$set": update_data}
     )
+    
+    # Deduct call duration from trial time (if user is on trial)
+    if call_status == "completed" and call_duration_seconds > 0:
+        # Get the call record to find the user
+        call_record = await db.calls.find_one({"twilio_sid": call_sid}, {"_id": 0})
+        if call_record and call_record.get("user_id"):
+            user = await db.users.find_one({"user_id": call_record["user_id"]}, {"_id": 0})
+            if user:
+                trial_status = get_trial_status(user)
+                if trial_status["is_trial"] and not trial_status["trial_expired"]:
+                    # Deduct call duration from trial
+                    await deduct_trial_time(user["user_id"], call_duration_seconds)
+                    logger.info(f"Deducted {call_duration_seconds}s from trial for user {user['user_id']}")
     
     return {"status": "ok"}
 

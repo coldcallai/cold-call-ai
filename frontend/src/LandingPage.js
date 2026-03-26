@@ -407,7 +407,7 @@ const LandingPage = () => {
               <div className="order-1 lg:order-2">
                 <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
                   <img 
-                    src="https://onboard-dialgenix.preview.emergentagent.com/demo-funnel.png" 
+                    src="https://voice-dialer-staging.preview.emergentagent.com/demo-funnel.png" 
                     alt="Sales Funnel Dashboard"
                     className="rounded-xl shadow-2xl w-full"
                     onError={(e) => {
@@ -424,7 +424,7 @@ const LandingPage = () => {
               <div>
                 <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
                   <img 
-                    src="https://onboard-dialgenix.preview.emergentagent.com/demo-leads.png" 
+                    src="https://voice-dialer-staging.preview.emergentagent.com/demo-leads.png" 
                     alt="AI Lead Discovery"
                     className="rounded-xl shadow-2xl w-full"
                     onError={(e) => {
@@ -495,7 +495,7 @@ const LandingPage = () => {
               <div className="order-1 lg:order-2">
                 <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
                   <img 
-                    src="https://onboard-dialgenix.preview.emergentagent.com/demo-calls.png" 
+                    src="https://voice-dialer-staging.preview.emergentagent.com/demo-calls.png" 
                     alt="Call History & Recordings"
                     className="rounded-xl shadow-2xl w-full"
                     onError={(e) => {

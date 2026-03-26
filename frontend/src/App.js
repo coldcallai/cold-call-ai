@@ -46,6 +46,7 @@ const API = `${BACKEND_URL}/api`;
 const Sidebar = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const navItems = [
     { path: "/app/getting-started", icon: Rocket, label: "Getting Started" },
@@ -67,8 +68,13 @@ const Sidebar = () => {
     window.location.href = "/";
   };
 
-  return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  const SidebarContent = () => (
+    <>
       <div className="p-6 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
@@ -83,7 +89,7 @@ const Sidebar = () => {
         </div>
       </div>
       
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 p-4 overflow-y-auto">
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || 
@@ -99,6 +105,7 @@ const Sidebar = () => {
                       ? "bg-blue-50 text-blue-600 border border-blue-100"
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   }`}
+                  onClick={() => setMobileMenuOpen(false)}
                 >
                   <Icon className="w-5 h-5" />
                   {item.label}
@@ -149,19 +156,56 @@ const Sidebar = () => {
           </Button>
         </div>
       )}
-      
-      <div className="p-4 border-t border-gray-100">
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-medium text-amber-800">Demo Mode</p>
-              <p className="text-xs text-amber-600 mt-0.5">Calls are simulated. Add Twilio credentials for real calls.</p>
-            </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile Header */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <Phone className="w-4 h-4 text-white" />
           </div>
+          <span className="font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            DialGenix.ai
+          </span>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            console.log('Menu toggle clicked, current state:', mobileMenuOpen);
+            setMobileMenuOpen(prev => !prev);
+          }}
+          data-testid="mobile-menu-toggle"
+          className="p-2"
+        >
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <LayoutDashboard className="w-6 h-6" />}
+        </Button>
       </div>
-    </aside>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <aside className={`
+        lg:hidden fixed top-0 left-0 h-full w-72 bg-white z-50 transform transition-transform duration-300 ease-in-out flex flex-col
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <SidebarContent />
+      </aside>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 min-h-screen flex-col">
+        <SidebarContent />
+      </aside>
+    </>
   );
 };
 
@@ -3671,9 +3715,9 @@ const AppRouter = () => {
         {/* Protected Dashboard Routes */}
         <Route path="/app/*" element={
           <ProtectedRoute>
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row min-h-screen">
               <Sidebar />
-              <main className="flex-1 min-h-screen">
+              <main className="flex-1 min-h-screen lg:pt-0 pt-14">
                 <Routes>
                   <Route path="/" element={<FunnelPage />} />
                   <Route path="/getting-started" element={<GettingStartedPage />} />

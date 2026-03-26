@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -19,12 +19,13 @@ const LoginPage = () => {
   const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
 
   // Redirect if already authenticated
-  if (isAuthenticated) {
-    const needsSetup = !user?.setup_wizard_completed;
-    const destination = needsSetup ? "/app/getting-started" : (location.state?.from?.pathname || "/app");
-    navigate(destination, { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      const needsSetup = !user?.setup_wizard_completed;
+      const destination = needsSetup ? "/app/getting-started" : (location.state?.from?.pathname || "/app");
+      navigate(destination, { replace: true });
+    }
+  }, [isAuthenticated, user, navigate, location.state]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

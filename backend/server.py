@@ -395,6 +395,7 @@ CALL_PACKS = [
 
 # Top-up Packs (20% premium for one-off purchases)
 TOPUP_PACKS = [
+    {"id": "topup_test_1", "name": "Test Pack (1 Lead)", "quantity": 1, "price": 1, "type": "topup", "credit_type": "leads", "per_unit": 1.00},
     {"id": "topup_100_leads", "name": "100 Leads Top-up", "quantity": 100, "price": 24, "type": "topup", "credit_type": "leads", "per_unit": 0.24},
     {"id": "topup_250_leads", "name": "250 Leads Top-up", "quantity": 250, "price": 55, "type": "topup", "credit_type": "leads", "per_unit": 0.22},
     {"id": "topup_100_calls", "name": "100 Calls Top-up", "quantity": 100, "price": 15, "type": "topup", "credit_type": "calls", "per_unit": 0.15},

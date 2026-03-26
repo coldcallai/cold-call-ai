@@ -259,12 +259,12 @@ const LandingPage = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
-            <Link to="/login">
+            <a href="#demo">
               <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-8 py-6 text-base font-medium border-0">
                 <Play className="w-4 h-4 mr-2" />
-                Get a demo
+                See the demo
               </Button>
-            </Link>
+            </a>
             <a href="#how-it-works">
               <Button variant="outline" className="rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent px-8 py-6 text-base">
                 Learn more about DialGenix.ai
@@ -280,6 +280,161 @@ const LandingPage = () => {
               <span className="text-gray-500 font-semibold text-lg">OpenAI</span>
               <span className="text-gray-500 font-semibold text-lg">Calendly</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Product Demo Section */}
+      <section id="demo" className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-full text-cyan-400 text-sm font-medium mb-6">
+              <Play className="w-4 h-4" />
+              See It In Action
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              Your AI Sales Pipeline
+            </h2>
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              Watch how DialGenix.ai automates your entire cold calling workflow
+            </p>
+          </div>
+
+          {/* Demo Screenshots */}
+          <div className="space-y-20">
+            {/* Screenshot 1: Sales Funnel */}
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              <div className="order-2 lg:order-1">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-full text-emerald-400 text-sm font-medium mb-4">
+                  Step 1
+                </div>
+                <h3 className="text-3xl font-bold text-white mb-4">Visual Sales Funnel</h3>
+                <p className="text-gray-400 text-lg mb-6">
+                  Track every lead through your pipeline — from discovery to booked meeting. 
+                  See real-time stats on qualification rates, calls made, and bookings.
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    Drag-and-drop lead management
+                  </li>
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    One-click AI calling
+                  </li>
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    Real-time conversion metrics
+                  </li>
+                </ul>
+              </div>
+              <div className="order-1 lg:order-2">
+                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
+                  <img 
+                    src="https://onboard-dialgenix.preview.emergentagent.com/demo-funnel.png" 
+                    alt="Sales Funnel Dashboard"
+                    className="rounded-xl shadow-2xl w-full"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = '<div class="bg-gray-800 rounded-xl p-12 text-center"><p class="text-gray-400">Sales Funnel Preview</p><p class="text-gray-500 text-sm mt-2">Track leads through New → Contacted → Qualified → Booked</p></div>';
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Screenshot 2: Lead Discovery */}
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              <div>
+                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
+                  <img 
+                    src="https://onboard-dialgenix.preview.emergentagent.com/demo-leads.png" 
+                    alt="AI Lead Discovery"
+                    className="rounded-xl shadow-2xl w-full"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = '<div class="bg-gray-800 rounded-xl p-12 text-center"><p class="text-gray-400">Lead Discovery Preview</p><p class="text-gray-500 text-sm mt-2">AI finds businesses searching for your services</p></div>';
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-400 text-sm font-medium mb-4">
+                  Step 2
+                </div>
+                <h3 className="text-3xl font-bold text-white mb-4">AI Lead Discovery</h3>
+                <p className="text-gray-400 text-lg mb-6">
+                  Enter your target keywords and let AI find businesses actively searching for solutions like yours. 
+                  Or upload your own CSV with existing leads.
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-blue-400" />
+                    Intent-based lead discovery
+                  </li>
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-blue-400" />
+                    CSV upload for existing lists
+                  </li>
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-blue-400" />
+                    Phone verification (Mobile/Landline)
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Screenshot 3: Call History */}
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              <div className="order-2 lg:order-1">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-400 text-sm font-medium mb-4">
+                  Step 3
+                </div>
+                <h3 className="text-3xl font-bold text-white mb-4">Call Recordings & Results</h3>
+                <p className="text-gray-400 text-lg mb-6">
+                  Review every AI conversation. See call transcripts, qualification scores, 
+                  and listen to recordings to train your AI further.
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-purple-400" />
+                    Full call recordings
+                  </li>
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-purple-400" />
+                    AI transcription
+                  </li>
+                  <li className="flex items-center gap-3 text-gray-300">
+                    <CheckCircle className="w-5 h-5 text-purple-400" />
+                    Qualification scoring
+                  </li>
+                </ul>
+              </div>
+              <div className="order-1 lg:order-2">
+                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
+                  <img 
+                    src="https://onboard-dialgenix.preview.emergentagent.com/demo-calls.png" 
+                    alt="Call History & Recordings"
+                    className="rounded-xl shadow-2xl w-full"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = '<div class="bg-gray-800 rounded-xl p-12 text-center"><p class="text-gray-400">Call History Preview</p><p class="text-gray-500 text-sm mt-2">View recordings, transcripts, and qualification results</p></div>';
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA after demo */}
+          <div className="text-center mt-20">
+            <Link to="/login">
+              <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-6 text-lg font-medium border-0">
+                Start Free Trial
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </Link>
+            <p className="text-gray-500 mt-4">50 free leads + 50 free calls. No credit card required.</p>
           </div>
         </div>
       </section>

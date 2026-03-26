@@ -424,6 +424,31 @@ A vertical-agnostic B2B SaaS platform that:
   5. First campaign created (campaigns collection count)
 - **Tests**: 24 setup status tests passing (`/app/backend/tests/test_setup_status.py`)
 
+### Session 17 (December 2025): Synthflow-style Free Trial
+- **Time-based Free Trial** - 15 minutes of call time (no credit card required):
+  - New users get `trial_minutes_total: 15.0` instead of lead/call credits
+  - `trial_seconds_used` tracks actual call duration consumed
+  - `trial_expired` flag marks when trial is exhausted
+  - `subscription_status: "trialing"` for trial users
+- **Trial Status API** - Real-time trial tracking:
+  - GET /api/user/trial-status - Returns trial info (is_trial, trial_active, minutes_remaining, etc.)
+  - GET /api/auth/me - Now includes `trial_status` object in response
+  - Paid users get `is_trial: false`, `minutes_remaining: -1` (unlimited)
+- **Call Duration Tracking** - Automatic deduction on call completion:
+  - Twilio status webhook (`/api/twilio/status`) deducts call duration from trial
+  - `deduct_trial_time()` helper updates `trial_seconds_used` and `trial_expired`
+- **Call Blocking** - Trial users blocked when expired:
+  - `/api/calls/initiate` returns 402 with upgrade message for expired trials
+  - `/api/calls/simulate` also checks trial status before allowing calls
+- **TrialBanner Component** - Dynamic UI based on trial state:
+  - Info (cyan): >7 minutes remaining - "Free Trial: X min of call time remaining"
+  - Warning (amber): 3-7 minutes - "Trial running low"
+  - Critical (red pulsing): <3 minutes - "Trial Almost Over!"
+  - Expired (red): "Free Trial Expired" with prominent "Upgrade Now" button
+  - Progress bar showing usage percentage
+  - Paid users do not see any trial banner
+- **Tests**: 8 trial feature tests passing (`/app/backend/tests/test_trial_features.py`)
+
 ## Prioritized Backlog
 
 ### P0 - Critical
@@ -435,6 +460,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~AMD + Voicemail Drop~~ ✅ DONE
 - [x] ~~ICP Scoring~~ ✅ DONE
 - [x] ~~Setup Instructions / Onboarding Wizard~~ ✅ DONE (December 2025)
+- [x] ~~Synthflow-style Free Trial (15 minutes of call time)~~ ✅ DONE (December 2025)
 
 ### P1 - High Priority
 - [x] ~~Multi-tenant data isolation - Scope leads/campaigns to user accounts~~ ✅ DONE (December 2025)
@@ -472,12 +498,18 @@ A vertical-agnostic B2B SaaS platform that:
 - TCPA compliance tests: `/app/backend/tests/test_tcpa_compliance.py` (24 tests)
 - Setup status tests: `/app/backend/tests/test_setup_status.py` (24 tests)
 - Phone verification tests: `/app/backend/tests/test_phone_verification.py` (12 tests)
+- Trial features tests: `/app/backend/tests/test_trial_features.py` (8 tests)
 - Auth testing playbook: `/app/auth_testing.md`
-- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_6.json`
+- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_7.json`
 - Test users:
   - User A (admin): test@example.com / Test123!
   - User B (free): test_user_b@example.com / Test456!
   - Starter user: test_starter_1ea49b76@example.com / Test123!
+  - Trial users (for testing trial states):
+    - Fresh trial: trial_fresh_befc8abc@test.com / Test123!
+    - Low trial (5 min): trial_low_355019df@test.com / Test123!
+    - Critical trial (2 min): trial_critical_a44e1a05@test.com / Test123!
+    - Expired trial: trial_test_1774537902@test.com / Test123!
 
 ## 3rd Party Integrations Status
 | Service | Status | Notes |

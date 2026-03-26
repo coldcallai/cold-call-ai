@@ -38,6 +38,7 @@ import GettingStartedPage from "@/pages/GettingStartedPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 import SetupWizard from "@/components/SetupWizard";
+import TrialBanner from "@/components/TrialBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -299,7 +300,17 @@ const FunnelPage = () => {
       toast.success("Call started!");
       setTimeout(fetchData, 3000);
     } catch (error) {
-      toast.error("Failed to start call");
+      if (error.response?.status === 402) {
+        toast.error("You've run out of call credits", {
+          description: "Upgrade your plan to continue making calls",
+          action: {
+            label: "Upgrade",
+            onClick: () => navigate("/app/packs")
+          }
+        });
+      } else {
+        toast.error("Failed to start call");
+      }
     }
   };
 
@@ -3715,28 +3726,33 @@ const AppRouter = () => {
         {/* Protected Dashboard Routes */}
         <Route path="/app/*" element={
           <ProtectedRoute>
-            <div className="flex flex-col lg:flex-row min-h-screen">
-              <Sidebar />
-              <main className="flex-1 min-h-screen lg:pt-0 pt-14">
-                <Routes>
-                  <Route path="/" element={<FunnelPage />} />
-                  <Route path="/getting-started" element={<GettingStartedPage />} />
-                  <Route path="/usage" element={<UsageDashboard />} />
-                  <Route path="/leads" element={<LeadDiscovery />} />
-                  <Route path="/campaigns" element={<Campaigns />} />
-                  <Route path="/agents" element={<Agents />} />
-                  <Route path="/bookings" element={<BookingsPage />} />
-                  <Route path="/calls" element={<CallHistory />} />
-                  <Route path="/integrations" element={<CRMIntegrationsPage />} />
-                  <Route path="/dnc" element={<DNCManagementPage />} />
-                  <Route path="/compliance" element={<ComplianceSetupPage />} />
-                  <Route path="/packs" element={<CreditPacks />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                </Routes>
-              </main>
+            <div className="flex flex-col min-h-screen">
+              {/* Trial Banner - Shows at top of entire dashboard */}
+              <TrialBanner user={user} />
               
-              {/* Help Chat - Always visible in dashboard */}
-              <HelpChat currentPage={location.pathname} />
+              <div className="flex flex-col lg:flex-row flex-1">
+                <Sidebar />
+                <main className="flex-1 min-h-screen lg:pt-0 pt-14">
+                  <Routes>
+                    <Route path="/" element={<FunnelPage />} />
+                    <Route path="/getting-started" element={<GettingStartedPage />} />
+                    <Route path="/usage" element={<UsageDashboard />} />
+                    <Route path="/leads" element={<LeadDiscovery />} />
+                    <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/agents" element={<Agents />} />
+                    <Route path="/bookings" element={<BookingsPage />} />
+                    <Route path="/calls" element={<CallHistory />} />
+                    <Route path="/integrations" element={<CRMIntegrationsPage />} />
+                    <Route path="/dnc" element={<DNCManagementPage />} />
+                    <Route path="/compliance" element={<ComplianceSetupPage />} />
+                    <Route path="/packs" element={<CreditPacks />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                  </Routes>
+                </main>
+                
+                {/* Help Chat - Always visible in dashboard */}
+                <HelpChat currentPage={location.pathname} />
+              </div>
             </div>
             
             {/* Setup Wizard - Shows for new users who haven't completed setup */}

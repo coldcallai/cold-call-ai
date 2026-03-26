@@ -212,6 +212,30 @@ const LandingPage = () => {
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
+
+          {/* Mobile Menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden bg-[#0B1628] border-t border-gray-800 py-4 px-4">
+              <div className="flex flex-col space-y-4">
+                <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">How It Works</a>
+                <a href="#features" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">Features</a>
+                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">Pricing</a>
+                <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">FAQ</a>
+                <div className="pt-4 border-t border-gray-800 flex flex-col gap-3">
+                  <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="outline" className="w-full rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent">
+                      Log in
+                    </Button>
+                  </Link>
+                  <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                    <Button className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0">
+                      Get started free
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </nav>
 

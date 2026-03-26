@@ -450,24 +450,30 @@ A vertical-agnostic B2B SaaS platform that:
 - **Tests**: 8 trial feature tests passing (`/app/backend/tests/test_trial_features.py`)
 
 ### Session 18 (December 2025): Phone Verification for Trial Abuse Prevention
-- **SMS Phone Verification** - Required for email/password registration:
+- **SMS Phone Verification** - Required for ALL trial users (email/password AND OAuth):
   - POST /api/auth/send-verification - Sends 6-digit SMS code via Twilio
   - POST /api/auth/verify-phone - Validates code and returns verification token
+  - POST /api/auth/verify-phone-oauth - Completes verification for logged-in OAuth users
   - Codes expire after 10 minutes, max 5 attempts
   - 1-minute cooldown between resend requests
 - **Trial Phone Number Tracking** - `trial_phone_numbers` collection:
   - Each phone can only be used for ONE free trial
   - Blocks same phone from creating multiple trial accounts
   - Stores user_id, email, and timestamp for audit trail
-- **Updated Registration Flow**:
+- **Updated Registration Flow (Email/Password)**:
   - Step 1: Enter name, email, phone, password
   - Step 2: Enter 6-digit SMS code
   - Step 3: Account created with verified phone
-  - Frontend shows formatted phone input + verification code entry
+- **OAuth Users Also Require Phone Verification**:
+  - PhoneVerificationModal appears after OAuth login if phone not verified
+  - User must verify phone before accessing any trial features
+  - Call initiation blocked with 403 error until phone verified
 - **User Model Updates**:
   - `phone_number` - Verified phone stored on user
   - `phone_verified` - Boolean flag for verification status
-- **Google OAuth Users** - Trusted without phone verification (Google already verifies identity)
+- **API Updates**:
+  - `/api/user/trial-status` includes `phone_verification_required` flag
+  - `/api/calls/initiate` and `/api/calls/simulate` check `phone_verified` for trial users
 
 ## Prioritized Backlog
 

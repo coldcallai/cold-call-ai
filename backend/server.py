@@ -3674,6 +3674,75 @@ async def verify_phone_code(request: PhoneVerificationConfirm):
         "verification_token": verification_token
     }
 
+# Model for OAuth user phone verification
+class OAuthPhoneVerification(BaseModel):
+    phone_number: str
+    verification_code: str  # The verification token from verify-phone
+
+@api_router.post("/auth/verify-phone-oauth")
+async def verify_phone_for_oauth_user(
+    request: OAuthPhoneVerification,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Complete phone verification for OAuth users.
+    Required before they can use their free trial.
+    """
+    phone = normalize_phone_number(request.phone_number)
+    user_id = current_user["user_id"]
+    
+    # Check if user already has verified phone
+    if current_user.get("phone_verified"):
+        raise HTTPException(status_code=400, detail="Phone already verified")
+    
+    # Verify the verification token
+    verification = await db.phone_verifications.find_one({
+        "phone_number": phone,
+        "verified": True,
+        "verification_token": request.verification_code
+    })
+    
+    if not verification:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid or expired phone verification. Please verify your phone number first."
+        )
+    
+    # Check if phone number already used for a trial
+    existing_trial = await db.trial_phone_numbers.find_one({"phone_number": phone})
+    if existing_trial:
+        raise HTTPException(
+            status_code=400, 
+            detail="This phone number has already been used for a free trial. Please subscribe to continue."
+        )
+    
+    # Update user with verified phone
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "phone_number": phone,
+            "phone_verified": True,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Record phone number as used for trial
+    await db.trial_phone_numbers.insert_one({
+        "phone_number": phone,
+        "user_id": user_id,
+        "email": current_user["email"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Clean up verification records
+    await db.phone_verifications.delete_many({"phone_number": phone})
+    
+    return {
+        "message": "Phone verified successfully. You can now use your free trial!",
+        "phone_number": phone,
+        "phone_verified": True
+    }
+
 @api_router.post("/auth/register")
 async def register(user_data: UserCreate):
     """Register a new user with email/password. Requires verified phone number."""
@@ -3838,13 +3907,15 @@ async def exchange_session_id(request: Request, response: Response):
     user_doc = await db.users.find_one({"email": auth_data["email"]}, {"_id": 0})
     
     if not user_doc:
-        # Create new user from OAuth
+        # Create new user from OAuth - requires phone verification before trial
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_doc = {
             "user_id": user_id,
             "email": auth_data["email"],
             "name": auth_data.get("name", auth_data["email"].split("@")[0]),
             "picture": auth_data.get("picture"),
+            "phone_number": None,  # Must verify phone before using trial
+            "phone_verified": False,  # Blocks calls until verified
             "role": UserRole.USER.value,
             "subscription_tier": None,
             "subscription_status": "trialing",
@@ -3958,12 +4029,19 @@ async def get_user_trial_status(current_user: Dict = Depends(get_current_user)):
     Returns remaining trial time, usage percentage, and whether user can make calls.
     """
     trial_status = get_trial_status(current_user)
+    phone_verified = current_user.get("phone_verified", False)
+    
+    # Trial users need phone verification before they can make calls
+    can_use_trial = phone_verified if trial_status["is_trial"] else True
     
     return {
         **trial_status,
         "user_id": current_user["user_id"],
         "subscription_tier": current_user.get("subscription_tier"),
         "subscription_status": current_user.get("subscription_status", "trialing"),
+        "phone_verified": phone_verified,
+        "phone_verification_required": trial_status["is_trial"] and not phone_verified,
+        "can_use_trial": can_use_trial,
         "upgrade_url": "/app/packs"
     }
 
@@ -5974,8 +6052,13 @@ async def simulate_call(
     """Simulate an AI cold call (MOCKED - real calls require Twilio credentials). Deducts from trial time or call credits."""
     user_id = current_user["user_id"]
     
-    # Check trial status first
+    # Check phone verification (required for all trial users)
     trial_status = get_trial_status(current_user)
+    if trial_status["is_trial"] and not current_user.get("phone_verified", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Phone verification required. Please verify your phone number to use your free trial."
+        )
     
     if trial_status["is_trial"]:
         # Trial user - check if they have time remaining
@@ -8116,6 +8199,13 @@ async def initiate_real_call(
     
     # Check trial status first
     trial_status = get_trial_status(current_user)
+    
+    # Check phone verification (required for all trial users)
+    if trial_status["is_trial"] and not current_user.get("phone_verified", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Phone verification required. Please verify your phone number to use your free trial."
+        )
     
     if trial_status["is_trial"]:
         # Trial user - check if they have time remaining

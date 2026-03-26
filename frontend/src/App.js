@@ -39,6 +39,7 @@ import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 import SetupWizard from "@/components/SetupWizard";
 import TrialBanner from "@/components/TrialBanner";
+import PhoneVerificationModal from "@/components/PhoneVerificationModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -3700,8 +3701,9 @@ const ProtectedRoute = ({ children }) => {
 const AppRouter = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
   
   // Check if user needs setup wizard (first time login, setup not complete)
   useEffect(() => {
@@ -3709,6 +3711,30 @@ const AppRouter = () => {
       setShowSetupWizard(true);
     }
   }, [user, location.pathname]);
+
+  // Check if trial user needs phone verification
+  useEffect(() => {
+    if (user && location.pathname.startsWith('/app')) {
+      const trialStatus = user.trial_status;
+      const isTrial = trialStatus?.is_trial || (!user.subscription_tier || user.subscription_tier === null);
+      const phoneVerified = user.phone_verified;
+      
+      // Show phone verification modal if trial user hasn't verified phone
+      if (isTrial && !phoneVerified) {
+        setShowPhoneVerification(true);
+      }
+    }
+  }, [user, location.pathname]);
+
+  const handlePhoneVerified = () => {
+    setShowPhoneVerification(false);
+    // Refresh user data to get updated phone_verified status
+    if (refreshUser) {
+      refreshUser();
+    } else {
+      window.location.reload();
+    }
+  };
 
   // CRITICAL: Check URL fragment for session_id synchronously during render
   // This prevents race conditions by processing OAuth callback FIRST
@@ -3763,6 +3789,16 @@ const AppRouter = () => {
                 onNavigate={(path) => {
                   navigate(path);
                 }}
+              />
+            )}
+
+            {/* Phone Verification Modal - Shows for trial users who haven't verified phone */}
+            {showPhoneVerification && user && (
+              <PhoneVerificationModal
+                isOpen={showPhoneVerification}
+                onClose={() => setShowPhoneVerification(false)}
+                onVerified={handlePhoneVerified}
+                userEmail={user.email}
               />
             )}
           </ProtectedRoute>

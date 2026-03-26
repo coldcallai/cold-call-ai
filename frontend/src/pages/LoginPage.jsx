@@ -6,17 +6,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Phone, Mail, Lock, User, Loader2 } from "lucide-react";
+import { Phone, Mail, Lock, User, Loader2, CheckCircle2, ArrowLeft, Shield } from "lucide-react";
 import { toast } from "sonner";
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register, loginWithGoogle, isAuthenticated, user } = useAuth();
+  const { login, loginWithGoogle, isAuthenticated, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
-  const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+  
+  // Registration flow state (multi-step with phone verification)
+  const [registerStep, setRegisterStep] = useState(1); // 1: info, 2: verify phone, 3: complete
+  const [registerForm, setRegisterForm] = useState({ 
+    name: "", 
+    email: "", 
+    password: "", 
+    confirmPassword: "",
+    phoneNumber: "",
+    verificationCode: "",
+    verificationToken: ""
+  });
+  const [codeSent, setCodeSent] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -27,13 +42,20 @@ const LoginPage = () => {
     }
   }, [isAuthenticated, user, navigate, location.state]);
 
+  // Resend timer countdown
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendTimer]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       await login(loginForm.email, loginForm.password);
       toast.success("Welcome back!");
-      // Always go to getting-started, it will redirect if setup is complete
       navigate("/app/getting-started", { replace: true });
     } catch (error) {
       console.error("Login failed:", error);
@@ -43,8 +65,12 @@ const LoginPage = () => {
     }
   };
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
+  const handleSendVerificationCode = async () => {
+    // Validate form before sending
+    if (!registerForm.name || !registerForm.email || !registerForm.password || !registerForm.phoneNumber) {
+      toast.error("Please fill in all fields");
+      return;
+    }
     
     if (registerForm.password !== registerForm.confirmPassword) {
       toast.error("Passwords do not match");
@@ -56,22 +82,141 @@ const LoginPage = () => {
       return;
     }
 
+    // Format phone number
+    let phone = registerForm.phoneNumber.replace(/\D/g, '');
+    if (phone.length === 10) {
+      phone = '+1' + phone;
+    } else if (phone.length === 11 && phone.startsWith('1')) {
+      phone = '+' + phone;
+    } else if (!phone.startsWith('+')) {
+      phone = '+' + phone;
+    }
+
     setLoading(true);
     try {
-      await register(registerForm.email, registerForm.password, registerForm.name);
-      toast.success("Account created! Welcome to DialGenix.ai");
-      navigate("/app/getting-started", { replace: true });
+      const response = await fetch(`${API_URL}/api/auth/send-verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          phone_number: phone,
+          email: registerForm.email 
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to send verification code");
+      }
+      
+      setCodeSent(true);
+      setRegisterStep(2);
+      setResendTimer(60); // 60 second cooldown
+      toast.success("Verification code sent to your phone!");
     } catch (error) {
-      console.error("Registration failed:", error);
-      toast.error(error.response?.data?.detail || "Registration failed. Please try again.");
+      console.error("Failed to send code:", error);
+      toast.error(error.message || "Failed to send verification code");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (registerForm.verificationCode.length !== 6) {
+      toast.error("Please enter the 6-digit code");
+      return;
+    }
+
+    let phone = registerForm.phoneNumber.replace(/\D/g, '');
+    if (phone.length === 10) {
+      phone = '+1' + phone;
+    } else if (phone.length === 11 && phone.startsWith('1')) {
+      phone = '+' + phone;
+    } else if (!phone.startsWith('+')) {
+      phone = '+' + phone;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/verify-phone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          phone_number: phone,
+          code: registerForm.verificationCode 
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || "Invalid verification code");
+      }
+      
+      // Store the verification token
+      setRegisterForm(prev => ({ ...prev, verificationToken: data.verification_token }));
+      toast.success("Phone verified! Creating your account...");
+      
+      // Now complete registration
+      await completeRegistration(data.verification_token, phone);
+    } catch (error) {
+      console.error("Verification failed:", error);
+      toast.error(error.message || "Verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeRegistration = async (verificationToken, phone) => {
+    try {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ 
+          email: registerForm.email,
+          password: registerForm.password,
+          name: registerForm.name,
+          phone_number: phone,
+          verification_code: verificationToken
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || "Registration failed");
+      }
+      
+      // Store session token and redirect
+      if (data.session_token) {
+        localStorage.setItem("session_token", data.session_token);
+      }
+      
+      toast.success("Account created! Welcome to DialGenix.ai");
+      navigate("/app/getting-started", { replace: true });
+      // Refresh to load user data
+      window.location.reload();
+    } catch (error) {
+      console.error("Registration failed:", error);
+      toast.error(error.message || "Registration failed");
+      // Go back to step 1 on failure
+      setRegisterStep(1);
+      setCodeSent(false);
     }
   };
 
   const handleGoogleLogin = () => {
     setLoading(true);
     loginWithGoogle();
+  };
+
+  const formatPhoneDisplay = (value) => {
+    // Format as (XXX) XXX-XXXX for US numbers
+    const cleaned = value.replace(/\D/g, '');
+    if (cleaned.length <= 3) return cleaned;
+    if (cleaned.length <= 6) return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
   };
 
   return (
@@ -128,7 +273,7 @@ const LoginPage = () => {
               </div>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setRegisterStep(1); setCodeSent(false); }} className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-white/5 mb-4">
                 <TabsTrigger value="login" className="data-[state=active]:bg-white/10 text-white">
                   Sign In
@@ -186,84 +331,185 @@ const LoginPage = () => {
               </TabsContent>
 
               <TabsContent value="register">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="register-name" className="text-gray-300">Full Name</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                {/* Step 1: Enter Info + Phone */}
+                {registerStep === 1 && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="register-name" className="text-gray-300">Full Name</Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <Input
+                          id="register-name"
+                          type="text"
+                          placeholder="John Doe"
+                          value={registerForm.name}
+                          onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
+                          required
+                          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                          data-testid="register-name-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-email" className="text-gray-300">Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <Input
+                          id="register-email"
+                          type="email"
+                          placeholder="you@company.com"
+                          value={registerForm.email}
+                          onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
+                          required
+                          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                          data-testid="register-email-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-phone" className="text-gray-300">Phone Number</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <Input
+                          id="register-phone"
+                          type="tel"
+                          placeholder="(555) 123-4567"
+                          value={formatPhoneDisplay(registerForm.phoneNumber)}
+                          onChange={(e) => setRegisterForm({ ...registerForm, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                          required
+                          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                          data-testid="register-phone-input"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 flex items-center gap-1">
+                        <Shield className="w-3 h-3" />
+                        We'll send a verification code to prevent trial abuse
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-password" className="text-gray-300">Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <Input
+                          id="register-password"
+                          type="password"
+                          placeholder="••••••••"
+                          value={registerForm.password}
+                          onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+                          required
+                          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                          data-testid="register-password-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-confirm" className="text-gray-300">Confirm Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <Input
+                          id="register-confirm"
+                          type="password"
+                          placeholder="••••••••"
+                          value={registerForm.confirmPassword}
+                          onChange={(e) => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
+                          required
+                          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                          data-testid="register-confirm-input"
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleSendVerificationCode}
+                      disabled={loading || !registerForm.phoneNumber || registerForm.phoneNumber.length < 10}
+                      className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white py-6"
+                      data-testid="register-send-code-btn"
+                    >
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send Verification Code"}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Step 2: Verify Phone Code */}
+                {registerStep === 2 && (
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => { setRegisterStep(1); setCodeSent(false); }}
+                      className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back to form
+                    </button>
+
+                    <div className="text-center py-4">
+                      <div className="w-16 h-16 bg-gradient-to-br from-cyan-500/20 to-teal-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Phone className="w-8 h-8 text-cyan-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-white mb-2">Verify Your Phone</h3>
+                      <p className="text-gray-400 text-sm">
+                        We sent a 6-digit code to<br />
+                        <span className="text-white font-medium">{formatPhoneDisplay(registerForm.phoneNumber)}</span>
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="verification-code" className="text-gray-300">Verification Code</Label>
                       <Input
-                        id="register-name"
+                        id="verification-code"
                         type="text"
-                        placeholder="John Doe"
-                        value={registerForm.name}
-                        onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
-                        required
-                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
-                        data-testid="register-name-input"
+                        placeholder="123456"
+                        value={registerForm.verificationCode}
+                        onChange={(e) => setRegisterForm({ ...registerForm, verificationCode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                        maxLength={6}
+                        className="text-center text-2xl tracking-widest bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                        data-testid="verification-code-input"
                       />
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="register-email" className="text-gray-300">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                      <Input
-                        id="register-email"
-                        type="email"
-                        placeholder="you@company.com"
-                        value={registerForm.email}
-                        onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                        required
-                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
-                        data-testid="register-email-input"
-                      />
+                    <Button
+                      type="button"
+                      onClick={handleVerifyCode}
+                      disabled={loading || registerForm.verificationCode.length !== 6}
+                      className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white py-6"
+                      data-testid="verify-code-btn"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-5 h-5 mr-2" />
+                          Verify & Create Account
+                        </>
+                      )}
+                    </Button>
+
+                    <div className="text-center">
+                      {resendTimer > 0 ? (
+                        <p className="text-gray-500 text-sm">
+                          Resend code in {resendTimer}s
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleSendVerificationCode}
+                          disabled={loading}
+                          className="text-cyan-400 hover:text-cyan-300 text-sm underline"
+                        >
+                          Resend code
+                        </button>
+                      )}
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password" className="text-gray-300">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                      <Input
-                        id="register-password"
-                        type="password"
-                        placeholder="••••••••"
-                        value={registerForm.password}
-                        onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                        required
-                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
-                        data-testid="register-password-input"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="register-confirm" className="text-gray-300">Confirm Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                      <Input
-                        id="register-confirm"
-                        type="password"
-                        placeholder="••••••••"
-                        value={registerForm.confirmPassword}
-                        onChange={(e) => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
-                        required
-                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
-                        data-testid="register-confirm-input"
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white py-6"
-                    data-testid="register-submit-btn"
-                  >
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Create Account"}
-                  </Button>
-                </form>
+                )}
               </TabsContent>
             </Tabs>
 

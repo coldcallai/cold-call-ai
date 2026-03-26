@@ -110,6 +110,8 @@ class User(BaseModel):
     user_id: str = Field(default_factory=lambda: f"user_{uuid.uuid4().hex[:12]}")
     email: str
     name: str
+    phone_number: Optional[str] = None  # Verified phone number for trial abuse prevention
+    phone_verified: bool = False  # Whether phone was verified via SMS
     picture: Optional[str] = None
     role: UserRole = UserRole.USER
     subscription_tier: Optional[SubscriptionTier] = None
@@ -144,10 +146,21 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str
+    phone_number: str  # Required for trial abuse prevention
+    verification_code: str  # SMS verification code
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+# Phone verification models for trial abuse prevention
+class PhoneVerificationRequest(BaseModel):
+    phone_number: str
+    email: EmailStr  # To check if email is already registered
+
+class PhoneVerificationConfirm(BaseModel):
+    phone_number: str
+    code: str
 
 class PasswordUser(BaseModel):
     user_id: str = Field(default_factory=lambda: f"user_{uuid.uuid4().hex[:12]}")
@@ -3529,13 +3542,168 @@ async def root():
 
 # ============== AUTHENTICATION ROUTES ==============
 
+# Phone verification for trial abuse prevention
+def normalize_phone_number(phone: str) -> str:
+    """Normalize phone number to E.164 format"""
+    # Remove all non-digit characters except leading +
+    cleaned = ''.join(c for c in phone if c.isdigit() or c == '+')
+    # If no + prefix and 10 digits, assume US number
+    if not cleaned.startswith('+') and len(cleaned) == 10:
+        cleaned = '+1' + cleaned
+    elif not cleaned.startswith('+') and len(cleaned) == 11 and cleaned.startswith('1'):
+        cleaned = '+' + cleaned
+    return cleaned
+
+@api_router.post("/auth/send-verification")
+async def send_phone_verification(request: PhoneVerificationRequest):
+    """
+    Send SMS verification code to phone number.
+    Checks if phone has already been used for a trial.
+    """
+    phone = normalize_phone_number(request.phone_number)
+    
+    # Check if email already registered
+    existing_user = await db.users.find_one({"email": request.email}, {"_id": 0})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Check if phone number already used for a trial (abuse prevention)
+    existing_trial = await db.trial_phone_numbers.find_one({"phone_number": phone})
+    if existing_trial:
+        raise HTTPException(
+            status_code=400, 
+            detail="This phone number has already been used for a free trial. Please subscribe to continue."
+        )
+    
+    # Check if there's a recent verification request (rate limiting)
+    recent_request = await db.phone_verifications.find_one({
+        "phone_number": phone,
+        "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()}
+    })
+    if recent_request:
+        raise HTTPException(
+            status_code=429, 
+            detail="Please wait 1 minute before requesting another code"
+        )
+    
+    # Generate 6-digit verification code
+    verification_code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+    
+    # Store verification code (expires in 10 minutes)
+    await db.phone_verifications.delete_many({"phone_number": phone})  # Remove old codes
+    await db.phone_verifications.insert_one({
+        "phone_number": phone,
+        "email": request.email,
+        "code": verification_code,
+        "attempts": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    })
+    
+    # Send SMS via Twilio
+    if twilio_service.is_configured:
+        try:
+            twilio_client.messages.create(
+                body=f"Your DialGenix.ai verification code is: {verification_code}. Valid for 10 minutes.",
+                from_=os.environ.get("TWILIO_PHONE_NUMBER"),
+                to=phone
+            )
+            logger.info(f"Sent verification SMS to {phone}")
+        except Exception as e:
+            logger.error(f"Failed to send SMS to {phone}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to send verification SMS. Please try again.")
+    else:
+        # For development/testing without Twilio
+        logger.warning(f"Twilio not configured. Verification code for {phone}: {verification_code}")
+    
+    return {
+        "message": "Verification code sent",
+        "phone_number": phone,
+        "expires_in_minutes": 10
+    }
+
+@api_router.post("/auth/verify-phone")
+async def verify_phone_code(request: PhoneVerificationConfirm):
+    """
+    Verify the SMS code. Returns a verification token to use during registration.
+    """
+    phone = normalize_phone_number(request.phone_number)
+    
+    # Find verification record
+    verification = await db.phone_verifications.find_one({"phone_number": phone})
+    
+    if not verification:
+        raise HTTPException(status_code=400, detail="No verification code found. Please request a new one.")
+    
+    # Check if expired
+    expires_at = datetime.fromisoformat(verification["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        await db.phone_verifications.delete_one({"phone_number": phone})
+        raise HTTPException(status_code=400, detail="Verification code expired. Please request a new one.")
+    
+    # Check attempts (max 5)
+    if verification.get("attempts", 0) >= 5:
+        await db.phone_verifications.delete_one({"phone_number": phone})
+        raise HTTPException(status_code=400, detail="Too many failed attempts. Please request a new code.")
+    
+    # Verify code
+    if verification["code"] != request.code:
+        await db.phone_verifications.update_one(
+            {"phone_number": phone},
+            {"$inc": {"attempts": 1}}
+        )
+        remaining = 5 - verification.get("attempts", 0) - 1
+        raise HTTPException(status_code=400, detail=f"Invalid code. {remaining} attempts remaining.")
+    
+    # Code is correct - generate verification token
+    verification_token = f"phone_verified_{uuid.uuid4().hex}"
+    
+    # Update verification record with token
+    await db.phone_verifications.update_one(
+        {"phone_number": phone},
+        {"$set": {
+            "verified": True,
+            "verification_token": verification_token,
+            "verified_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": "Phone verified successfully",
+        "phone_number": phone,
+        "verification_token": verification_token
+    }
+
 @api_router.post("/auth/register")
 async def register(user_data: UserCreate):
-    """Register a new user with email/password"""
+    """Register a new user with email/password. Requires verified phone number."""
+    phone = normalize_phone_number(user_data.phone_number)
+    
     # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Verify phone verification code
+    verification = await db.phone_verifications.find_one({
+        "phone_number": phone,
+        "verified": True,
+        "verification_token": user_data.verification_code
+    })
+    
+    if not verification:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid or expired phone verification. Please verify your phone number first."
+        )
+    
+    # Check if phone number already used for a trial (double-check for race conditions)
+    existing_trial = await db.trial_phone_numbers.find_one({"phone_number": phone})
+    if existing_trial:
+        raise HTTPException(
+            status_code=400, 
+            detail="This phone number has already been used for a free trial. Please subscribe to continue."
+        )
     
     # Hash password and create user
     password_hash = pwd_context.hash(user_data.password)
@@ -3545,6 +3713,8 @@ async def register(user_data: UserCreate):
         "user_id": user_id,
         "email": user_data.email,
         "name": user_data.name,
+        "phone_number": phone,
+        "phone_verified": True,
         "password_hash": password_hash,
         "role": UserRole.USER.value,
         "subscription_tier": None,
@@ -3563,6 +3733,17 @@ async def register(user_data: UserCreate):
     }
     
     await db.users.insert_one(user_doc)
+    
+    # Record phone number as used for trial (prevent reuse)
+    await db.trial_phone_numbers.insert_one({
+        "phone_number": phone,
+        "user_id": user_id,
+        "email": user_data.email,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Clean up verification records
+    await db.phone_verifications.delete_many({"phone_number": phone})
     
     # Create session
     session_token = f"sess_{uuid.uuid4().hex}"

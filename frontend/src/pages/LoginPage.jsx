@@ -12,7 +12,7 @@ import { toast } from "sonner";
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register, loginWithGoogle, isAuthenticated } = useAuth();
+  const { login, register, loginWithGoogle, isAuthenticated, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
@@ -20,8 +20,9 @@ const LoginPage = () => {
 
   // Redirect if already authenticated
   if (isAuthenticated) {
-    const from = location.state?.from?.pathname || "/app";
-    navigate(from, { replace: true });
+    const needsSetup = !user?.setup_wizard_completed;
+    const destination = needsSetup ? "/app/getting-started" : (location.state?.from?.pathname || "/app");
+    navigate(destination, { replace: true });
     return null;
   }
 
@@ -29,10 +30,13 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(loginForm.email, loginForm.password);
+      const loggedInUser = await login(loginForm.email, loginForm.password);
       toast.success("Welcome back!");
-      const from = location.state?.from?.pathname || "/app";
-      navigate(from, { replace: true });
+      
+      // Check if user needs to complete setup
+      const needsSetup = !loggedInUser?.setup_wizard_completed;
+      const destination = needsSetup ? "/app/getting-started" : (location.state?.from?.pathname || "/app");
+      navigate(destination, { replace: true });
     } catch (error) {
       console.error("Login failed:", error);
       toast.error(error.response?.data?.detail || "Login failed. Please check your credentials.");
@@ -58,7 +62,7 @@ const LoginPage = () => {
     try {
       await register(registerForm.email, registerForm.password, registerForm.name);
       toast.success("Account created! Welcome to DialGenix.ai");
-      navigate("/app", { replace: true });
+      navigate("/app/getting-started", { replace: true });
     } catch (error) {
       console.error("Registration failed:", error);
       toast.error(error.response?.data?.detail || "Registration failed. Please try again.");

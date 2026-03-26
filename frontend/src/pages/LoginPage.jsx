@@ -31,13 +31,10 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const loggedInUser = await login(loginForm.email, loginForm.password);
+      await login(loginForm.email, loginForm.password);
       toast.success("Welcome back!");
-      
-      // Check if user needs to complete setup
-      const needsSetup = !loggedInUser?.setup_wizard_completed;
-      const destination = needsSetup ? "/app/getting-started" : (location.state?.from?.pathname || "/app");
-      navigate(destination, { replace: true });
+      // Always go to getting-started, it will redirect if setup is complete
+      navigate("/app/getting-started", { replace: true });
     } catch (error) {
       console.error("Login failed:", error);
       toast.error(error.response?.data?.detail || "Login failed. Please check your credentials.");

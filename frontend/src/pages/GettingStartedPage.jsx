@@ -30,13 +30,18 @@ const GettingStartedPage = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSetupStatus(response.data);
+      
+      // If setup is complete and wizard was completed, redirect to Funnel
+      if (response.data.all_required_complete && response.data.setup_wizard_completed) {
+        navigate("/app", { replace: true });
+      }
     } catch (error) {
       console.error("Failed to fetch setup status:", error);
       toast.error("Failed to load setup status");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     fetchSetupStatus();

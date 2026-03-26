@@ -257,15 +257,11 @@ const LandingPage = () => {
             </div>
 
             <div className="hidden md:flex items-center gap-3">
-              <Link to="/login">
-                <Button variant="outline" className="rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent">
-                  Log in
-                </Button>
+              <Link to="/login" className="rounded-full border border-gray-600 text-white hover:bg-white/10 bg-transparent px-4 py-2 text-sm">
+                Log in
               </Link>
-              <Link to="/login">
-                <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0">
-                  Get started free
-                </Button>
+              <Link to="/login" className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-4 py-2 text-sm">
+                Get started free
               </Link>
             </div>
 
@@ -286,15 +282,11 @@ const LandingPage = () => {
                 <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">Pricing</a>
                 <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">FAQ</a>
                 <div className="pt-4 border-t border-gray-800 flex flex-col gap-3">
-                  <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" className="w-full rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent">
-                      Log in
-                    </Button>
+                  <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="w-full rounded-full border border-gray-600 text-white hover:bg-white/10 bg-transparent px-4 py-3 text-sm text-center">
+                    Log in
                   </Link>
-                  <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
-                    <Button className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0">
-                      Get started free
-                    </Button>
+                  <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-4 py-3 text-sm text-center">
+                    Get started free
                   </Link>
                 </div>
               </div>
@@ -502,10 +494,10 @@ const LandingPage = () => {
           {/* CTA after demo */}
           <div className="text-center mt-20">
             <Link to="/login">
-              <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-6 text-lg font-medium border-0">
+              <button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-6 text-lg font-medium border-0 inline-flex items-center cursor-pointer transition-all">
                 Start Free Trial
                 <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
+              </button>
             </Link>
             <p className="text-gray-500 mt-4">50 free leads + 50 free calls. No credit card required.</p>
           </div>
@@ -529,11 +521,9 @@ const LandingPage = () => {
                 </p>
               </div>
             </div>
-            <Link to="/login">
-              <Button className="rounded-full bg-white text-gray-900 hover:bg-gray-100 px-6 py-5 text-base font-medium whitespace-nowrap">
-                Upload CSV Now
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
+            <Link to="/login" className="rounded-full bg-white text-gray-900 hover:bg-gray-100 px-6 py-4 text-base font-medium whitespace-nowrap inline-flex items-center">
+              Upload CSV Now
+              <ArrowRight className="w-4 h-4 ml-2" />
             </Link>
           </div>
         </div>
@@ -844,9 +834,9 @@ const LandingPage = () => {
                   ))}
                 </ul>
 
-                <Link to="/login">
-                  <Button 
-                    className={`w-full rounded-full py-5 text-sm ${
+                <Link to="/login" className="block">
+                  <button 
+                    className={`w-full rounded-full py-5 text-sm font-medium cursor-pointer transition-all ${
                       plan.popular 
                         ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0' 
                         : plan.isPayg
@@ -855,7 +845,7 @@ const LandingPage = () => {
                     }`}
                   >
                     {plan.cta}
-                  </Button>
+                  </button>
                 </Link>
               </div>
             ))}

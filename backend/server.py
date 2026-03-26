@@ -8866,6 +8866,88 @@ async def get_available_voices():
         logger.error(f"Error fetching voices: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching voices: {str(e)}")
 
+# Demo narration scripts
+DEMO_NARRATIONS = {
+    "step1": {
+        "title": "Visual Sales Funnel",
+        "text": "Welcome to DialGenix. Your visual sales funnel shows every lead's journey - from discovery to booked meeting. Track real-time stats on qualification rates, calls made, and bookings. Just click 'Call' to let AI do the heavy lifting."
+    },
+    "step2": {
+        "title": "AI Lead Discovery",
+        "text": "Finding leads is easy. Enter your target keywords - like 'Toast alternative' or 'payment processing' - and our AI finds businesses actively searching for solutions like yours. You can also upload your own CSV with existing leads."
+    },
+    "step3": {
+        "title": "Call Recordings & Results",
+        "text": "After each call, review the full recording and AI-generated transcript. See qualification scores to know which leads are hot. Your AI agent handles objections, qualifies prospects, and books meetings - all automatically."
+    }
+}
+
+# Cache for generated audio
+demo_audio_cache = {}
+
+@api_router.get("/demo/narration/{step_id}")
+async def get_demo_narration(step_id: str):
+    """Get demo narration audio for a specific step"""
+    if step_id not in DEMO_NARRATIONS:
+        raise HTTPException(status_code=404, detail="Demo step not found")
+    
+    # Check cache first
+    if step_id in demo_audio_cache:
+        return demo_audio_cache[step_id]
+    
+    if not eleven_client:
+        raise HTTPException(status_code=503, detail="ElevenLabs not configured. Add ELEVENLABS_API_KEY to .env")
+    
+    try:
+        narration = DEMO_NARRATIONS[step_id]
+        
+        voice_settings = VoiceSettings(
+            stability=0.5,
+            similarity_boost=0.75
+        )
+        
+        # Use a professional, friendly voice - "Rachel" is a good default
+        audio_generator = eleven_client.text_to_speech.convert(
+            text=narration["text"],
+            voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - professional female voice
+            model_id="eleven_multilingual_v2",
+            voice_settings=voice_settings
+        )
+        
+        # Collect audio data
+        audio_data = b""
+        for chunk in audio_generator:
+            audio_data += chunk
+        
+        # Convert to base64 for transfer
+        audio_b64 = base64.b64encode(audio_data).decode()
+        
+        result = {
+            "step_id": step_id,
+            "title": narration["title"],
+            "text": narration["text"],
+            "audio_url": f"data:audio/mpeg;base64,{audio_b64}"
+        }
+        
+        # Cache the result
+        demo_audio_cache[step_id] = result
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error generating demo narration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating narration: {str(e)}")
+
+@api_router.get("/demo/narrations")
+async def get_all_demo_narrations():
+    """Get all demo narration metadata (without audio)"""
+    return {
+        "narrations": [
+            {"step_id": k, "title": v["title"], "text": v["text"]} 
+            for k, v in DEMO_NARRATIONS.items()
+        ]
+    }
+
 # Include router
 app.include_router(api_router)
 

@@ -1,12 +1,76 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
-  ChevronDown, Bot, Target, Menu, X, Upload
+  ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2
 } from "lucide-react";
+import axios from "axios";
+
+const API = process.env.REACT_APP_BACKEND_URL + "/api";
+
+// Audio Player Component for Demo Narration
+const DemoAudioPlayer = ({ stepId }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const audioRef = useRef(null);
+
+  const playNarration = async () => {
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios.get(`${API}/demo/narration/${stepId}`);
+      const { audio_url } = response.data;
+      
+      if (audioRef.current) {
+        audioRef.current.src = audio_url;
+        audioRef.current.play();
+        setIsPlaying(true);
+      }
+    } catch (err) {
+      console.error("Error loading narration:", err);
+      setError("Audio unavailable");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAudioEnd = () => {
+    setIsPlaying(false);
+  };
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <audio ref={audioRef} onEnded={handleAudioEnd} />
+      <Button
+        onClick={playNarration}
+        disabled={isLoading}
+        size="sm"
+        className="rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 px-4"
+      >
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : isPlaying ? (
+          <Pause className="w-4 h-4" />
+        ) : (
+          <Volume2 className="w-4 h-4" />
+        )}
+        <span className="ml-2 text-sm">{isPlaying ? "Pause" : "Listen"}</span>
+      </Button>
+      {error && <span className="text-xs text-red-400">{error}</span>}
+    </div>
+  );
+};
 
 const LandingPage = () => {
   const [email, setEmail] = useState("");
@@ -305,8 +369,11 @@ const LandingPage = () => {
             {/* Screenshot 1: Sales Funnel */}
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div className="order-2 lg:order-1">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-full text-emerald-400 text-sm font-medium mb-4">
-                  Step 1
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-full text-emerald-400 text-sm font-medium">
+                    Step 1
+                  </div>
+                  <DemoAudioPlayer stepId="step1" />
                 </div>
                 <h3 className="text-3xl font-bold text-white mb-4">Visual Sales Funnel</h3>
                 <p className="text-gray-400 text-lg mb-6">
@@ -359,8 +426,11 @@ const LandingPage = () => {
                 </div>
               </div>
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-400 text-sm font-medium mb-4">
-                  Step 2
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-400 text-sm font-medium">
+                    Step 2
+                  </div>
+                  <DemoAudioPlayer stepId="step2" />
                 </div>
                 <h3 className="text-3xl font-bold text-white mb-4">AI Lead Discovery</h3>
                 <p className="text-gray-400 text-lg mb-6">
@@ -387,8 +457,11 @@ const LandingPage = () => {
             {/* Screenshot 3: Call History */}
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div className="order-2 lg:order-1">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-400 text-sm font-medium mb-4">
-                  Step 3
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-400 text-sm font-medium">
+                    Step 3
+                  </div>
+                  <DemoAudioPlayer stepId="step3" />
                 </div>
                 <h3 className="text-3xl font-bold text-white mb-4">Call Recordings & Results</h3>
                 <p className="text-gray-400 text-lg mb-6">

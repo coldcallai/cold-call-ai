@@ -259,13 +259,17 @@ const LandingPage = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
-            <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-8 py-6 text-base font-medium border-0">
-              <Play className="w-4 h-4 mr-2" />
-              Get a demo
-            </Button>
-            <Button variant="outline" className="rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent px-8 py-6 text-base">
-              Learn more about DialGenix.ai
-            </Button>
+            <Link to="/login">
+              <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-8 py-6 text-base font-medium border-0">
+                <Play className="w-4 h-4 mr-2" />
+                Get a demo
+              </Button>
+            </Link>
+            <a href="#how-it-works">
+              <Button variant="outline" className="rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent px-8 py-6 text-base">
+                Learn more about DialGenix.ai
+              </Button>
+            </a>
           </div>
 
           {/* Trust logos */}

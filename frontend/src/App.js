@@ -1748,6 +1748,15 @@ const Campaigns = () => {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showFollowUpSettings, setShowFollowUpSettings] = useState(null); // campaign for settings modal
+  const [followUpSettings, setFollowUpSettings] = useState({
+    enabled: true,
+    no_answer_retry_enabled: true,
+    no_answer_retry_count: 3,
+    no_answer_retry_delay_hours: 24,
+    voicemail_followup_enabled: true,
+    voicemail_followup_delay_hours: 48
+  });
   const [newCampaign, setNewCampaign] = useState({
     name: "",
     description: "",
@@ -1819,6 +1828,42 @@ const Campaigns = () => {
     }
   };
 
+  const openFollowUpSettings = async (campaign) => {
+    setShowFollowUpSettings(campaign);
+    try {
+      const response = await axios.get(`${API}/campaigns/${campaign.id}/followup-settings`);
+      setFollowUpSettings(response.data.settings);
+    } catch (error) {
+      // Use defaults if no settings exist
+      setFollowUpSettings({
+        enabled: true,
+        no_answer_retry_enabled: true,
+        no_answer_retry_count: 3,
+        no_answer_retry_delay_hours: 24,
+        voicemail_followup_enabled: true,
+        voicemail_followup_delay_hours: 48
+      });
+    }
+  };
+
+  const saveFollowUpSettings = async () => {
+    if (!showFollowUpSettings) return;
+    
+    try {
+      const formData = new FormData();
+      Object.entries(followUpSettings).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+      
+      await axios.put(`${API}/campaigns/${showFollowUpSettings.id}/followup-settings`, formData);
+      toast.success("Follow-up settings saved!");
+      setShowFollowUpSettings(null);
+      fetchCampaigns();
+    } catch (error) {
+      toast.error("Failed to save follow-up settings");
+    }
+  };
+
   return (
     <div className="p-6 md:p-8 space-y-6" data-testid="campaigns-page">
       <div className="flex items-center justify-between">
@@ -1867,15 +1912,27 @@ const Campaigns = () => {
                     </CardTitle>
                     <StatusBadge status={campaign.status} />
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    data-testid={`delete-campaign-${campaign.id}`}
-                    onClick={() => deleteCampaign(campaign.id)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`followup-settings-${campaign.id}`}
+                      onClick={() => openFollowUpSettings(campaign)}
+                      className="text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50"
+                      title="Follow-up Settings"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`delete-campaign-${campaign.id}`}
+                      onClick={() => deleteCampaign(campaign.id)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -2189,6 +2246,166 @@ const Campaigns = () => {
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               Create Campaign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Follow-Up Settings Modal */}
+      <Dialog open={!!showFollowUpSettings} onOpenChange={() => setShowFollowUpSettings(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              <RefreshCw className="w-5 h-5 text-cyan-500" />
+              Follow-Up Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure automatic follow-up calls for "{showFollowUpSettings?.name}"
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Master Toggle */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div>
+                <Label className="text-base font-medium">Enable Auto Follow-Ups</Label>
+                <p className="text-sm text-gray-500">Automatically schedule retry calls</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={followUpSettings.enabled}
+                  onChange={(e) => setFollowUpSettings({...followUpSettings, enabled: e.target.checked})}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+              </label>
+            </div>
+
+            {followUpSettings.enabled && (
+              <>
+                {/* No-Answer Retry Settings */}
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <PhoneOff className="w-4 h-4 text-orange-500" />
+                      <Label className="font-medium">No-Answer Retries</Label>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={followUpSettings.no_answer_retry_enabled}
+                        onChange={(e) => setFollowUpSettings({...followUpSettings, no_answer_retry_enabled: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                    </label>
+                  </div>
+
+                  {followUpSettings.no_answer_retry_enabled && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm text-gray-600">Max Retries</Label>
+                        <Select
+                          value={String(followUpSettings.no_answer_retry_count)}
+                          onValueChange={(v) => setFollowUpSettings({...followUpSettings, no_answer_retry_count: parseInt(v)})}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1 retry</SelectItem>
+                            <SelectItem value="2">2 retries</SelectItem>
+                            <SelectItem value="3">3 retries</SelectItem>
+                            <SelectItem value="5">5 retries</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm text-gray-600">Delay Between</Label>
+                        <Select
+                          value={String(followUpSettings.no_answer_retry_delay_hours)}
+                          onValueChange={(v) => setFollowUpSettings({...followUpSettings, no_answer_retry_delay_hours: parseInt(v)})}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="4">4 hours</SelectItem>
+                            <SelectItem value="12">12 hours</SelectItem>
+                            <SelectItem value="24">24 hours</SelectItem>
+                            <SelectItem value="48">48 hours</SelectItem>
+                            <SelectItem value="72">72 hours</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Voicemail Follow-Up Settings */}
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-blue-500" />
+                      <Label className="font-medium">Voicemail Follow-Up</Label>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={followUpSettings.voicemail_followup_enabled}
+                        onChange={(e) => setFollowUpSettings({...followUpSettings, voicemail_followup_enabled: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                    </label>
+                  </div>
+
+                  {followUpSettings.voicemail_followup_enabled && (
+                    <div>
+                      <Label className="text-sm text-gray-600">Follow up after voicemail</Label>
+                      <Select
+                        value={String(followUpSettings.voicemail_followup_delay_hours)}
+                        onValueChange={(v) => setFollowUpSettings({...followUpSettings, voicemail_followup_delay_hours: parseInt(v)})}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="24">24 hours</SelectItem>
+                          <SelectItem value="48">48 hours (recommended)</SelectItem>
+                          <SelectItem value="72">72 hours</SelectItem>
+                          <SelectItem value="96">4 days</SelectItem>
+                          <SelectItem value="168">1 week</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Give leads time to listen to voicemail before calling back
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Info Box */}
+                <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
+                  <p className="text-sm text-cyan-800">
+                    <strong>How it works:</strong> When a call ends with no-answer or voicemail, 
+                    DialGenix automatically schedules a follow-up call based on these settings. 
+                    Follow-ups stop when the lead answers or gets booked.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFollowUpSettings(null)}>Cancel</Button>
+            <Button 
+              onClick={saveFollowUpSettings}
+              className="bg-cyan-600 hover:bg-cyan-700 text-white"
+              data-testid="save-followup-settings-btn"
+            >
+              Save Settings
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -527,8 +527,9 @@ A vertical-agnostic B2B SaaS platform that:
 - Phone verification tests: `/app/backend/tests/test_phone_verification.py` (12 tests)
 - Trial features tests: `/app/backend/tests/test_trial_features.py` (8 tests)
 - Voice cloning tests: `/app/backend/tests/test_voice_cloning.py` (10 tests)
+- Voice preview tests: `/app/backend/tests/test_voice_preview.py` (8 tests)
 - Auth testing playbook: `/app/auth_testing.md`
-- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_8.json`
+- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_9.json`
 - Test users:
   - User A (admin): test@example.com / Test123!
   - User B (free): test_user_b@example.com / Test456!
@@ -564,6 +565,10 @@ A vertical-agnostic B2B SaaS platform that:
   - `VoiceCloneModal` - Upload audio samples, name voice, clone via ElevenLabs API
   - `VoiceSettingsModal` - Select preset or cloned voice, tune voice parameters, preview
 - **Agent Voice Assignment** - Each agent can use preset or custom cloned voice
+- **Voice Preview on Agent Cards** - Play button to hear agent's voice before launching campaigns
+  - Play/Pause toggle with visual state feedback (purple=idle, green=playing)
+  - Uses ElevenLabs TTS for real-time audio generation
+  - Custom preview text: "Hi, this is {agent_name}. I'm your AI sales agent..."
 - **Backend Endpoints**:
   - `GET /api/voices/presets` - 10 ElevenLabs preset voices
   - `GET /api/voices/cloned` - User's cloned voices

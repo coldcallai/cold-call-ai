@@ -240,7 +240,7 @@ const LandingPage = () => {
       {/* Announcement Bar */}
       <div className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 py-2 px-4">
         <p className="text-center text-sm text-white font-medium">
-          Early Access Now Open — Limited spots available for founding customers →
+          Early Access Now Open — Limited spots available for founding users →
         </p>
       </div>
 

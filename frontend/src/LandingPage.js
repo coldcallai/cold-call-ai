@@ -367,8 +367,8 @@ const LandingPage = () => {
 
           {/* Human-like AI callout */}
           <div className="mt-10 max-w-2xl mx-auto">
-            <p className="text-gray-400 text-center text-base leading-relaxed bg-gradient-to-r from-cyan-500/5 via-teal-500/10 to-cyan-500/5 border border-cyan-500/20 rounded-xl px-6 py-4">
-              Our AI voice agents don't just talk—they <span className="text-cyan-400 font-medium">connect</span>. Trained with human-like energy, warmth, and natural conversation flow, they build rapport and qualify leads just like your best sales rep would.
+            <p className="text-gray-200 text-center text-base leading-relaxed bg-gradient-to-r from-cyan-600/20 via-teal-600/30 to-cyan-600/20 border border-cyan-400/40 rounded-xl px-6 py-4 backdrop-blur-sm shadow-lg shadow-cyan-500/10">
+              Our AI voice agents don't just talk—they <span className="text-cyan-300 font-semibold">connect</span>. Trained with human-like energy, warmth, and natural conversation flow, they build rapport and qualify leads just like your best sales rep would.
             </p>
           </div>
 

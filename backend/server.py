@@ -233,6 +233,12 @@ class Agent(BaseModel):
     max_daily_calls: int = 50
     assigned_leads: int = 0
     booked_meetings: int = 0  # Track meetings booked for this agent
+    # Voice Cloning Settings
+    voice_type: str = "preset"  # "preset" or "cloned"
+    preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Default ElevenLabs voice (Rachel)
+    cloned_voice_id: Optional[str] = None  # Custom cloned voice ID from ElevenLabs
+    cloned_voice_name: Optional[str] = None  # Name of the cloned voice
+    voice_settings: Optional[Dict[str, Any]] = None  # stability, similarity_boost, style
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class AgentCreate(BaseModel):
@@ -242,6 +248,9 @@ class AgentCreate(BaseModel):
     calendly_link: str
     calendly_api_token: Optional[str] = None  # Optional for advanced integration
     max_daily_calls: int = 50
+    voice_type: str = "preset"
+    preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    voice_settings: Optional[Dict[str, Any]] = None
 
 class Campaign(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -5925,6 +5934,220 @@ async def delete_agent(agent_id: str, current_user: Dict = Depends(get_current_u
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"message": "Agent deleted"}
+
+# ============== VOICE CLONING ENDPOINTS ==============
+
+# ElevenLabs preset voices available for selection
+ELEVENLABS_PRESET_VOICES = [
+    {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "description": "American, calm, professional"},
+    {"id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi", "description": "American, confident, energetic"},
+    {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "description": "American, soft, warm"},
+    {"id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "description": "American, well-rounded, calm"},
+    {"id": "MF3mGyEYCl7XYWbV9V6O", "name": "Elli", "description": "American, emotional, engaging"},
+    {"id": "TxGEqnHWrfWFTfGW9XjX", "name": "Josh", "description": "American, deep, narrative"},
+    {"id": "VR6AewLTigWG4xSOukaG", "name": "Arnold", "description": "American, crisp, authoritative"},
+    {"id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "description": "American, deep, narrative"},
+    {"id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "description": "American, raspy, casual"},
+    {"id": "jBpfuIE2acCO8z3wKNLl", "name": "Gigi", "description": "American, expressive, animated"},
+]
+
+@api_router.get("/voices/presets")
+async def get_preset_voices(current_user: Dict = Depends(get_current_user)):
+    """Get list of available ElevenLabs preset voices"""
+    return {"voices": ELEVENLABS_PRESET_VOICES}
+
+@api_router.get("/voices/cloned")
+async def get_cloned_voices(current_user: Dict = Depends(get_current_user)):
+    """Get user's cloned voices"""
+    voices = await db.cloned_voices.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).to_list(50)
+    return {"voices": voices}
+
+@api_router.post("/voices/clone")
+async def clone_voice(
+    files: List[UploadFile] = File(...),
+    voice_name: str = Form(...),
+    description: str = Form(""),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Clone a voice using ElevenLabs IVC (Instant Voice Cloning).
+    Requires 1-5 audio files (MP3, WAV) totaling at least 30 seconds.
+    """
+    if not eleven_client:
+        raise HTTPException(status_code=503, detail="ElevenLabs not configured. Add ELEVENLABS_API_KEY to .env")
+    
+    if len(files) < 1 or len(files) > 5:
+        raise HTTPException(status_code=400, detail="Please upload 1-5 audio files")
+    
+    # Check subscription tier (voice cloning is a premium feature)
+    tier = current_user.get("subscription_tier")
+    if tier not in ["pro", "unlimited", "enterprise"]:
+        raise HTTPException(
+            status_code=403, 
+            detail="Voice cloning is available on Pro and higher plans. Please upgrade to use this feature."
+        )
+    
+    # Check if user already has max cloned voices (limit to 5)
+    existing_count = await db.cloned_voices.count_documents({"user_id": current_user["user_id"]})
+    if existing_count >= 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 cloned voices allowed. Please delete one before creating a new one.")
+    
+    try:
+        # Prepare files for ElevenLabs
+        file_tuples = []
+        for file in files:
+            content = await file.read()
+            file_tuples.append((file.filename, content))
+        
+        # Clone voice using ElevenLabs IVC
+        voice = eleven_client.clone(
+            name=f"{voice_name}_{current_user['user_id'][:8]}",
+            description=description or f"Cloned voice for {current_user['email']}",
+            files=file_tuples
+        )
+        
+        # Save to database
+        cloned_voice_doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["user_id"],
+            "elevenlabs_voice_id": voice.voice_id,
+            "name": voice_name,
+            "description": description,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.cloned_voices.insert_one(cloned_voice_doc)
+        
+        logger.info(f"Voice cloned successfully for user {current_user['user_id']}: {voice.voice_id}")
+        
+        return {
+            "message": "Voice cloned successfully",
+            "voice_id": voice.voice_id,
+            "name": voice_name,
+            "id": cloned_voice_doc["id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Voice cloning failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Voice cloning failed: {str(e)}")
+
+@api_router.delete("/voices/cloned/{voice_id}")
+async def delete_cloned_voice(voice_id: str, current_user: Dict = Depends(get_current_user)):
+    """Delete a cloned voice"""
+    voice = await db.cloned_voices.find_one({
+        "id": voice_id,
+        "user_id": current_user["user_id"]
+    }, {"_id": 0})
+    
+    if not voice:
+        raise HTTPException(status_code=404, detail="Cloned voice not found")
+    
+    # Try to delete from ElevenLabs
+    if eleven_client and voice.get("elevenlabs_voice_id"):
+        try:
+            eleven_client.voices.delete(voice["elevenlabs_voice_id"])
+        except Exception as e:
+            logger.warning(f"Failed to delete voice from ElevenLabs: {e}")
+    
+    # Delete from database
+    await db.cloned_voices.delete_one({"id": voice_id, "user_id": current_user["user_id"]})
+    
+    # Update any agents using this voice to use default
+    await db.agents.update_many(
+        {"user_id": current_user["user_id"], "cloned_voice_id": voice.get("elevenlabs_voice_id")},
+        {"$set": {"voice_type": "preset", "cloned_voice_id": None, "cloned_voice_name": None}}
+    )
+    
+    return {"message": "Cloned voice deleted"}
+
+@api_router.post("/voices/preview")
+async def preview_voice(
+    text: str = Form(...),
+    voice_id: str = Form(...),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Generate a voice preview sample"""
+    if not eleven_client:
+        raise HTTPException(status_code=503, detail="ElevenLabs not configured")
+    
+    try:
+        audio_generator = eleven_client.text_to_speech.convert(
+            text=text[:500],  # Limit preview text
+            voice_id=voice_id,
+            model_id="eleven_multilingual_v2",
+            voice_settings=VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.75,
+                style=0.3,
+                use_speaker_boost=True
+            )
+        )
+        
+        # Collect audio data
+        audio_data = b""
+        for chunk in audio_generator:
+            audio_data += chunk
+        
+        # Return as base64
+        import base64
+        audio_b64 = base64.b64encode(audio_data).decode()
+        
+        return {
+            "audio": f"data:audio/mpeg;base64,{audio_b64}",
+            "text": text[:500]
+        }
+        
+    except Exception as e:
+        logger.error(f"Voice preview failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Voice preview failed: {str(e)}")
+
+@api_router.put("/agents/{agent_id}/voice")
+async def update_agent_voice(
+    agent_id: str,
+    voice_type: str = Form(...),
+    voice_id: str = Form(...),
+    stability: float = Form(0.5),
+    similarity_boost: float = Form(0.75),
+    style: float = Form(0.3),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Update an agent's voice settings"""
+    agent = await db.agents.find_one({"id": agent_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    update_data = {
+        "voice_type": voice_type,
+        "voice_settings": {
+            "stability": stability,
+            "similarity_boost": similarity_boost,
+            "style": style
+        }
+    }
+    
+    if voice_type == "preset":
+        update_data["preset_voice_id"] = voice_id
+        update_data["cloned_voice_id"] = None
+        update_data["cloned_voice_name"] = None
+    else:
+        # Verify cloned voice belongs to user
+        cloned = await db.cloned_voices.find_one({
+            "elevenlabs_voice_id": voice_id,
+            "user_id": current_user["user_id"]
+        }, {"_id": 0})
+        if not cloned:
+            raise HTTPException(status_code=400, detail="Cloned voice not found")
+        update_data["cloned_voice_id"] = voice_id
+        update_data["cloned_voice_name"] = cloned.get("name")
+    
+    await db.agents.update_one(
+        {"id": agent_id, "user_id": current_user["user_id"]},
+        {"$set": update_data}
+    )
+    
+    return {"message": "Agent voice updated", "voice_type": voice_type, "voice_id": voice_id}
 
 # ----- Campaigns CRUD -----
 @api_router.get("/campaigns", response_model=List[Campaign])

@@ -344,6 +344,26 @@ const LandingPage = () => {
             </a>
           </div>
 
+          {/* Feature badges */}
+          <div className="flex items-center justify-center gap-6 mt-8 flex-wrap">
+            <span className="flex items-center gap-2 text-gray-300 text-sm">
+              <CheckCircle className="w-4 h-4 text-cyan-400" />
+              AI Conversations
+            </span>
+            <span className="flex items-center gap-2 text-gray-300 text-sm">
+              <CheckCircle className="w-4 h-4 text-cyan-400" />
+              VM Drops
+            </span>
+            <span className="flex items-center gap-2 text-gray-300 text-sm">
+              <CheckCircle className="w-4 h-4 text-cyan-400" />
+              Auto-Booking
+            </span>
+            <span className="flex items-center gap-2 text-gray-300 text-sm">
+              <CheckCircle className="w-4 h-4 text-cyan-400" />
+              Lead Discovery
+            </span>
+          </div>
+
           {/* Trust logos */}
           <div className="mt-20">
             <p className="text-sm text-gray-500 mb-6">Powered by enterprise-grade technology</p>

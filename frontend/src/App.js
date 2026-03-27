@@ -10,7 +10,7 @@ import {
   Building2, User, Mail, ExternalLink, AlertCircle, Filter,
   ArrowRight, Zap, UserCheck, CalendarCheck, Upload, Download,
   CreditCard, Package, ShoppingCart, LogOut, BarChart3, X, Edit3, Tags, RefreshCw,
-  Database, Shield, Rocket
+  Database, Shield, Rocket, Mic, Volume2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -42,6 +42,7 @@ import OnboardingGuide from "@/components/OnboardingGuide";
 import SetupWizard from "@/components/SetupWizard";
 import TrialBanner from "@/components/TrialBanner";
 import PhoneVerificationModal from "@/components/PhoneVerificationModal";
+import { VoiceCloneModal, VoiceSettingsModal } from "@/components/VoiceCloning";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -2201,6 +2202,8 @@ const Agents = () => {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showVoiceClone, setShowVoiceClone] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(null); // agent for voice settings
   const [newAgent, setNewAgent] = useState({
     name: "",
     email: "",
@@ -2263,21 +2266,32 @@ const Agents = () => {
 
   return (
     <div className="p-6 md:p-8 space-y-6" data-testid="agents-page">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Agents
           </h1>
           <p className="text-gray-500 mt-1">Manage sales agents and their Calendly links</p>
         </div>
-        <Button 
-          data-testid="create-agent-btn"
-          onClick={() => setShowCreate(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Agent
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            data-testid="clone-voice-btn"
+            onClick={() => setShowVoiceClone(true)}
+            variant="outline"
+            className="border-purple-300 text-purple-700 hover:bg-purple-50"
+          >
+            <Mic className="w-4 h-4 mr-2" />
+            Clone Voice
+          </Button>
+          <Button 
+            data-testid="create-agent-btn"
+            onClick={() => setShowCreate(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Agent
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -2349,14 +2363,38 @@ const Agents = () => {
                   <span className="text-lg font-semibold text-gray-900">{agent.assigned_leads}</span>
                 </div>
 
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  data-testid={`toggle-agent-${agent.id}`}
-                  onClick={() => toggleAgent(agent)}
-                >
-                  {agent.is_active ? "Deactivate" : "Activate"}
-                </Button>
+                {/* Voice Settings Indicator */}
+                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg mb-4">
+                  <Volume2 className="w-4 h-4 text-purple-600" />
+                  <div className="flex-1">
+                    <span className="text-sm text-gray-700">
+                      {agent.voice_type === "cloned" ? agent.cloned_voice_name || "Cloned Voice" : "Preset Voice"}
+                    </span>
+                    {agent.voice_type === "cloned" && (
+                      <Badge className="ml-2 bg-purple-100 text-purple-700 text-xs">Custom</Badge>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowVoiceSettings(agent)}
+                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-100"
+                    data-testid={`voice-settings-${agent.id}`}
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    variant="outline"
+                    data-testid={`toggle-agent-${agent.id}`}
+                    onClick={() => toggleAgent(agent)}
+                  >
+                    {agent.is_active ? "Deactivate" : "Activate"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -2438,6 +2476,29 @@ const Agents = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Voice Clone Modal */}
+      <VoiceCloneModal
+        isOpen={showVoiceClone}
+        onClose={() => setShowVoiceClone(false)}
+        onVoiceCloned={(voice) => {
+          toast.success(`Voice "${voice.name}" cloned successfully!`);
+          setShowVoiceClone(false);
+        }}
+      />
+
+      {/* Voice Settings Modal */}
+      {showVoiceSettings && (
+        <VoiceSettingsModal
+          isOpen={!!showVoiceSettings}
+          onClose={() => setShowVoiceSettings(null)}
+          agent={showVoiceSettings}
+          onSave={() => {
+            fetchAgents();
+            setShowVoiceSettings(null);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -11,7 +11,7 @@ import os
 import uuid
 
 # Get the base URL from environment
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://voice-dialer-staging.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://voice-clone-preview-1.preview.emergentagent.com').rstrip('/')
 
 # Test users
 USER_A = {"email": "test@example.com", "password": "Test123!", "name": "Test User A"}

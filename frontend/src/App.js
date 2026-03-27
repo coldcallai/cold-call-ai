@@ -2204,6 +2204,8 @@ const Agents = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showVoiceSettings, setShowVoiceSettings] = useState(null); // agent for voice settings
+  const [previewingVoice, setPreviewingVoice] = useState(null); // agent id being previewed
+  const [playingAudio, setPlayingAudio] = useState(null); // audio element reference
   const [newAgent, setNewAgent] = useState({
     name: "",
     email: "",
@@ -2226,6 +2228,63 @@ const Agents = () => {
   useEffect(() => {
     fetchAgents();
   }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (playingAudio) {
+        playingAudio.pause();
+        playingAudio.src = "";
+      }
+    };
+  }, [playingAudio]);
+
+  const previewAgentVoice = async (agent) => {
+    // If already previewing this agent, stop it
+    if (previewingVoice === agent.id && playingAudio) {
+      playingAudio.pause();
+      setPlayingAudio(null);
+      setPreviewingVoice(null);
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (playingAudio) {
+      playingAudio.pause();
+    }
+
+    setPreviewingVoice(agent.id);
+    const voiceId = agent.voice_type === "cloned" ? agent.cloned_voice_id : (agent.preset_voice_id || "21m00Tcm4TlvDq8ikWAM");
+    const previewText = `Hi, this is ${agent.name}. I'm your AI sales agent, ready to help you connect with qualified leads and close more deals!`;
+
+    const formData = new FormData();
+    formData.append("text", previewText);
+    formData.append("voice_id", voiceId);
+
+    try {
+      const response = await axios.post(`${API}/voices/preview`, formData);
+      const audio = new Audio(response.data.audio);
+      
+      audio.onended = () => {
+        setPlayingAudio(null);
+        setPreviewingVoice(null);
+      };
+      
+      audio.onerror = () => {
+        toast.error("Failed to play audio");
+        setPlayingAudio(null);
+        setPreviewingVoice(null);
+      };
+
+      setPlayingAudio(audio);
+      await audio.play();
+      toast.success(`Playing ${agent.name}'s voice...`);
+    } catch (error) {
+      console.error("Preview failed:", error);
+      toast.error("Failed to generate voice preview");
+      setPreviewingVoice(null);
+    }
+  };
 
   const createAgent = async () => {
     if (!newAgent.name || !newAgent.email || !newAgent.calendly_link) {
@@ -2374,6 +2433,17 @@ const Agents = () => {
                       <Badge className="ml-2 bg-purple-100 text-purple-700 text-xs">Custom</Badge>
                     )}
                   </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => previewAgentVoice(agent)}
+                    disabled={previewingVoice && previewingVoice !== agent.id}
+                    className={`${previewingVoice === agent.id ? 'text-green-600 hover:text-green-700 hover:bg-green-100' : 'text-purple-600 hover:text-purple-700 hover:bg-purple-100'}`}
+                    data-testid={`preview-voice-${agent.id}`}
+                    title={previewingVoice === agent.id ? "Stop preview" : "Preview voice"}
+                  >
+                    {previewingVoice === agent.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"

@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { 
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
-  ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2
+  ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
+  Search, MessageSquare
 } from "lucide-react";
 import axios from "axios";
 
@@ -515,16 +516,65 @@ const LandingPage = () => {
             {/* Screenshot 2: Lead Discovery */}
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
-                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
-                  <img 
-                    src="https://voice-dialer-staging.preview.emergentagent.com/demo-leads.png" 
-                    alt="AI Lead Discovery"
-                    className="rounded-xl shadow-2xl w-full"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.parentElement.innerHTML = '<div class="bg-gray-800 rounded-xl p-12 text-center"><p class="text-gray-400">Lead Discovery Preview</p><p class="text-gray-500 text-sm mt-2">AI finds businesses searching for your services</p></div>';
-                    }}
-                  />
+                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-4 border border-cyan-500/20">
+                  {/* Styled Lead Discovery Mockup */}
+                  <div className="bg-[#0B1628] rounded-xl p-4 shadow-2xl">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-lg flex items-center justify-center">
+                          <Search className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-white font-semibold">Lead Discovery</span>
+                      </div>
+                      <button className="bg-cyan-500 text-white text-xs px-3 py-1.5 rounded-lg">+ Find Leads</button>
+                    </div>
+                    {/* Search Keywords */}
+                    <div className="bg-gray-800/50 rounded-lg p-3 mb-3">
+                      <div className="text-xs text-gray-400 mb-2">Active Keywords</div>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-1 rounded-full">HVAC repair</span>
+                        <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-1 rounded-full">plumbing services</span>
+                        <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-1 rounded-full">roofing contractor</span>
+                      </div>
+                    </div>
+                    {/* Results Table */}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-4 text-xs text-gray-500 px-2">
+                        <span>Business</span>
+                        <span>Phone</span>
+                        <span>Type</span>
+                        <span>Score</span>
+                      </div>
+                      <div className="bg-gray-800/30 rounded-lg p-2 grid grid-cols-4 items-center text-xs">
+                        <div>
+                          <div className="text-white">ABC Plumbing</div>
+                          <div className="text-gray-500 text-[10px]">Miami, FL</div>
+                        </div>
+                        <span className="text-gray-300">+1 305-555-0123</span>
+                        <span className="text-green-400 bg-green-500/20 px-1.5 py-0.5 rounded text-[10px] w-fit">Mobile</span>
+                        <span className="text-cyan-400">92%</span>
+                      </div>
+                      <div className="bg-gray-800/30 rounded-lg p-2 grid grid-cols-4 items-center text-xs">
+                        <div>
+                          <div className="text-white">FastFix HVAC</div>
+                          <div className="text-gray-500 text-[10px]">Tampa, FL</div>
+                        </div>
+                        <span className="text-gray-300">+1 813-555-0456</span>
+                        <span className="text-blue-400 bg-blue-500/20 px-1.5 py-0.5 rounded text-[10px] w-fit">Landline</span>
+                        <span className="text-cyan-400">87%</span>
+                      </div>
+                      <div className="bg-gray-800/30 rounded-lg p-2 grid grid-cols-4 items-center text-xs">
+                        <div>
+                          <div className="text-white">Pro Roofing Co</div>
+                          <div className="text-gray-500 text-[10px]">Orlando, FL</div>
+                        </div>
+                        <span className="text-gray-300">+1 407-555-0789</span>
+                        <span className="text-green-400 bg-green-500/20 px-1.5 py-0.5 rounded text-[10px] w-fit">Mobile</span>
+                        <span className="text-cyan-400">85%</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div>
@@ -586,16 +636,72 @@ const LandingPage = () => {
                 </ul>
               </div>
               <div className="order-1 lg:order-2">
-                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
-                  <img 
-                    src="https://voice-dialer-staging.preview.emergentagent.com/demo-calls.png" 
-                    alt="Call History & Recordings"
-                    className="rounded-xl shadow-2xl w-full"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.parentElement.innerHTML = '<div class="bg-gray-800 rounded-xl p-12 text-center"><p class="text-gray-400">Call History Preview</p><p class="text-gray-500 text-sm mt-2">View recordings, transcripts, and qualification results</p></div>';
-                    }}
-                  />
+                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-4 border border-cyan-500/20">
+                  {/* Styled Call History Mockup */}
+                  <div className="bg-[#0B1628] rounded-xl p-4 shadow-2xl">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg flex items-center justify-center">
+                          <Phone className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-white font-semibold">Call History</span>
+                      </div>
+                      <div className="flex gap-2 text-xs">
+                        <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded">12 Completed</span>
+                        <span className="bg-orange-500/20 text-orange-400 px-2 py-1 rounded">3 Booked</span>
+                      </div>
+                    </div>
+                    {/* Call Records */}
+                    <div className="space-y-2">
+                      {/* Call 1 - Booked */}
+                      <div className="bg-gray-800/50 rounded-lg p-3 border-l-2 border-green-500">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center">
+                              <Calendar className="w-3 h-3 text-green-400" />
+                            </div>
+                            <span className="text-white text-sm font-medium">ABC Plumbing</span>
+                            <span className="bg-green-500/20 text-green-400 text-[10px] px-2 py-0.5 rounded-full">BOOKED</span>
+                          </div>
+                          <span className="text-gray-500 text-xs">2:34 min</span>
+                        </div>
+                        <div className="text-gray-400 text-xs ml-8">"Interested in demo, scheduled for Thursday 3pm"</div>
+                        <div className="flex gap-2 mt-2 ml-8">
+                          <button className="text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded">Play Recording</button>
+                          <button className="text-[10px] text-gray-400 bg-gray-700/50 px-2 py-1 rounded">Transcript</button>
+                        </div>
+                      </div>
+                      {/* Call 2 - Qualified */}
+                      <div className="bg-gray-800/50 rounded-lg p-3 border-l-2 border-purple-500">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center">
+                              <CheckCircle className="w-3 h-3 text-purple-400" />
+                            </div>
+                            <span className="text-white text-sm font-medium">FastFix HVAC</span>
+                            <span className="bg-purple-500/20 text-purple-400 text-[10px] px-2 py-0.5 rounded-full">QUALIFIED</span>
+                          </div>
+                          <span className="text-gray-500 text-xs">1:52 min</span>
+                        </div>
+                        <div className="text-gray-400 text-xs ml-8">"Decision maker, needs follow-up next week"</div>
+                      </div>
+                      {/* Call 3 - VM Drop */}
+                      <div className="bg-gray-800/50 rounded-lg p-3 border-l-2 border-orange-500">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center">
+                              <MessageSquare className="w-3 h-3 text-orange-400" />
+                            </div>
+                            <span className="text-white text-sm font-medium">Pro Roofing Co</span>
+                            <span className="bg-orange-500/20 text-orange-400 text-[10px] px-2 py-0.5 rounded-full">VM DROP</span>
+                          </div>
+                          <span className="text-gray-500 text-xs">0:30 min</span>
+                        </div>
+                        <div className="text-gray-400 text-xs ml-8">"Left voicemail, auto-retry scheduled"</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

@@ -508,6 +508,7 @@ A vertical-agnostic B2B SaaS platform that:
 
 ### P3 - Future
 - [ ] **Multi-language support** (50+ languages like Synthflow) - Currently English only
+- [ ] **Bulk Voice Assignment** - Assign same cloned voice to multiple agents at once
 - [ ] Team seat management
 - [ ] API rate limiting by tier
 - [ ] Refactor App.js (2000+ lines) into smaller components

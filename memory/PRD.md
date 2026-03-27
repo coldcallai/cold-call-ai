@@ -570,6 +570,16 @@ A vertical-agnostic B2B SaaS platform that:
   - Play/Pause toggle with visual state feedback (purple=idle, green=playing)
   - Uses ElevenLabs TTS for real-time audio generation
   - Custom preview text: "Hi, this is {agent_name}. I'm your AI sales agent..."
+- **Synthflow-Style Subscription Billing System**:
+  - `POST /api/subscriptions/create` - Create recurring Stripe subscription
+  - `GET /api/subscriptions/portal` - Access Stripe Customer Portal for self-service management
+  - `GET /api/subscriptions/current` - Get current subscription details
+  - `GET /api/subscriptions/invoices` - Invoice history with downloadable PDFs
+  - `POST /api/webhook/stripe-subscriptions` - Handle subscription lifecycle webhooks
+  - `GET /api/usage/current-period` - Track usage and calculate overage charges
+  - Auto-recurring billing on same day each month
+  - Credit refresh on invoice.paid webhook
+  - Late payment handling (past_due status after 5 days)
 - **Backend Endpoints**:
   - `GET /api/voices/presets` - 10 ElevenLabs preset voices
   - `GET /api/voices/cloned` - User's cloned voices

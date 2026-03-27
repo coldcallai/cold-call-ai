@@ -27,6 +27,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 from elevenlabs import ElevenLabs
 from elevenlabs.types import VoiceSettings
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+import stripe
 from twilio.rest import Client as TwilioClient
 from twilio.twiml.voice_response import VoiceResponse, Gather, Say, Connect, Stream
 import requests  # For Calendly API calls and object storage
@@ -57,6 +58,8 @@ eleven_client = ElevenLabs(api_key=elevenlabs_api_key) if elevenlabs_api_key els
 
 # Stripe configuration
 stripe_api_key = os.environ.get('STRIPE_API_KEY')
+if stripe_api_key:
+    stripe.api_key = stripe_api_key
 
 # Twilio configuration
 twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
@@ -7436,6 +7439,580 @@ async def get_payment_history(current_user: Dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(50)
     
     return {"transactions": transactions}
+
+# ----- Synthflow-Style Subscription System -----
+
+# Stripe Price IDs - These would be created in Stripe Dashboard
+# For now, we'll create them dynamically or use existing ones
+STRIPE_PRICE_IDS = {
+    "starter_monthly": None,  # Will be created dynamically
+    "starter_yearly": None,
+    "professional_monthly": None,
+    "professional_yearly": None,
+    "unlimited_monthly": None,
+    "unlimited_yearly": None,
+    "byl_monthly": None,
+    "byl_yearly": None,
+}
+
+async def get_or_create_stripe_customer(user: Dict) -> str:
+    """Get existing Stripe customer or create new one"""
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    # Check if user already has a Stripe customer ID
+    if user.get("stripe_customer_id"):
+        return user["stripe_customer_id"]
+    
+    # Create new Stripe customer
+    try:
+        customer = stripe.Customer.create(
+            email=user["email"],
+            name=user.get("name", user["email"]),
+            metadata={
+                "user_id": user["user_id"],
+                "platform": "dialgenix"
+            }
+        )
+        
+        # Save customer ID to user record
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {"stripe_customer_id": customer.id}}
+        )
+        
+        return customer.id
+    except Exception as e:
+        logger.error(f"Failed to create Stripe customer: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create payment profile")
+
+async def get_or_create_stripe_price(plan_id: str, billing_cycle: str) -> str:
+    """Get or create a Stripe Price for a subscription plan"""
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    plan = SUBSCRIPTION_PLANS.get(plan_id)
+    if not plan:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    
+    price_key = f"{plan_id}_{billing_cycle}"
+    
+    # Check cache
+    if STRIPE_PRICE_IDS.get(price_key):
+        return STRIPE_PRICE_IDS[price_key]
+    
+    # Check if price exists in Stripe
+    try:
+        prices = stripe.Price.list(
+            lookup_keys=[price_key],
+            active=True,
+            limit=1
+        )
+        if prices.data:
+            STRIPE_PRICE_IDS[price_key] = prices.data[0].id
+            return prices.data[0].id
+    except Exception:
+        pass
+    
+    # Calculate price based on billing cycle
+    monthly_price = plan["price"]
+    if billing_cycle == "yearly":
+        # 15% discount for yearly
+        yearly_price = int(monthly_price * 12 * 0.85 * 100)  # In cents
+        interval = "year"
+    else:
+        yearly_price = int(monthly_price * 100)  # In cents
+        interval = "month"
+    
+    # Create product if needed
+    try:
+        products = stripe.Product.list(limit=100)
+        product = None
+        for p in products.data:
+            if p.metadata.get("plan_id") == plan_id:
+                product = p
+                break
+        
+        if not product:
+            product = stripe.Product.create(
+                name=f"DialGenix {plan['name']}",
+                description=f"{plan.get('leads_per_month', 0)} leads/mo, {plan.get('calls_per_month', 0)} calls/mo",
+                metadata={"plan_id": plan_id}
+            )
+        
+        # Create price
+        price = stripe.Price.create(
+            product=product.id,
+            unit_amount=yearly_price,
+            currency="usd",
+            recurring={"interval": interval},
+            lookup_key=price_key,
+            metadata={"plan_id": plan_id, "billing_cycle": billing_cycle}
+        )
+        
+        STRIPE_PRICE_IDS[price_key] = price.id
+        return price.id
+        
+    except Exception as e:
+        logger.error(f"Failed to create Stripe price: {e}")
+        raise HTTPException(status_code=500, detail="Failed to configure pricing")
+
+@api_router.post("/subscriptions/create")
+async def create_subscription(
+    request: Request,
+    plan_id: str = Form(...),
+    billing_cycle: str = Form("monthly"),  # monthly or yearly
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Create a Stripe subscription with automatic recurring billing.
+    Synthflow-style: auto-invoices on billing date, same-day recurring.
+    """
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    if plan_id not in SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=400, detail="Invalid subscription plan")
+    
+    if billing_cycle not in ["monthly", "yearly"]:
+        raise HTTPException(status_code=400, detail="Invalid billing cycle")
+    
+    # Check if user already has active subscription
+    if current_user.get("stripe_subscription_id"):
+        existing_sub = stripe.Subscription.retrieve(current_user["stripe_subscription_id"])
+        if existing_sub.status in ["active", "trialing"]:
+            raise HTTPException(
+                status_code=400, 
+                detail="You already have an active subscription. Use the customer portal to manage it."
+            )
+    
+    try:
+        # Get or create Stripe customer
+        customer_id = await get_or_create_stripe_customer(current_user)
+        
+        # Get or create price
+        price_id = await get_or_create_stripe_price(plan_id, billing_cycle)
+        
+        # Build URLs
+        origin = request.headers.get("origin", "https://dialgenix.ai")
+        success_url = f"{origin}/app/settings?subscription=success"
+        cancel_url = f"{origin}/app/packs?subscription=canceled"
+        
+        # Create checkout session for subscription
+        checkout_session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=["card"],
+            line_items=[{
+                "price": price_id,
+                "quantity": 1,
+            }],
+            mode="subscription",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            subscription_data={
+                "metadata": {
+                    "user_id": current_user["user_id"],
+                    "plan_id": plan_id,
+                    "billing_cycle": billing_cycle
+                }
+            },
+            # Enable automatic tax if configured
+            # automatic_tax={"enabled": True},
+            # Enable invoice email
+            invoice_creation={"enabled": True} if stripe.checkout.Session else None,
+            metadata={
+                "user_id": current_user["user_id"],
+                "plan_id": plan_id,
+                "billing_cycle": billing_cycle,
+                "type": "subscription"
+            }
+        )
+        
+        # Record pending subscription
+        subscription_record = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["user_id"],
+            "checkout_session_id": checkout_session.id,
+            "plan_id": plan_id,
+            "billing_cycle": billing_cycle,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.subscription_records.insert_one(subscription_record)
+        
+        return {
+            "checkout_url": checkout_session.url,
+            "session_id": checkout_session.id
+        }
+        
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error creating subscription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/subscriptions/portal")
+async def get_customer_portal(
+    request: Request,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get Stripe Customer Portal URL for managing subscription.
+    Users can update payment method, cancel, or change plans here.
+    """
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    customer_id = current_user.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="No payment profile found. Please subscribe first.")
+    
+    origin = request.headers.get("origin", "https://dialgenix.ai")
+    return_url = f"{origin}/app/settings"
+    
+    try:
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url
+        )
+        return {"portal_url": portal_session.url}
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe portal error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to access billing portal")
+
+@api_router.get("/subscriptions/current")
+async def get_current_subscription(current_user: Dict = Depends(get_current_user)):
+    """Get current subscription details"""
+    if not stripe_api_key:
+        return {"subscription": None, "message": "Stripe not configured"}
+    
+    subscription_id = current_user.get("stripe_subscription_id")
+    if not subscription_id:
+        return {
+            "subscription": None,
+            "tier": current_user.get("subscription_tier"),
+            "status": current_user.get("subscription_status", "inactive")
+        }
+    
+    try:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        
+        # Get upcoming invoice for next billing date
+        upcoming_invoice = None
+        try:
+            upcoming = stripe.Invoice.upcoming(subscription=subscription_id)
+            upcoming_invoice = {
+                "amount_due": upcoming.amount_due / 100,
+                "currency": upcoming.currency,
+                "next_billing_date": datetime.fromtimestamp(upcoming.next_payment_attempt).isoformat() if upcoming.next_payment_attempt else None
+            }
+        except Exception:
+            pass
+        
+        return {
+            "subscription": {
+                "id": subscription.id,
+                "status": subscription.status,
+                "current_period_start": datetime.fromtimestamp(subscription.current_period_start).isoformat(),
+                "current_period_end": datetime.fromtimestamp(subscription.current_period_end).isoformat(),
+                "cancel_at_period_end": subscription.cancel_at_period_end,
+                "plan_id": subscription.metadata.get("plan_id"),
+                "billing_cycle": subscription.metadata.get("billing_cycle", "monthly")
+            },
+            "upcoming_invoice": upcoming_invoice,
+            "tier": current_user.get("subscription_tier"),
+            "status": subscription.status
+        }
+    except stripe.error.StripeError as e:
+        logger.error(f"Error retrieving subscription: {e}")
+        return {
+            "subscription": None,
+            "tier": current_user.get("subscription_tier"),
+            "status": current_user.get("subscription_status", "inactive"),
+            "error": str(e)
+        }
+
+@api_router.get("/subscriptions/invoices")
+async def get_subscription_invoices(
+    limit: int = 10,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get invoice history for the customer"""
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    customer_id = current_user.get("stripe_customer_id")
+    if not customer_id:
+        return {"invoices": []}
+    
+    try:
+        invoices = stripe.Invoice.list(
+            customer=customer_id,
+            limit=limit
+        )
+        
+        return {
+            "invoices": [{
+                "id": inv.id,
+                "number": inv.number,
+                "status": inv.status,
+                "amount_due": inv.amount_due / 100,
+                "amount_paid": inv.amount_paid / 100,
+                "currency": inv.currency,
+                "created": datetime.fromtimestamp(inv.created).isoformat(),
+                "invoice_pdf": inv.invoice_pdf,
+                "hosted_invoice_url": inv.hosted_invoice_url,
+                "period_start": datetime.fromtimestamp(inv.period_start).isoformat() if inv.period_start else None,
+                "period_end": datetime.fromtimestamp(inv.period_end).isoformat() if inv.period_end else None
+            } for inv in invoices.data]
+        }
+    except stripe.error.StripeError as e:
+        logger.error(f"Error fetching invoices: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch invoices")
+
+@api_router.post("/webhook/stripe-subscriptions")
+async def stripe_subscription_webhook(request: Request):
+    """
+    Handle Stripe subscription webhook events.
+    This handles: invoice.paid, invoice.payment_failed, customer.subscription.updated, etc.
+    """
+    if not stripe_api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    payload = await request.body()
+    sig_header = request.headers.get("Stripe-Signature")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+    
+    try:
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        else:
+            # For testing without webhook signature verification
+            event = stripe.Event.construct_from(
+                json.loads(payload), stripe.api_key
+            )
+    except ValueError as e:
+        logger.error(f"Invalid webhook payload: {e}")
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError as e:
+        logger.error(f"Invalid webhook signature: {e}")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    
+    event_type = event.type
+    data = event.data.object
+    
+    logger.info(f"Stripe webhook received: {event_type}")
+    
+    # Handle subscription events
+    if event_type == "checkout.session.completed":
+        # Subscription checkout completed
+        if data.mode == "subscription":
+            user_id = data.metadata.get("user_id")
+            plan_id = data.metadata.get("plan_id")
+            billing_cycle = data.metadata.get("billing_cycle", "monthly")
+            subscription_id = data.subscription
+            
+            if user_id and subscription_id:
+                plan = SUBSCRIPTION_PLANS.get(plan_id, {})
+                
+                await db.users.update_one(
+                    {"user_id": user_id},
+                    {"$set": {
+                        "stripe_subscription_id": subscription_id,
+                        "subscription_tier": plan_id,
+                        "subscription_status": "active",
+                        "subscription_billing_cycle": billing_cycle,
+                        "monthly_lead_allowance": plan.get("leads_per_month", 0),
+                        "monthly_call_allowance": plan.get("calls_per_month", 0),
+                        "lead_credits_remaining": plan.get("leads_per_month", 0),
+                        "call_credits_remaining": plan.get("calls_per_month", 0),
+                        "subscription_started_at": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                
+                # Update subscription record
+                await db.subscription_records.update_one(
+                    {"checkout_session_id": data.id},
+                    {"$set": {
+                        "stripe_subscription_id": subscription_id,
+                        "status": "active",
+                        "activated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                
+                logger.info(f"Subscription activated for user {user_id}: {plan_id}")
+    
+    elif event_type == "invoice.paid":
+        # Recurring invoice paid - refresh credits
+        subscription_id = data.subscription
+        if subscription_id:
+            # Find user by subscription ID
+            user = await db.users.find_one(
+                {"stripe_subscription_id": subscription_id},
+                {"_id": 0}
+            )
+            
+            if user:
+                plan_id = user.get("subscription_tier")
+                plan = SUBSCRIPTION_PLANS.get(plan_id, {})
+                
+                # Refresh monthly credits
+                await db.users.update_one(
+                    {"user_id": user["user_id"]},
+                    {"$set": {
+                        "lead_credits_remaining": plan.get("leads_per_month", 0),
+                        "call_credits_remaining": plan.get("calls_per_month", 0),
+                        "last_credit_refresh": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                
+                # Record invoice in our database
+                await db.invoices.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user["user_id"],
+                    "stripe_invoice_id": data.id,
+                    "amount_paid": data.amount_paid / 100,
+                    "currency": data.currency,
+                    "status": "paid",
+                    "invoice_pdf": data.invoice_pdf,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                })
+                
+                logger.info(f"Invoice paid, credits refreshed for user {user['user_id']}")
+    
+    elif event_type == "invoice.payment_failed":
+        # Payment failed
+        subscription_id = data.subscription
+        if subscription_id:
+            user = await db.users.find_one(
+                {"stripe_subscription_id": subscription_id},
+                {"_id": 0}
+            )
+            
+            if user:
+                await db.users.update_one(
+                    {"user_id": user["user_id"]},
+                    {"$set": {
+                        "subscription_status": "past_due",
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                logger.warning(f"Payment failed for user {user['user_id']}")
+    
+    elif event_type == "customer.subscription.updated":
+        # Subscription updated (plan change, cancellation scheduled, etc.)
+        subscription_id = data.id
+        user = await db.users.find_one(
+            {"stripe_subscription_id": subscription_id},
+            {"_id": 0}
+        )
+        
+        if user:
+            update_data = {
+                "subscription_status": data.status,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            if data.cancel_at_period_end:
+                update_data["subscription_canceling"] = True
+                update_data["subscription_cancel_at"] = datetime.fromtimestamp(data.current_period_end).isoformat()
+            
+            await db.users.update_one(
+                {"user_id": user["user_id"]},
+                {"$set": update_data}
+            )
+    
+    elif event_type == "customer.subscription.deleted":
+        # Subscription canceled/ended
+        subscription_id = data.id
+        user = await db.users.find_one(
+            {"stripe_subscription_id": subscription_id},
+            {"_id": 0}
+        )
+        
+        if user:
+            await db.users.update_one(
+                {"user_id": user["user_id"]},
+                {"$set": {
+                    "subscription_tier": None,
+                    "subscription_status": "canceled",
+                    "stripe_subscription_id": None,
+                    "subscription_canceling": False,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            logger.info(f"Subscription canceled for user {user['user_id']}")
+    
+    return {"status": "success", "event_type": event_type}
+
+# ----- Usage Tracking & Overage Billing -----
+
+@api_router.get("/usage/current-period")
+async def get_current_period_usage(current_user: Dict = Depends(get_current_user)):
+    """Get usage for the current billing period"""
+    
+    # Determine billing period
+    subscription_started = current_user.get("subscription_started_at")
+    if subscription_started:
+        start_date = datetime.fromisoformat(subscription_started.replace("Z", "+00:00"))
+        # Find current period start (same day each month)
+        now = datetime.now(timezone.utc)
+        period_start = start_date.replace(year=now.year, month=now.month)
+        if period_start > now:
+            period_start = period_start.replace(month=period_start.month - 1)
+    else:
+        # Default to start of current month
+        now = datetime.now(timezone.utc)
+        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Count usage
+    leads_used = await db.leads.count_documents({
+        "user_id": current_user["user_id"],
+        "created_at": {"$gte": period_start.isoformat()}
+    })
+    
+    calls_made = await db.calls.count_documents({
+        "user_id": current_user["user_id"],
+        "created_at": {"$gte": period_start.isoformat()}
+    })
+    
+    # Get allowances
+    plan = SUBSCRIPTION_PLANS.get(current_user.get("subscription_tier"), {})
+    leads_allowance = plan.get("leads_per_month", 0)
+    calls_allowance = plan.get("calls_per_month", 0)
+    
+    # Calculate overages
+    leads_overage = max(0, leads_used - leads_allowance)
+    calls_overage = max(0, calls_made - calls_allowance)
+    
+    # Overage rates (per unit)
+    leads_overage_rate = 0.12  # $0.12 per lead overage
+    calls_overage_rate = 0.10  # $0.10 per call overage
+    
+    overage_charges = (leads_overage * leads_overage_rate) + (calls_overage * calls_overage_rate)
+    
+    return {
+        "period_start": period_start.isoformat(),
+        "usage": {
+            "leads_used": leads_used,
+            "leads_allowance": leads_allowance,
+            "leads_remaining": max(0, leads_allowance - leads_used),
+            "leads_overage": leads_overage,
+            "calls_made": calls_made,
+            "calls_allowance": calls_allowance,
+            "calls_remaining": max(0, calls_allowance - calls_made),
+            "calls_overage": calls_overage
+        },
+        "overage_charges": {
+            "leads_rate": leads_overage_rate,
+            "calls_rate": calls_overage_rate,
+            "total_pending": round(overage_charges, 2)
+        },
+        "subscription": {
+            "tier": current_user.get("subscription_tier"),
+            "status": current_user.get("subscription_status")
+        }
+    }
 
 # ----- Compliance & Twilio Calling Endpoints -----
 

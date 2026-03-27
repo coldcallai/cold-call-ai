@@ -1155,9 +1155,9 @@ const LandingPage = () => {
             </div>
 
             <div className="flex items-center gap-8 text-sm text-gray-400">
-              <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-              <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-              <a href="#" className="hover:text-white transition-colors">Contact</a>
+              <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+              <a href="mailto:support@dialgenix.ai" className="hover:text-white transition-colors">Contact</a>
             </div>
 
             <p className="text-sm text-gray-500">© 2025 DialGenix.ai. All rights reserved.</p>

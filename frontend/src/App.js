@@ -35,6 +35,8 @@ import CRMIntegrationsPage from "@/pages/CRMIntegrationsPage";
 import DNCManagementPage from "@/pages/DNCManagementPage";
 import ComplianceSetupPage from "@/pages/ComplianceSetupPage";
 import GettingStartedPage from "@/pages/GettingStartedPage";
+import TermsPage from "@/pages/TermsPage";
+import PrivacyPage from "@/pages/PrivacyPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 import SetupWizard from "@/components/SetupWizard";
@@ -3748,6 +3750,8 @@ const AppRouter = () => {
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         
         {/* Protected Dashboard Routes */}
         <Route path="/app/*" element={

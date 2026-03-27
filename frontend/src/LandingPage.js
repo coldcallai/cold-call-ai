@@ -347,9 +347,11 @@ const LandingPage = () => {
           {/* Trust logos */}
           <div className="mt-20">
             <p className="text-sm text-gray-500 mb-6">Powered by enterprise-grade technology</p>
-            <div className="flex items-center justify-center gap-12">
+            <div className="flex items-center justify-center gap-12 flex-wrap">
               <span className="text-gray-500 font-semibold text-lg">twilio</span>
               <span className="text-gray-500 font-semibold text-lg">OpenAI</span>
+              <span className="text-gray-500 font-semibold text-lg">ElevenLabs</span>
+              <span className="text-gray-500 font-semibold text-lg">Stripe</span>
               <span className="text-gray-500 font-semibold text-lg">Calendly</span>
             </div>
           </div>

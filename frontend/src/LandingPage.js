@@ -365,6 +365,13 @@ const LandingPage = () => {
             </span>
           </div>
 
+          {/* Human-like AI callout */}
+          <div className="mt-10 max-w-2xl mx-auto">
+            <p className="text-gray-400 text-center text-base leading-relaxed bg-gradient-to-r from-cyan-500/5 via-teal-500/10 to-cyan-500/5 border border-cyan-500/20 rounded-xl px-6 py-4">
+              Our AI voice agents don't just talk—they <span className="text-cyan-400 font-medium">connect</span>. Trained with human-like energy, warmth, and natural conversation flow, they build rapport and qualify leads just like your best sales rep would.
+            </p>
+          </div>
+
           {/* Trust logos */}
           <div className="mt-20">
             <p className="text-sm text-gray-500 mb-6">Powered by enterprise-grade technology</p>

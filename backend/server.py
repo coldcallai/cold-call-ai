@@ -8498,6 +8498,268 @@ async def twilio_book_webhook(request: Request):
     response.hangup()
     return Response(content=str(response), media_type="application/xml")
 
+# ============== INBOUND SALES CALL HANDLER ==============
+# Handles incoming calls to the DialGenix.ai sales line (888) 513-1913
+
+@api_router.post("/twilio/inbound")
+async def handle_inbound_sales_call(request: Request):
+    """
+    Handle incoming calls to the DialGenix.ai sales line.
+    AI Sales Assistant 'Alex' answers and qualifies callers.
+    """
+    form_data = await request.form()
+    caller = form_data.get("From", "Unknown")
+    call_sid = form_data.get("CallSid", "")
+    
+    logger.info(f"Inbound sales call from {caller}, SID: {call_sid}")
+    
+    # Log the inbound call
+    await db.inbound_calls.insert_one({
+        "call_sid": call_sid,
+        "caller_number": caller,
+        "status": "answered",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "conversation_stage": "greeting"
+    })
+    
+    response = VoiceResponse()
+    
+    # Greeting from Alex, the AI Sales Assistant
+    response.say(
+        "Hi, thanks for calling DialGenix.ai! "
+        "This is Alex, your AI sales assistant. "
+        "I can answer questions about our platform, help you understand if we're a good fit, "
+        "and even book a demo with our team. "
+        "How can I help you today?",
+        voice='Polly.Joanna'
+    )
+    
+    # Gather caller's response
+    gather = Gather(
+        input='speech',
+        timeout=5,
+        speech_timeout='auto',
+        action='/api/twilio/inbound/respond',
+        method='POST'
+    )
+    response.append(gather)
+    
+    # Fallback if no response
+    response.say("I didn't catch that. Feel free to ask me anything about DialGenix.", voice='Polly.Joanna')
+    response.redirect('/api/twilio/inbound')
+    
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.post("/twilio/inbound/respond")
+async def handle_inbound_response(request: Request):
+    """Handle caller's response and provide appropriate information."""
+    form_data = await request.form()
+    speech_result = form_data.get("SpeechResult", "").lower()
+    call_sid = form_data.get("CallSid", "")
+    caller = form_data.get("From", "Unknown")
+    
+    logger.info(f"Inbound caller said: {speech_result}")
+    
+    response = VoiceResponse()
+    
+    # Update conversation log
+    await db.inbound_calls.update_one(
+        {"call_sid": call_sid},
+        {"$push": {"conversation": {"caller": speech_result, "timestamp": datetime.now(timezone.utc).isoformat()}}}
+    )
+    
+    # Pricing questions
+    if any(word in speech_result for word in ["price", "cost", "pricing", "how much", "expensive", "afford"]):
+        response.say(
+            "Great question! We have flexible plans. "
+            "Our Starter plan is $199 per month and includes 250 leads and 500 AI calls. "
+            "Our Pro plan at $499 gives you 1,000 leads and 2,000 calls with advanced features like CRM integrations. "
+            "We also offer a free trial with 15 minutes of AI calling, no credit card required. "
+            "Would you like me to book a quick demo so our team can walk you through which plan fits your needs?",
+            voice='Polly.Joanna'
+        )
+    
+    # How it works
+    elif any(word in speech_result for word in ["how", "work", "what do", "tell me", "explain", "more"]):
+        response.say(
+            "Here's how DialGenix works in 4 simple steps. "
+            "First, our AI discovers leads by finding businesses actively searching for services like yours. "
+            "Second, our voice agents call these leads with natural, human-like conversations. "
+            "Third, the AI qualifies leads based on your criteria and scores them automatically. "
+            "Fourth, qualified leads get booked directly into your calendar. "
+            "You basically wake up to booked meetings! Would you like to see a demo?",
+            voice='Polly.Joanna'
+        )
+    
+    # Demo / meeting request
+    elif any(word in speech_result for word in ["demo", "meeting", "schedule", "book", "yes", "sure", "okay", "interested"]):
+        response.say(
+            "Perfect! I'd love to get you scheduled with one of our product specialists. "
+            "They can give you a personalized walkthrough and answer any specific questions. "
+            "Can you tell me your email address so I can send you a calendar invite? "
+            "Please spell it out slowly.",
+            voice='Polly.Joanna'
+        )
+        
+        gather = Gather(
+            input='speech',
+            timeout=10,
+            speech_timeout='auto',
+            action='/api/twilio/inbound/capture-email',
+            method='POST'
+        )
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+    
+    # Features
+    elif any(word in speech_result for word in ["feature", "can it", "does it", "integration", "crm", "calendly"]):
+        response.say(
+            "DialGenix has some powerful features. "
+            "We offer AI lead discovery, natural voice conversations, voicemail drops, "
+            "automatic call transcription and recording, CRM integrations with HubSpot and Salesforce, "
+            "and Calendly integration for auto-booking meetings. "
+            "Our AI agents can even handle objections and qualify leads based on your custom criteria. "
+            "What's most important to you?",
+            voice='Polly.Joanna'
+        )
+    
+    # Not interested / end call
+    elif any(word in speech_result for word in ["not interested", "no thanks", "goodbye", "bye", "no"]):
+        response.say(
+            "No problem at all! Thanks for calling DialGenix. "
+            "If you ever want to explore AI-powered sales automation, we're here. "
+            "Have a great day!",
+            voice='Polly.Joanna'
+        )
+        response.hangup()
+        
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {"status": "completed", "outcome": "not_interested", "ended_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return Response(content=str(response), media_type="application/xml")
+    
+    # Default response
+    else:
+        response.say(
+            "I'd be happy to help with that. "
+            "DialGenix is an AI-powered cold calling platform that automates your sales outreach. "
+            "Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. "
+            "Would you like to know about pricing, see how it works, or schedule a demo?",
+            voice='Polly.Joanna'
+        )
+    
+    # Continue conversation
+    gather = Gather(
+        input='speech',
+        timeout=5,
+        speech_timeout='auto',
+        action='/api/twilio/inbound/respond',
+        method='POST'
+    )
+    response.append(gather)
+    
+    response.say("Is there anything else you'd like to know?", voice='Polly.Joanna')
+    response.redirect('/api/twilio/inbound/respond')
+    
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.post("/twilio/inbound/capture-email")
+async def capture_caller_email(request: Request):
+    """Capture caller's email for demo booking."""
+    form_data = await request.form()
+    speech_result = form_data.get("SpeechResult", "")
+    call_sid = form_data.get("CallSid", "")
+    caller = form_data.get("From", "Unknown")
+    
+    logger.info(f"Caller email attempt: {speech_result}")
+    
+    response = VoiceResponse()
+    
+    # Try to parse email from speech
+    email_attempt = speech_result.lower().replace(" at ", "@").replace(" dot ", ".").replace(" ", "")
+    
+    # Save the lead info
+    await db.inbound_calls.update_one(
+        {"call_sid": call_sid},
+        {"$set": {
+            "email_captured": email_attempt,
+            "status": "demo_requested",
+            "outcome": "hot_lead",
+            "ended_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Also save as a lead
+    await db.inbound_leads.insert_one({
+        "phone": caller,
+        "email": email_attempt,
+        "source": "inbound_call",
+        "status": "demo_requested",
+        "call_sid": call_sid,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    response.say(
+        f"I've noted your email. "
+        "Our team will send you a calendar invite shortly with available demo times. "
+        "You'll also receive an email with information about DialGenix and a link to start your free trial. "
+        "Is there anything else I can help you with before we wrap up?",
+        voice='Polly.Joanna'
+    )
+    
+    gather = Gather(
+        input='speech',
+        timeout=5,
+        speech_timeout='auto',
+        action='/api/twilio/inbound/final',
+        method='POST'
+    )
+    response.append(gather)
+    
+    response.say(
+        "Thanks for calling DialGenix.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
+        voice='Polly.Joanna'
+    )
+    response.hangup()
+    
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.post("/twilio/inbound/final")
+async def handle_final_response(request: Request):
+    """Handle final response before ending call."""
+    form_data = await request.form()
+    speech_result = form_data.get("SpeechResult", "").lower()
+    call_sid = form_data.get("CallSid", "")
+    
+    response = VoiceResponse()
+    
+    if any(word in speech_result for word in ["yes", "question", "actually", "one more"]):
+        response.say("Sure, what else would you like to know?", voice='Polly.Joanna')
+        
+        gather = Gather(
+            input='speech',
+            timeout=5,
+            speech_timeout='auto',
+            action='/api/twilio/inbound/respond',
+            method='POST'
+        )
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+    
+    response.say(
+        "Thanks for calling DialGenix.ai! We're excited to help you automate your sales outreach. Have a fantastic day!",
+        voice='Polly.Joanna'
+    )
+    response.hangup()
+    
+    await db.inbound_calls.update_one(
+        {"call_sid": call_sid},
+        {"$set": {"status": "completed", "ended_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return Response(content=str(response), media_type="application/xml")
+
 @api_router.post("/twilio/status")
 async def twilio_status_webhook(request: Request):
     """Handle call status updates from Twilio"""

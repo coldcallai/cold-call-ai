@@ -1157,9 +1157,9 @@ const LandingPage = () => {
             <div className="flex items-center gap-8 text-sm text-gray-400">
               <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
               <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-              <a href="tel:+18885551234" className="hover:text-white transition-colors flex items-center gap-1">
+              <a href="tel:+18885131913" className="hover:text-white transition-colors flex items-center gap-1">
                 <Phone className="w-3 h-3" />
-                (888) 555-1234
+                (888) 513-1913
               </a>
               <a href="mailto:support@dialgenix.ai" className="hover:text-white transition-colors">Contact</a>
             </div>

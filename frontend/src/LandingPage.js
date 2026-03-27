@@ -426,16 +426,88 @@ const LandingPage = () => {
                 </ul>
               </div>
               <div className="order-1 lg:order-2">
-                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-3 border border-cyan-500/20">
-                  <img 
-                    src="https://voice-dialer-staging.preview.emergentagent.com/demo-funnel.png" 
-                    alt="Sales Funnel Dashboard"
-                    className="rounded-xl shadow-2xl w-full"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.parentElement.innerHTML = '<div class="bg-gray-800 rounded-xl p-12 text-center"><p class="text-gray-400">Sales Funnel Preview</p><p class="text-gray-500 text-sm mt-2">Track leads through New → Contacted → Qualified → Booked</p></div>';
-                    }}
-                  />
+                <div className="bg-gradient-to-br from-cyan-500/10 to-teal-500/10 rounded-2xl p-4 border border-cyan-500/20">
+                  {/* Styled Funnel Mockup */}
+                  <div className="bg-[#0B1628] rounded-xl p-4 shadow-2xl">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg"></div>
+                        <span className="text-white font-semibold">Sales Pipeline</span>
+                      </div>
+                      <div className="flex gap-4 text-xs">
+                        <span className="text-gray-400">Total: <span className="text-white">24 leads</span></span>
+                        <span className="text-gray-400">Rate: <span className="text-green-400">32%</span></span>
+                      </div>
+                    </div>
+                    {/* Funnel Columns */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {/* New */}
+                      <div className="bg-gray-800/50 rounded-lg p-2">
+                        <div className="text-xs text-emerald-400 font-medium mb-2 flex justify-between">
+                          <span>New</span><span className="bg-emerald-500/20 px-1.5 rounded">8</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs">
+                            <div className="text-white text-[10px]">Acme Corp</div>
+                            <div className="text-gray-500 text-[8px]">+1 555-0123</div>
+                          </div>
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs">
+                            <div className="text-white text-[10px]">TechStart Inc</div>
+                            <div className="text-gray-500 text-[8px]">+1 555-0456</div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Contacted */}
+                      <div className="bg-gray-800/50 rounded-lg p-2">
+                        <div className="text-xs text-blue-400 font-medium mb-2 flex justify-between">
+                          <span>Contacted</span><span className="bg-blue-500/20 px-1.5 rounded">6</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs">
+                            <div className="text-white text-[10px]">GlobalTech</div>
+                            <div className="text-green-400 text-[8px]">Interested</div>
+                          </div>
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs">
+                            <div className="text-white text-[10px]">DataFlow</div>
+                            <div className="text-yellow-400 text-[8px]">Call back</div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Qualified */}
+                      <div className="bg-gray-800/50 rounded-lg p-2">
+                        <div className="text-xs text-purple-400 font-medium mb-2 flex justify-between">
+                          <span>Qualified</span><span className="bg-purple-500/20 px-1.5 rounded">5</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs">
+                            <div className="text-white text-[10px]">MegaSales Co</div>
+                            <div className="text-purple-400 text-[8px]">Hot lead</div>
+                          </div>
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs">
+                            <div className="text-white text-[10px]">CloudFirst</div>
+                            <div className="text-purple-400 text-[8px]">Decision maker</div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Booked */}
+                      <div className="bg-gray-800/50 rounded-lg p-2">
+                        <div className="text-xs text-orange-400 font-medium mb-2 flex justify-between">
+                          <span>Booked</span><span className="bg-orange-500/20 px-1.5 rounded">5</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs border border-green-500/30">
+                            <div className="text-white text-[10px]">Enterprise Ltd</div>
+                            <div className="text-green-400 text-[8px]">Tomorrow 2pm</div>
+                          </div>
+                          <div className="bg-gray-700/50 rounded p-1.5 text-xs border border-green-500/30">
+                            <div className="text-white text-[10px]">ScaleUp Inc</div>
+                            <div className="text-green-400 text-[8px]">Friday 10am</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

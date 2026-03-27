@@ -517,6 +517,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [ ] Parallel dialing (Orum-style)
 - [ ] Call Analytics Dashboard
 - [ ] A/B testing for call scripts
+- [x] ~~Automated Follow-Up Calls~~ ✅ DONE (March 2026)
 
 ## Testing
 - Backend: pytest suite at `/app/backend/tests/test_auth_and_api.py`
@@ -587,3 +588,17 @@ A vertical-agnostic B2B SaaS platform that:
   - `POST /api/voices/preview` - Generate voice preview audio
   - `PUT /api/agents/{id}/voice` - Update agent voice settings
   - `DELETE /api/voices/cloned/{id}` - Delete cloned voice
+- **Automated Follow-Up Call System** (Synthflow-style):
+  - `GET /api/followups` - Get scheduled follow-up calls
+  - `POST /api/followups` - Manually schedule a follow-up
+  - `GET /api/followups/pending` - Get overdue follow-ups ready to execute
+  - `POST /api/followups/{id}/execute` - Execute a scheduled follow-up call
+  - `POST /api/followups/{id}/complete` - Mark complete with optional retry
+  - `DELETE /api/followups/{id}` - Cancel a scheduled follow-up
+  - `POST /api/followups/schedule-callback` - Schedule callback at lead's requested time
+  - `GET /api/followups/stats` - Get follow-up statistics
+  - `GET /api/followup-sequences` - Get multi-touch sequence templates
+  - `POST /api/followup-sequences` - Create sequence template
+  - `PUT /api/campaigns/{id}/followup-settings` - Configure campaign follow-up rules
+  - `GET /api/campaigns/{id}/followup-settings` - Get campaign follow-up rules
+  - Auto-scheduling after no-answer/voicemail via `auto_schedule_followup()` helper

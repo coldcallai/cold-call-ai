@@ -345,6 +345,101 @@ class Booking(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# ============== FOLLOW-UP CALL SYSTEM ==============
+class FollowUpReason(str, Enum):
+    NO_ANSWER = "no_answer"  # Lead didn't answer
+    VOICEMAIL = "voicemail"  # Left voicemail, follow up later
+    CALLBACK_REQUESTED = "callback_requested"  # Lead requested callback at specific time
+    NURTURE = "nurture"  # Warm lead, needs nurturing
+    RETRY = "retry"  # Automatic retry (busy, failed)
+    SEQUENCE = "sequence"  # Part of multi-touch sequence
+
+class FollowUpStatus(str, Enum):
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+    SKIPPED = "skipped"  # Skipped (lead converted, unsubscribed, etc.)
+
+class FollowUp(BaseModel):
+    """Scheduled follow-up calls for leads"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    lead_id: str
+    campaign_id: str
+    agent_id: Optional[str] = None
+    
+    # Scheduling
+    scheduled_at: str  # When to make the follow-up call (ISO format)
+    reason: FollowUpReason = FollowUpReason.NO_ANSWER
+    status: FollowUpStatus = FollowUpStatus.SCHEDULED
+    
+    # Retry tracking
+    attempt_number: int = 1  # Which attempt this is (1, 2, 3...)
+    max_attempts: int = 3  # Max retry attempts for this follow-up
+    
+    # Context
+    original_call_id: Optional[str] = None  # Reference to original call
+    notes: Optional[str] = None  # Why this follow-up was scheduled
+    callback_time_preference: Optional[str] = None  # "morning", "afternoon", "evening" or specific time
+    
+    # Results
+    result_call_id: Optional[str] = None  # Call ID when follow-up executed
+    completed_at: Optional[str] = None
+    
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class FollowUpCreate(BaseModel):
+    lead_id: str
+    campaign_id: str
+    scheduled_at: str  # ISO format datetime
+    reason: FollowUpReason = FollowUpReason.NO_ANSWER
+    notes: Optional[str] = None
+    callback_time_preference: Optional[str] = None
+    max_attempts: int = 3
+
+class FollowUpSequence(BaseModel):
+    """Multi-touch follow-up sequence template"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+    
+    # Sequence steps
+    steps: List[Dict[str, Any]] = []
+    # Example step: {"step": 1, "delay_hours": 24, "action": "call", "script_override": None}
+    # Example step: {"step": 2, "delay_hours": 72, "action": "call", "script_override": "Follow-up script..."}
+    
+    # Settings
+    max_attempts_per_step: int = 2
+    stop_on_connect: bool = True  # Stop sequence when lead answers
+    stop_on_booking: bool = True  # Stop sequence when meeting booked
+    
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class CampaignFollowUpSettings(BaseModel):
+    """Follow-up settings for a campaign"""
+    enabled: bool = True
+    
+    # No-answer retry settings
+    no_answer_retry_enabled: bool = True
+    no_answer_retry_count: int = 3  # Max retries for no-answer
+    no_answer_retry_delay_hours: int = 24  # Hours between retries
+    
+    # Voicemail follow-up
+    voicemail_followup_enabled: bool = True
+    voicemail_followup_delay_hours: int = 48  # Follow up 2 days after voicemail
+    
+    # Callback handling
+    callback_buffer_minutes: int = 15  # Buffer time around requested callback
+    
+    # Sequence
+    sequence_id: Optional[str] = None  # Optional follow-up sequence to use
+
 class LeadDiscoveryRequest(BaseModel):
     search_query: str = "credit card processing"
     location: Optional[str] = None
@@ -8013,6 +8108,506 @@ async def get_current_period_usage(current_user: Dict = Depends(get_current_user
             "status": current_user.get("subscription_status")
         }
     }
+
+# ----- Follow-Up Call System -----
+
+@api_router.get("/followups")
+async def get_followups(
+    status: Optional[str] = None,
+    lead_id: Optional[str] = None,
+    campaign_id: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get scheduled follow-up calls"""
+    query = {"user_id": current_user["user_id"]}
+    
+    if status:
+        query["status"] = status
+    if lead_id:
+        query["lead_id"] = lead_id
+    if campaign_id:
+        query["campaign_id"] = campaign_id
+    
+    followups = await db.followups.find(
+        query, {"_id": 0}
+    ).sort("scheduled_at", 1).skip(skip).limit(limit).to_list(limit)
+    
+    total = await db.followups.count_documents(query)
+    
+    return {
+        "followups": followups,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.post("/followups")
+async def create_followup(
+    followup: FollowUpCreate,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Manually schedule a follow-up call"""
+    # Verify lead exists and belongs to user
+    lead = await db.leads.find_one({
+        "id": followup.lead_id,
+        "user_id": current_user["user_id"]
+    })
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Create follow-up record
+    followup_record = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["user_id"],
+        "lead_id": followup.lead_id,
+        "campaign_id": followup.campaign_id,
+        "scheduled_at": followup.scheduled_at,
+        "reason": followup.reason,
+        "status": "scheduled",
+        "attempt_number": 1,
+        "max_attempts": followup.max_attempts,
+        "notes": followup.notes,
+        "callback_time_preference": followup.callback_time_preference,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.followups.insert_one(followup_record)
+    
+    return {"message": "Follow-up scheduled", "followup": {k: v for k, v in followup_record.items() if k != "_id"}}
+
+@api_router.get("/followups/pending")
+async def get_pending_followups(
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get follow-ups that are due to be executed"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    followups = await db.followups.find({
+        "user_id": current_user["user_id"],
+        "status": "scheduled",
+        "scheduled_at": {"$lte": now}
+    }, {"_id": 0}).sort("scheduled_at", 1).to_list(100)
+    
+    return {"pending_followups": followups, "count": len(followups)}
+
+@api_router.post("/followups/{followup_id}/execute")
+async def execute_followup(
+    followup_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Execute a scheduled follow-up call"""
+    followup = await db.followups.find_one({
+        "id": followup_id,
+        "user_id": current_user["user_id"]
+    })
+    
+    if not followup:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    
+    if followup["status"] != "scheduled":
+        raise HTTPException(status_code=400, detail=f"Follow-up is {followup['status']}, not scheduled")
+    
+    # Update status to in_progress
+    await db.followups.update_one(
+        {"id": followup_id},
+        {"$set": {"status": "in_progress", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Get lead and campaign
+    lead = await db.leads.find_one({"id": followup["lead_id"]}, {"_id": 0})
+    campaign = await db.campaigns.find_one({"id": followup["campaign_id"]}, {"_id": 0})
+    
+    if not lead or not campaign:
+        await db.followups.update_one(
+            {"id": followup_id},
+            {"$set": {"status": "failed", "notes": "Lead or campaign not found"}}
+        )
+        raise HTTPException(status_code=404, detail="Lead or campaign not found")
+    
+    # Check if lead is still callable (not converted, not DNC)
+    if lead.get("status") in ["converted", "dnc", "unsubscribed"]:
+        await db.followups.update_one(
+            {"id": followup_id},
+            {"$set": {"status": "skipped", "notes": f"Lead status: {lead.get('status')}"}}
+        )
+        return {"message": "Follow-up skipped", "reason": f"Lead status: {lead.get('status')}"}
+    
+    # Initiate the call (similar to /calls/initiate but with follow-up context)
+    try:
+        # Create call record
+        call_record = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["user_id"],
+            "lead_id": lead["id"],
+            "campaign_id": campaign["id"],
+            "agent_id": followup.get("agent_id"),
+            "status": "pending",
+            "is_followup": True,
+            "followup_id": followup_id,
+            "followup_attempt": followup["attempt_number"],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.calls.insert_one(call_record)
+        
+        # Update follow-up with call reference
+        await db.followups.update_one(
+            {"id": followup_id},
+            {"$set": {"result_call_id": call_record["id"]}}
+        )
+        
+        return {
+            "message": "Follow-up call initiated",
+            "call_id": call_record["id"],
+            "followup_id": followup_id,
+            "lead": {"name": lead.get("contact_name") or lead.get("business_name"), "phone": lead.get("phone")}
+        }
+        
+    except Exception as e:
+        await db.followups.update_one(
+            {"id": followup_id},
+            {"$set": {"status": "failed", "notes": str(e)}}
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+
+@api_router.post("/followups/{followup_id}/complete")
+async def complete_followup(
+    followup_id: str,
+    outcome: str,  # "connected", "no_answer", "voicemail", "failed"
+    schedule_retry: bool = False,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Mark a follow-up as completed and optionally schedule retry"""
+    followup = await db.followups.find_one({
+        "id": followup_id,
+        "user_id": current_user["user_id"]
+    })
+    
+    if not followup:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    
+    update_data = {
+        "status": "completed",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.followups.update_one({"id": followup_id}, {"$set": update_data})
+    
+    # Schedule retry if requested and attempts remaining
+    if schedule_retry and outcome in ["no_answer", "voicemail"] and followup["attempt_number"] < followup["max_attempts"]:
+        # Get campaign follow-up settings
+        campaign = await db.campaigns.find_one({"id": followup["campaign_id"]})
+        delay_hours = 24  # Default 24 hours
+        
+        if campaign and campaign.get("followup_settings"):
+            settings = campaign["followup_settings"]
+            if outcome == "no_answer":
+                delay_hours = settings.get("no_answer_retry_delay_hours", 24)
+            elif outcome == "voicemail":
+                delay_hours = settings.get("voicemail_followup_delay_hours", 48)
+        
+        # Create new follow-up
+        retry_followup = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["user_id"],
+            "lead_id": followup["lead_id"],
+            "campaign_id": followup["campaign_id"],
+            "agent_id": followup.get("agent_id"),
+            "scheduled_at": (datetime.now(timezone.utc) + timedelta(hours=delay_hours)).isoformat(),
+            "reason": "no_answer" if outcome == "no_answer" else "voicemail",
+            "status": "scheduled",
+            "attempt_number": followup["attempt_number"] + 1,
+            "max_attempts": followup["max_attempts"],
+            "original_call_id": followup.get("original_call_id"),
+            "notes": f"Retry #{followup['attempt_number'] + 1} after {outcome}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.followups.insert_one(retry_followup)
+        
+        return {
+            "message": "Follow-up completed, retry scheduled",
+            "outcome": outcome,
+            "retry_scheduled": True,
+            "retry_at": retry_followup["scheduled_at"],
+            "attempt": retry_followup["attempt_number"]
+        }
+    
+    return {"message": "Follow-up completed", "outcome": outcome, "retry_scheduled": False}
+
+@api_router.delete("/followups/{followup_id}")
+async def cancel_followup(
+    followup_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Cancel a scheduled follow-up"""
+    result = await db.followups.update_one(
+        {"id": followup_id, "user_id": current_user["user_id"], "status": "scheduled"},
+        {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Follow-up not found or already processed")
+    
+    return {"message": "Follow-up cancelled"}
+
+@api_router.post("/followups/schedule-callback")
+async def schedule_callback(
+    lead_id: str = Form(...),
+    campaign_id: str = Form(...),
+    callback_datetime: str = Form(...),  # ISO format
+    notes: Optional[str] = Form(None),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Schedule a callback when lead requests specific time"""
+    # Verify lead exists
+    lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    followup = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["user_id"],
+        "lead_id": lead_id,
+        "campaign_id": campaign_id,
+        "scheduled_at": callback_datetime,
+        "reason": "callback_requested",
+        "status": "scheduled",
+        "attempt_number": 1,
+        "max_attempts": 2,  # Try callback twice max
+        "notes": notes or "Customer requested callback",
+        "callback_time_preference": callback_datetime,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.followups.insert_one(followup)
+    
+    # Update lead status
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"status": "callback_scheduled", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Callback scheduled", "followup": {k: v for k, v in followup.items() if k != "_id"}}
+
+@api_router.get("/followups/stats")
+async def get_followup_stats(
+    campaign_id: Optional[str] = None,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get follow-up statistics"""
+    query = {"user_id": current_user["user_id"]}
+    if campaign_id:
+        query["campaign_id"] = campaign_id
+    
+    # Count by status
+    pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    status_counts = await db.followups.aggregate(pipeline).to_list(10)
+    
+    # Count by reason
+    reason_pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$reason", "count": {"$sum": 1}}}
+    ]
+    reason_counts = await db.followups.aggregate(reason_pipeline).to_list(10)
+    
+    # Upcoming follow-ups (next 24 hours)
+    tomorrow = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+    upcoming = await db.followups.count_documents({
+        **query,
+        "status": "scheduled",
+        "scheduled_at": {"$lte": tomorrow}
+    })
+    
+    # Overdue follow-ups
+    now = datetime.now(timezone.utc).isoformat()
+    overdue = await db.followups.count_documents({
+        **query,
+        "status": "scheduled",
+        "scheduled_at": {"$lt": now}
+    })
+    
+    return {
+        "by_status": {item["_id"]: item["count"] for item in status_counts},
+        "by_reason": {item["_id"]: item["count"] for item in reason_counts},
+        "upcoming_24h": upcoming,
+        "overdue": overdue,
+        "total": await db.followups.count_documents(query)
+    }
+
+# ----- Follow-Up Sequences -----
+
+@api_router.get("/followup-sequences")
+async def get_followup_sequences(current_user: Dict = Depends(get_current_user)):
+    """Get user's follow-up sequences"""
+    sequences = await db.followup_sequences.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).to_list(50)
+    return {"sequences": sequences}
+
+@api_router.post("/followup-sequences")
+async def create_followup_sequence(
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    steps: str = Form(...),  # JSON string
+    current_user: Dict = Depends(get_current_user)
+):
+    """Create a multi-touch follow-up sequence"""
+    import json as json_module
+    
+    try:
+        steps_list = json_module.loads(steps)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid steps JSON")
+    
+    sequence = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["user_id"],
+        "name": name,
+        "description": description,
+        "is_active": True,
+        "steps": steps_list,
+        "max_attempts_per_step": 2,
+        "stop_on_connect": True,
+        "stop_on_booking": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.followup_sequences.insert_one(sequence)
+    
+    return {"message": "Sequence created", "sequence": {k: v for k, v in sequence.items() if k != "_id"}}
+
+@api_router.put("/campaigns/{campaign_id}/followup-settings")
+async def update_campaign_followup_settings(
+    campaign_id: str,
+    enabled: bool = Form(True),
+    no_answer_retry_enabled: bool = Form(True),
+    no_answer_retry_count: int = Form(3),
+    no_answer_retry_delay_hours: int = Form(24),
+    voicemail_followup_enabled: bool = Form(True),
+    voicemail_followup_delay_hours: int = Form(48),
+    sequence_id: Optional[str] = Form(None),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Update follow-up settings for a campaign"""
+    campaign = await db.campaigns.find_one({
+        "id": campaign_id,
+        "user_id": current_user["user_id"]
+    })
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    followup_settings = {
+        "enabled": enabled,
+        "no_answer_retry_enabled": no_answer_retry_enabled,
+        "no_answer_retry_count": no_answer_retry_count,
+        "no_answer_retry_delay_hours": no_answer_retry_delay_hours,
+        "voicemail_followup_enabled": voicemail_followup_enabled,
+        "voicemail_followup_delay_hours": voicemail_followup_delay_hours,
+        "sequence_id": sequence_id
+    }
+    
+    await db.campaigns.update_one(
+        {"id": campaign_id},
+        {"$set": {"followup_settings": followup_settings, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Follow-up settings updated", "settings": followup_settings}
+
+@api_router.get("/campaigns/{campaign_id}/followup-settings")
+async def get_campaign_followup_settings(
+    campaign_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get follow-up settings for a campaign"""
+    campaign = await db.campaigns.find_one({
+        "id": campaign_id,
+        "user_id": current_user["user_id"]
+    }, {"_id": 0, "followup_settings": 1, "id": 1, "name": 1})
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Return default settings if none configured
+    default_settings = {
+        "enabled": True,
+        "no_answer_retry_enabled": True,
+        "no_answer_retry_count": 3,
+        "no_answer_retry_delay_hours": 24,
+        "voicemail_followup_enabled": True,
+        "voicemail_followup_delay_hours": 48,
+        "sequence_id": None
+    }
+    
+    return {
+        "campaign_id": campaign["id"],
+        "campaign_name": campaign.get("name"),
+        "settings": campaign.get("followup_settings", default_settings)
+    }
+
+# Background task helper for auto-scheduling follow-ups after calls
+async def auto_schedule_followup(call_id: str, outcome: str, user_id: str):
+    """Automatically schedule follow-up based on call outcome"""
+    call = await db.calls.find_one({"id": call_id})
+    if not call:
+        return
+    
+    campaign = await db.campaigns.find_one({"id": call.get("campaign_id")})
+    if not campaign:
+        return
+    
+    settings = campaign.get("followup_settings", {})
+    if not settings.get("enabled", True):
+        return
+    
+    # Check if lead already has pending follow-up
+    existing = await db.followups.find_one({
+        "lead_id": call["lead_id"],
+        "campaign_id": call["campaign_id"],
+        "status": "scheduled"
+    })
+    if existing:
+        return  # Don't create duplicate
+    
+    delay_hours = None
+    reason = None
+    
+    if outcome == "no_answer" and settings.get("no_answer_retry_enabled", True):
+        delay_hours = settings.get("no_answer_retry_delay_hours", 24)
+        reason = "no_answer"
+    elif outcome == "voicemail" and settings.get("voicemail_followup_enabled", True):
+        delay_hours = settings.get("voicemail_followup_delay_hours", 48)
+        reason = "voicemail"
+    
+    if delay_hours and reason:
+        followup = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "lead_id": call["lead_id"],
+            "campaign_id": call["campaign_id"],
+            "agent_id": call.get("agent_id"),
+            "scheduled_at": (datetime.now(timezone.utc) + timedelta(hours=delay_hours)).isoformat(),
+            "reason": reason,
+            "status": "scheduled",
+            "attempt_number": 1,
+            "max_attempts": settings.get("no_answer_retry_count", 3),
+            "original_call_id": call_id,
+            "notes": f"Auto-scheduled after {outcome}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.followups.insert_one(followup)
+        logger.info(f"Auto-scheduled follow-up for lead {call['lead_id']} in {delay_hours}h")
 
 # ----- Compliance & Twilio Calling Endpoints -----
 

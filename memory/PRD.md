@@ -487,6 +487,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~ICP Scoring~~ ✅ DONE
 - [x] ~~Setup Instructions / Onboarding Wizard~~ ✅ DONE (December 2025)
 - [x] ~~Synthflow-style Free Trial (15 minutes of call time)~~ ✅ DONE (December 2025)
+- [x] ~~ElevenLabs Voice Cloning~~ ✅ DONE (March 2026) - Clone custom voices for AI agents
 
 ### P1 - High Priority
 - [x] ~~Multi-tenant data isolation - Scope leads/campaigns to user accounts~~ ✅ DONE (December 2025)
@@ -525,8 +526,9 @@ A vertical-agnostic B2B SaaS platform that:
 - Setup status tests: `/app/backend/tests/test_setup_status.py` (24 tests)
 - Phone verification tests: `/app/backend/tests/test_phone_verification.py` (12 tests)
 - Trial features tests: `/app/backend/tests/test_trial_features.py` (8 tests)
+- Voice cloning tests: `/app/backend/tests/test_voice_cloning.py` (10 tests)
 - Auth testing playbook: `/app/auth_testing.md`
-- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_7.json`
+- Test reports: `/app/test_reports/iteration_1.json` through `/app/test_reports/iteration_8.json`
 - Test users:
   - User A (admin): test@example.com / Test123!
   - User B (free): test_user_b@example.com / Test456!
@@ -543,7 +545,7 @@ A vertical-agnostic B2B SaaS platform that:
 | OpenAI GPT-5.2 | ✅ Active | Via Emergent LLM Key |
 | OpenAI Whisper | ✅ Active | STT for caller audio |
 | Emergent Auth | ✅ Active | Google OAuth |
-| ElevenLabs | ✅ Active | TTS voice generation, μ-law output |
+| ElevenLabs | ✅ Active | TTS voice generation, μ-law output, Voice Cloning (IVC) |
 | Stripe | ✅ Active | Test keys, checkout working |
 | Twilio | ✅ Active | Live outbound calls + Media Streams |
 | Resend | ⚠️ Requires Key | Email notifications |
@@ -551,3 +553,21 @@ A vertical-agnostic B2B SaaS platform that:
 | Salesforce | ✅ Ready | CRM integration - requires user API key |
 | HubSpot | ✅ Ready | CRM integration - requires user API key |
 | Real Phone Validation | ⚠️ Ready | DNC Plus API - configure DNC_API_KEY |
+
+### Session 10 (March 2026): Voice Cloning Integration
+- **ElevenLabs Voice Cloning (IVC)** - Clone custom voices for AI agents (Synthflow/Bland AI parity)
+  - Upload 1-5 audio samples (MP3/WAV, 30+ seconds total)
+  - Pro+ subscription required for voice cloning
+  - Maximum 5 cloned voices per user
+  - Voice tuning controls: Stability, Similarity, Style
+- **Voice Cloning UI Components**:
+  - `VoiceCloneModal` - Upload audio samples, name voice, clone via ElevenLabs API
+  - `VoiceSettingsModal` - Select preset or cloned voice, tune voice parameters, preview
+- **Agent Voice Assignment** - Each agent can use preset or custom cloned voice
+- **Backend Endpoints**:
+  - `GET /api/voices/presets` - 10 ElevenLabs preset voices
+  - `GET /api/voices/cloned` - User's cloned voices
+  - `POST /api/voices/clone` - Clone voice with file upload
+  - `POST /api/voices/preview` - Generate voice preview audio
+  - `PUT /api/agents/{id}/voice` - Update agent voice settings
+  - `DELETE /api/voices/cloned/{id}` - Delete cloned voice

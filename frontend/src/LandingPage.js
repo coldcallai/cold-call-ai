@@ -327,8 +327,7 @@ const LandingPage = () => {
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Break free from manual dialing. Discover leads, qualify them with AI-powered phone calls, 
-            and book meetings automatically — with AI Agents doing the heavy lifting.
+            Stop wasting time on manual dialing. Let our AI agents find leads, have natural real human-like AI conversations to qualify them, and book meetings for you—on autopilot.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">

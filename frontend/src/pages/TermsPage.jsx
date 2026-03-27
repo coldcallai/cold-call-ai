@@ -93,21 +93,69 @@ const TermsPage = () => {
 
           {/* Section 4 */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-white mb-4">4. Payment and Billing</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">4. Fees and Payment</h2>
             <p className="text-gray-300 leading-relaxed mb-4">
-              Some features require payment. By subscribing, you agree to:
+              You agree to pay DialGenix AI the fees listed in your chosen Subscription Plan ("Subscription Fees").
             </p>
-            <ul className="list-disc list-inside text-gray-300 space-y-2 ml-4">
-              <li>Pay all applicable fees</li>
-              <li>Authorize recurring billing where applicable</li>
-              <li>Provide accurate billing information</li>
-            </ul>
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-4">
+            
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-medium text-white mb-2">Payment Methods</h3>
+                <p className="text-gray-300 leading-relaxed">
+                  You may choose from available payment options. If using a third-party payment provider, that provider's terms will also apply.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-white mb-2">Credit Card Payments</h3>
+                <p className="text-gray-300 leading-relaxed">
+                  If a payment cannot be processed for reasons beyond DialGenix AI's control, you must provide an alternative payment method.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-white mb-2">Billing Cycle</h3>
+                <p className="text-gray-300 leading-relaxed">
+                  Payments are due according to the billing schedule in your Subscription Plan. Switching from annual to monthly billing requires DialGenix AI's confirmation.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-white mb-2">Invoices</h3>
+                <p className="text-gray-300 leading-relaxed">
+                  DialGenix AI will email invoices for each billing cycle.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-white mb-2">Late Payment</h3>
+                <p className="text-gray-300 leading-relaxed">
+                  If payment is overdue by more than five (5) days, DialGenix AI may suspend access to the Service until payment is received. Continued non-payment after notice may result in termination of your account.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-white mb-2">Usage Irrelevant</h3>
+                <p className="text-gray-300 leading-relaxed">
+                  Fees are due regardless of whether you actively use the Service.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-white mb-2">Taxes</h3>
+                <p className="text-gray-300 leading-relaxed">
+                  All fees are net of taxes. You are responsible for all applicable taxes, levies, or governmental charges. If DialGenix AI must pay taxes on your behalf, you will reimburse the amount unless a valid exemption certificate is provided. DialGenix AI is responsible only for taxes on its own income, property, or employees.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-6">
               <p className="text-red-400 font-medium mb-2">No Refund Policy</p>
               <p className="text-gray-300 text-sm">
                 All payments made to DialGenix AI are final and non-refundable. We do not provide refunds or credits for partial subscription periods, unused services, or cancellations, unless required by applicable law. Cancellation will only take effect at the end of the current billing cycle.
               </p>
             </div>
+            
             <p className="text-gray-300 leading-relaxed mt-4">
               We may change pricing with reasonable notice.
             </p>

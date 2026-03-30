@@ -328,7 +328,7 @@ const LandingPage = () => {
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Stop wasting time on manual dialing. Let our AI agents find leads, have natural, human-like conversations, and book meetings for you—on autopilot.
+            Stop wasting time on manual dialing. Let our AI agents find leads, have natural, human-like conversations, and book meetings for you <span className="text-cyan-400">➤</span> on autopilot.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">

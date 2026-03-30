@@ -373,7 +373,7 @@ const LandingPage = () => {
           </div>
 
           {/* Trust logos */}
-          <div className="mt-10 space-y-8">
+          <div className="mt-16 space-y-8">
             {/* Partner Logos */}
             <div>
               <p className="text-sm text-gray-500 mb-4">Powered by enterprise-grade technology</p>

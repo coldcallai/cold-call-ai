@@ -2423,12 +2423,44 @@ const Agents = () => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(null); // agent for voice settings
   const [previewingVoice, setPreviewingVoice] = useState(null); // agent id being previewed
   const [playingAudio, setPlayingAudio] = useState(null); // audio element reference
+  
+  // Use case templates with pre-filled prompts
+  const USE_CASE_TEMPLATES = {
+    sales_cold_calling: {
+      label: "Sales / Cold Calling",
+      description: "Qualify leads and book meetings",
+      prompt: `You are a sales representative for {company}. Your goal is to qualify leads by asking about their current pain points, budget, and timeline. If qualified, book a meeting with their sales team. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+    },
+    appointment_setter: {
+      label: "Appointment Setter",
+      description: "Schedule appointments and manage bookings",
+      prompt: `You are a scheduling assistant for {company}. Help callers book, reschedule, or cancel appointments. Confirm their contact information and preferred times. Send calendar invites after booking. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+    },
+    receptionist: {
+      label: "Receptionist",
+      description: "Answer calls and route to departments",
+      prompt: `You are the front desk receptionist for {company}. Greet callers warmly, ask how you can help, and route them to the appropriate department or person. Take messages if someone is unavailable. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+    },
+    customer_service: {
+      label: "Customer Service",
+      description: "Handle support inquiries and issues",
+      prompt: `You are a customer support agent for {company}. Listen to the customer's issue, troubleshoot common problems, and provide solutions. Escalate to a human agent if needed. Always confirm the issue is resolved before ending the call. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+    },
+    answering_service: {
+      label: "Answering Service",
+      description: "After-hours message taking",
+      prompt: `You are the after-hours answering service for {company}. Take the caller's name, phone number, and a brief message about their inquiry. Let them know someone will return their call during business hours. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+    }
+  };
+  
   const [newAgent, setNewAgent] = useState({
     name: "",
     email: "",
     phone: "",
     calendly_link: "",
-    max_daily_calls: 50
+    max_daily_calls: 50,
+    use_case: "sales_cold_calling",
+    system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt
   });
 
   const fetchAgents = async () => {
@@ -2513,7 +2545,15 @@ const Agents = () => {
       await axios.post(`${API}/agents`, newAgent);
       toast.success("Agent created!");
       setShowCreate(false);
-      setNewAgent({ name: "", email: "", phone: "", calendly_link: "", max_daily_calls: 50 });
+      setNewAgent({ 
+        name: "", 
+        email: "", 
+        phone: "", 
+        calendly_link: "", 
+        max_daily_calls: 50,
+        use_case: "sales_cold_calling",
+        system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt
+      });
       fetchAgents();
     } catch (error) {
       toast.error("Failed to create agent");
@@ -2701,6 +2741,33 @@ const Agents = () => {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
+            {/* Use Case Selector */}
+            <div>
+              <Label htmlFor="use-case">Use Case *</Label>
+              <select
+                id="use-case"
+                data-testid="agent-use-case-select"
+                value={newAgent.use_case}
+                onChange={(e) => {
+                  const useCase = e.target.value;
+                  const template = USE_CASE_TEMPLATES[useCase];
+                  setNewAgent({
+                    ...newAgent, 
+                    use_case: useCase,
+                    system_prompt: template.prompt
+                  });
+                }}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {Object.entries(USE_CASE_TEMPLATES).map(([key, template]) => (
+                  <option key={key} value={key}>{template.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {USE_CASE_TEMPLATES[newAgent.use_case]?.description}
+              </p>
+            </div>
+            
             <div>
               <Label htmlFor="agent-name">Name *</Label>
               <Input
@@ -2748,6 +2815,24 @@ const Agents = () => {
                 placeholder="https://calendly.com/john-doe/30min"
                 className="mt-1"
               />
+            </div>
+            
+            {/* System Prompt (Advanced) */}
+            <div>
+              <Label htmlFor="system-prompt" className="flex items-center gap-2">
+                AI Script 
+                <span className="text-xs text-gray-400 font-normal">(customize if needed)</span>
+              </Label>
+              <textarea
+                id="system-prompt"
+                data-testid="agent-prompt-input"
+                value={newAgent.system_prompt}
+                onChange={(e) => setNewAgent({...newAgent, system_prompt: e.target.value})}
+                placeholder="Enter custom AI instructions..."
+                rows={4}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">Use {'{company}'} as a placeholder for the company name</p>
             </div>
           </div>
 

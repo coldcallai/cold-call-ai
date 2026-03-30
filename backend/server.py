@@ -236,6 +236,9 @@ class Agent(BaseModel):
     max_daily_calls: int = 50
     assigned_leads: int = 0
     booked_meetings: int = 0  # Track meetings booked for this agent
+    # Use Case & System Prompt
+    use_case: str = "sales_cold_calling"  # sales_cold_calling, appointment_setter, receptionist, customer_service, answering_service
+    system_prompt: Optional[str] = None  # Custom AI instructions for this agent
     # Voice Cloning Settings
     voice_type: str = "preset"  # "preset" or "cloned"
     preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Default ElevenLabs voice (Rachel)
@@ -251,6 +254,8 @@ class AgentCreate(BaseModel):
     calendly_link: str
     calendly_api_token: Optional[str] = None  # Optional for advanced integration
     max_daily_calls: int = 50
+    use_case: str = "sales_cold_calling"
+    system_prompt: Optional[str] = None
     voice_type: str = "preset"
     preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     voice_settings: Optional[Dict[str, Any]] = None

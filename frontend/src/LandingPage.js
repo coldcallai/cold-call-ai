@@ -444,8 +444,8 @@ const LandingPage = () => {
                         <span className="text-white font-semibold">Sales Pipeline</span>
                       </div>
                       <div className="flex gap-4 text-xs">
-                        <span className="text-gray-400">Total: <span className="text-white">24 leads</span></span>
-                        <span className="text-gray-400">Rate: <span className="text-green-400">32%</span></span>
+                        <span className="text-gray-400">Total: <span className="text-white">248 leads</span></span>
+                        <span className="text-gray-400">Rate: <span className="text-green-400">3.6%</span></span>
                       </div>
                     </div>
                     {/* Funnel Columns */}
@@ -453,7 +453,7 @@ const LandingPage = () => {
                       {/* New */}
                       <div className="bg-gray-800/50 rounded-lg p-2">
                         <div className="text-xs text-emerald-400 font-medium mb-2 flex justify-between">
-                          <span>New</span><span className="bg-emerald-500/20 px-1.5 rounded">8</span>
+                          <span>New</span><span className="bg-emerald-500/20 px-1.5 rounded">70</span>
                         </div>
                         <div className="space-y-1.5">
                           <div className="bg-gray-700/50 rounded p-1.5 text-xs">
@@ -469,7 +469,7 @@ const LandingPage = () => {
                       {/* Contacted */}
                       <div className="bg-gray-800/50 rounded-lg p-2">
                         <div className="text-xs text-blue-400 font-medium mb-2 flex justify-between">
-                          <span>Contacted</span><span className="bg-blue-500/20 px-1.5 rounded">6</span>
+                          <span>Contacted</span><span className="bg-blue-500/20 px-1.5 rounded">136</span>
                         </div>
                         <div className="space-y-1.5">
                           <div className="bg-gray-700/50 rounded p-1.5 text-xs">
@@ -485,7 +485,7 @@ const LandingPage = () => {
                       {/* Qualified */}
                       <div className="bg-gray-800/50 rounded-lg p-2">
                         <div className="text-xs text-purple-400 font-medium mb-2 flex justify-between">
-                          <span>Qualified</span><span className="bg-purple-500/20 px-1.5 rounded">5</span>
+                          <span>Qualified</span><span className="bg-purple-500/20 px-1.5 rounded">42</span>
                         </div>
                         <div className="space-y-1.5">
                           <div className="bg-gray-700/50 rounded p-1.5 text-xs">

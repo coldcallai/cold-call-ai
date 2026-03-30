@@ -349,11 +349,11 @@ const LandingPage = () => {
           <div className="flex items-center justify-center gap-6 mt-8 flex-wrap">
             <span className="flex items-center gap-2 text-gray-300 text-sm">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
-              AI Conversations
+              Lead Discovery
             </span>
             <span className="flex items-center gap-2 text-gray-300 text-sm">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
-              VM Drops
+              AI Conversations
             </span>
             <span className="flex items-center gap-2 text-gray-300 text-sm">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
@@ -361,7 +361,7 @@ const LandingPage = () => {
             </span>
             <span className="flex items-center gap-2 text-gray-300 text-sm">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
-              Lead Discovery
+              VM Drops
             </span>
           </div>
 

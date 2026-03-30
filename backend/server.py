@@ -10999,7 +10999,7 @@ demo_audio_cache = {}
 # Different voices for each demo step to showcase AI voice variety
 DEMO_VOICE_MAP = {
     "step1": {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel"},    # Professional female - Dashboard Overview
-    "step2": {"id": "TxGEqnHWrfWFTfGW9XjX", "name": "Josh"},      # Deep narrative male - AI Lead Discovery
+    "step2": {"id": "ErXwobaYiN019PkySvjV", "name": "Antoni"},    # Well-rounded calm male - AI Lead Discovery
     "step3": {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella"},     # Soft warm female - Call Recordings
 }
 

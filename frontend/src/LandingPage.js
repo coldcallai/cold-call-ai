@@ -1085,6 +1085,18 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Value Proposition Callout - Above Pricing */}
+      <section className="bg-gradient-to-b from-gray-50 to-white py-16 px-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center bg-gradient-to-r from-blue-600/10 via-cyan-600/15 to-blue-600/10 border border-cyan-500/30 rounded-2xl px-8 py-8 backdrop-blur-sm shadow-lg">
+            <p className="text-gray-800 text-lg md:text-xl leading-relaxed font-medium">
+              Create your own call scripts, handle objections with confidence, and seamlessly book meetings—all in one place. 
+              <span className="text-cyan-600 font-semibold"> Take control of your outreach</span> and turn more conversations into sales.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing - White */}
       <section id="pricing" className="bg-white py-24 px-6">
         <div className="max-w-7xl mx-auto">

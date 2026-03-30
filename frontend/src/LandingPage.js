@@ -373,10 +373,10 @@ const LandingPage = () => {
           </div>
 
           {/* Trust logos */}
-          <div className="mt-20 space-y-12">
+          <div className="mt-10 space-y-8">
             {/* Partner Logos */}
             <div>
-              <p className="text-sm text-gray-500 mb-6">Powered by enterprise-grade technology</p>
+              <p className="text-sm text-gray-500 mb-4">Powered by enterprise-grade technology</p>
               <div className="flex items-center justify-center gap-10 flex-wrap">
                 {/* Twilio */}
                 <div className="flex items-center gap-2 bg-gray-800/50 px-5 py-3 rounded-lg">

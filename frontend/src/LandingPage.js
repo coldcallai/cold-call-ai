@@ -373,14 +373,96 @@ const LandingPage = () => {
           </div>
 
           {/* Trust logos */}
-          <div className="mt-20">
-            <p className="text-sm text-gray-500 mb-6">Powered by enterprise-grade technology</p>
-            <div className="flex items-center justify-center gap-12 flex-wrap">
-              <span className="text-gray-500 font-semibold text-lg">twilio</span>
-              <span className="text-gray-500 font-semibold text-lg">OpenAI</span>
-              <span className="text-gray-500 font-semibold text-lg">ElevenLabs</span>
-              <span className="text-gray-500 font-semibold text-lg">Stripe</span>
-              <span className="text-gray-500 font-semibold text-lg">Calendly</span>
+          <div className="mt-20 space-y-12">
+            {/* Partner Logos */}
+            <div>
+              <p className="text-sm text-gray-500 mb-6">Powered by enterprise-grade technology</p>
+              <div className="flex items-center justify-center gap-10 flex-wrap">
+                {/* Twilio */}
+                <div className="flex items-center gap-2 bg-gray-800/50 px-5 py-3 rounded-lg">
+                  <svg className="w-6 h-6 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.381 0 0 5.381 0 12s5.381 12 12 12 12-5.381 12-12S18.619 0 12 0zm0 20.16c-4.499 0-8.16-3.661-8.16-8.16S7.501 3.84 12 3.84s8.16 3.661 8.16 8.16-3.661 8.16-8.16 8.16zm3.36-11.52c1.32 0 2.4 1.08 2.4 2.4s-1.08 2.4-2.4 2.4-2.4-1.08-2.4-2.4 1.08-2.4 2.4-2.4zm-6.72 0c1.32 0 2.4 1.08 2.4 2.4s-1.08 2.4-2.4 2.4-2.4-1.08-2.4-2.4 1.08-2.4 2.4-2.4z"/>
+                  </svg>
+                  <span className="text-white font-bold text-lg">twilio</span>
+                </div>
+                {/* OpenAI */}
+                <div className="flex items-center gap-2 bg-gray-800/50 px-5 py-3 rounded-lg">
+                  <svg className="w-6 h-6 text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.896zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/>
+                  </svg>
+                  <span className="text-white font-bold text-lg">OpenAI</span>
+                </div>
+                {/* ElevenLabs */}
+                <div className="flex items-center gap-2 bg-gray-800/50 px-5 py-3 rounded-lg">
+                  <svg className="w-6 h-6 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="7" y="4" width="3" height="16" rx="1"/>
+                    <rect x="14" y="4" width="3" height="16" rx="1"/>
+                  </svg>
+                  <span className="text-white font-bold text-lg">ElevenLabs</span>
+                </div>
+                {/* Stripe */}
+                <div className="flex items-center gap-2 bg-gray-800/50 px-5 py-3 rounded-lg">
+                  <svg className="w-6 h-6 text-indigo-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/>
+                  </svg>
+                  <span className="text-white font-bold text-lg">Stripe</span>
+                </div>
+                {/* Calendly */}
+                <div className="flex items-center gap-2 bg-gray-800/50 px-5 py-3 rounded-lg">
+                  <svg className="w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/>
+                  </svg>
+                  <span className="text-white font-bold text-lg">Calendly</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Stats & Trust Badges */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+              <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700/50 rounded-xl p-5 text-center">
+                <div className="text-3xl font-bold text-cyan-400 mb-1">99.9%</div>
+                <div className="text-sm text-gray-400">Uptime SLA</div>
+              </div>
+              <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700/50 rounded-xl p-5 text-center">
+                <div className="text-3xl font-bold text-emerald-400 mb-1">256-bit</div>
+                <div className="text-sm text-gray-400">SSL Encryption</div>
+              </div>
+              <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700/50 rounded-xl p-5 text-center">
+                <div className="text-3xl font-bold text-purple-400 mb-1">50+</div>
+                <div className="text-sm text-gray-400">AI Voice Options</div>
+              </div>
+              <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700/50 rounded-xl p-5 text-center">
+                <div className="text-3xl font-bold text-orange-400 mb-1">24/7</div>
+                <div className="text-sm text-gray-400">Automated Calling</div>
+              </div>
+            </div>
+            
+            {/* Compliance Badges */}
+            <div className="flex items-center justify-center gap-6 flex-wrap">
+              <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-full text-sm font-medium">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                TCPA Compliant
+              </div>
+              <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-4 py-2 rounded-full text-sm font-medium">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                GDPR Ready
+              </div>
+              <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 text-purple-400 px-4 py-2 rounded-full text-sm font-medium">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                SOC 2 Type II
+              </div>
+              <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 px-4 py-2 rounded-full text-sm font-medium">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                DNC List Verified
+              </div>
             </div>
           </div>
         </div>

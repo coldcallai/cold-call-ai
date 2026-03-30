@@ -1174,6 +1174,9 @@ const LandingPage = () => {
           <p className="text-center text-gray-500 text-sm mt-8">
             Start free with 15 minutes of AI calling. No credit card required.
           </p>
+          <p className="text-center text-gray-400 text-sm mt-3">
+            Need more leads or calls? <span className="text-cyan-600 font-medium">Add credit packs anytime</span> from your dashboard.
+          </p>
         </div>
       </section>
 

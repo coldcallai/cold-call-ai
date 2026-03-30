@@ -869,7 +869,7 @@ const LandingPage = () => {
                   { 
                     icon: "🔗", 
                     title: "CRM Integration Ready", 
-                    desc: "Connect to HubSpot, Salesforce, or your existing tools via API" 
+                    desc: "Connect to HubSpot, Salesforce, Go High Level (GHL), or your existing tools via API" 
                   },
                   { 
                     icon: "📞", 

@@ -602,3 +602,17 @@ A vertical-agnostic B2B SaaS platform that:
   - `PUT /api/campaigns/{id}/followup-settings` - Configure campaign follow-up rules
   - `GET /api/campaigns/{id}/followup-settings` - Get campaign follow-up rules
   - Auto-scheduling after no-answer/voicemail via `auto_schedule_followup()` helper
+- **Demo Narration System** (Landing Page):
+  - `GET /api/demo/narration/{step_id}` - Generate audio narration for demo steps
+  - Uses 3 distinct ElevenLabs voices to showcase AI variety:
+    - Step 1 (Visual Sales Funnel): Rachel - professional female
+    - Step 2 (AI Lead Discovery): Josh - deep narrative male
+    - Step 3 (Call Recordings): Bella - soft warm female
+  - Audio is cached after first generation for performance
+
+---
+
+## Changelog
+
+### December 2025
+- **3 Voice Demo Narrations**: Landing page demo buttons now use 3 distinct ElevenLabs voices (Rachel, Josh, Bella) to showcase AI voice variety to visitors

@@ -10991,6 +10991,13 @@ DEMO_NARRATIONS = {
 # Cache for generated audio
 demo_audio_cache = {}
 
+# Different voices for each demo step to showcase AI voice variety
+DEMO_VOICE_MAP = {
+    "step1": {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel"},    # Professional female - Dashboard Overview
+    "step2": {"id": "TxGEqnHWrfWFTfGW9XjX", "name": "Josh"},      # Deep narrative male - AI Lead Discovery
+    "step3": {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella"},     # Soft warm female - Call Recordings
+}
+
 @api_router.get("/demo/narration/{step_id}")
 async def get_demo_narration(step_id: str):
     """Get demo narration audio for a specific step"""
@@ -11012,10 +11019,12 @@ async def get_demo_narration(step_id: str):
             similarity_boost=0.75
         )
         
-        # Use a professional, friendly voice - "Rachel" is a good default
+        # Use distinct voice for each step to showcase AI voice variety
+        voice_info = DEMO_VOICE_MAP.get(step_id, {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel"})
+        
         audio_generator = eleven_client.text_to_speech.convert(
             text=narration["text"],
-            voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - professional female voice
+            voice_id=voice_info["id"],
             model_id="eleven_multilingual_v2",
             voice_settings=voice_settings
         )
@@ -11032,6 +11041,7 @@ async def get_demo_narration(step_id: str):
             "step_id": step_id,
             "title": narration["title"],
             "text": narration["text"],
+            "voice_name": voice_info["name"],
             "audio_url": f"data:audio/mpeg;base64,{audio_b64}"
         }
         

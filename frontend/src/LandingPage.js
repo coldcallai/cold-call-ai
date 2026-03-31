@@ -218,7 +218,8 @@ const LandingPage = () => {
       description: "Scale without limits",
       features: [
         "5,000 leads/month",
-        "Unlimited AI calls",
+        "3,000 AI calls included",
+        "$0.35/call after cap",
         "90-day recordings",
         "Priority support",
         "5 team seats",

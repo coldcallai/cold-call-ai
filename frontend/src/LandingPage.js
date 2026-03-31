@@ -78,7 +78,7 @@ const CallYourselfHero = () => {
                 placeholder="+1 (555) 123-4567"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full sm:w-48 bg-white/10 border-white/20 text-white placeholder:text-gray-500"
+                className="w-full sm:w-48 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400"
                 data-testid="landing-demo-phone"
               />
               <Button

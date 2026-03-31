@@ -459,6 +459,15 @@ class PackType(str, Enum):
 
 # Subscription Plans
 SUBSCRIPTION_PLANS = {
+    "test_drive": {
+        "name": "Test Drive",
+        "price": 29,
+        "leads_per_month": 0,  # No leads included
+        "calls_per_month": 50,  # 50 calls to test with real leads
+        "features": ["50 AI calls", "Call recordings", "Basic dashboard", "CSV upload"],
+        "users": 1,
+        "is_test_plan": True
+    },
     "payg": {
         "name": "Pay-as-you-go",
         "price": 0,  # No monthly fee
@@ -9573,6 +9582,146 @@ async def get_dnc_refresh_reminder(
             "error": str(e)
         }
 
+# ============== CALL YOURSELF DEMO FEATURE ==============
+
+class DemoCallRequest(BaseModel):
+    phone_number: str  # User's own phone number to call
+
+@api_router.post("/demo/call-yourself")
+async def call_yourself_demo(
+    request: DemoCallRequest,
+    http_request: Request,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Let users experience the AI by calling their own phone.
+    This is a low-cost way to demonstrate the AI quality without burning leads.
+    Cost: ~$0.50 per demo call
+    """
+    user_id = current_user["user_id"]
+    
+    # Check if user already used their demo call (limit 2 per user)
+    user = await db.users.find_one({"id": user_id})
+    demo_calls_used = user.get("demo_calls_used", 0)
+    MAX_DEMO_CALLS = 2
+    
+    if demo_calls_used >= MAX_DEMO_CALLS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"You've already used your {MAX_DEMO_CALLS} free demo calls. Subscribe to make more calls!"
+        )
+    
+    # Validate phone number format
+    phone = request.phone_number.strip()
+    if not phone.startswith("+"):
+        phone = "+1" + phone.replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
+    
+    if not twilio_service.client:
+        raise HTTPException(status_code=503, detail="Calling service not configured")
+    
+    try:
+        # Get the base URL for webhooks
+        host = http_request.headers.get("host", "")
+        protocol = "https" if "https" in str(http_request.url) or "preview" in host or "dialgenix" in host else "http"
+        base_url = f"{protocol}://{host}"
+        
+        # Create a demo call record
+        demo_call_id = str(uuid.uuid4())
+        
+        # Make the call with demo TwiML
+        call = twilio_service.client.calls.create(
+            to=phone,
+            from_=twilio_service.phone_number,
+            url=f"{base_url}/api/demo/twiml/{demo_call_id}",
+            status_callback=f"{base_url}/api/twilio/status",
+            status_callback_event=["completed"],
+            timeout=30
+        )
+        
+        # Update user's demo call count
+        await db.users.update_one(
+            {"id": user_id},
+            {"$inc": {"demo_calls_used": 1}}
+        )
+        
+        # Log the demo call
+        await db.demo_calls.insert_one({
+            "id": demo_call_id,
+            "user_id": user_id,
+            "phone_number": phone,
+            "twilio_sid": call.sid,
+            "status": "initiated",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        logger.info(f"Demo call initiated for user {user_id} to {phone}")
+        
+        return {
+            "success": True,
+            "message": "Demo call initiated! Your phone will ring in a few seconds.",
+            "call_id": demo_call_id,
+            "demo_calls_remaining": MAX_DEMO_CALLS - demo_calls_used - 1
+        }
+        
+    except Exception as e:
+        logger.error(f"Demo call failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to initiate demo call: {str(e)}")
+
+@api_router.get("/demo/twiml/{demo_call_id}")
+async def demo_call_twiml(demo_call_id: str):
+    """Generate TwiML for the demo call - showcases the AI voice quality"""
+    response = VoiceResponse()
+    
+    # Use a high-quality Polly neural voice
+    voice = 'Polly.Matthew-Neural'
+    
+    response.say(
+        "Hi there! This is a demo call from DialGenix AI. "
+        "I'm calling to show you exactly what your prospects will hear when our AI reaches out to them.",
+        voice=voice
+    )
+    
+    response.pause(length=1)
+    
+    response.say(
+        "Our AI agents can handle objections, qualify leads, and book meetings automatically. "
+        "They sound natural, respond in real-time, and work twenty four seven.",
+        voice=voice
+    )
+    
+    response.pause(length=1)
+    
+    response.say(
+        "Imagine having a team of AI sales reps making hundreds of calls for you every day, "
+        "while you focus on closing deals. That's what DialGenix delivers.",
+        voice=voice
+    )
+    
+    response.pause(length=1)
+    
+    response.say(
+        "Ready to see results? Head back to your dashboard and start your first campaign. "
+        "Thanks for trying DialGenix. Have a great day!",
+        voice=voice
+    )
+    
+    return Response(content=str(response), media_type="application/xml")
+
+@api_router.get("/demo/calls-remaining")
+async def get_demo_calls_remaining(current_user: Dict = Depends(get_current_user)):
+    """Check how many demo calls the user has remaining"""
+    user = await db.users.find_one({"id": current_user["user_id"]})
+    demo_calls_used = user.get("demo_calls_used", 0)
+    MAX_DEMO_CALLS = 2
+    
+    return {
+        "demo_calls_used": demo_calls_used,
+        "demo_calls_remaining": max(0, MAX_DEMO_CALLS - demo_calls_used),
+        "max_demo_calls": MAX_DEMO_CALLS
+    }
+
+# ============== END CALL YOURSELF DEMO ==============
+
 class RealCallRequest(BaseModel):
     lead_id: str
     campaign_id: str
@@ -10702,6 +10851,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
     
     lead = context["lead"]
     campaign = context["campaign"]
+    user_id = context.get("user_id")
     stream_sid = None
     
     # Conversation state
@@ -10709,10 +10859,28 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
     is_first_response = True
     audio_buffer = b""
     
+    # Silence detection state
+    consecutive_silence_count = 0
+    MAX_CONSECUTIVE_SILENCE = 3  # Hang up after 3 no-responses
+    last_response_time = asyncio.get_event_loop().time()
+    MAX_CALL_DURATION = 600  # 10 minute hard cap
+    call_start_time = asyncio.get_event_loop().time()
+    
     logger.info(f"Media stream connected for call {call_id}")
     
     try:
         while True:
+            # Check max call duration
+            if asyncio.get_event_loop().time() - call_start_time > MAX_CALL_DURATION:
+                logger.info(f"Call {call_id} hit max duration, ending call")
+                if stream_sid:
+                    await send_tts_to_stream(
+                        websocket, stream_sid,
+                        "I appreciate your time today. I'll follow up with you soon. Have a great day!"
+                    )
+                    await asyncio.sleep(3)
+                break
+            
             data = await websocket.receive_text()
             message = json.loads(data)
             event = message.get("event")
@@ -10739,6 +10907,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                     
                     # Generate and send TTS
                     await send_tts_to_stream(websocket, stream_sid, greeting)
+                    last_response_time = asyncio.get_event_loop().time()
                 
             elif event == "media":
                 # Receive audio from caller
@@ -10753,6 +10922,9 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                     transcript = await transcribe_audio_chunk(audio_buffer)
                     
                     if transcript and len(transcript.strip()) > 2:
+                        # Reset silence counter - we got a response!
+                        consecutive_silence_count = 0
+                        last_response_time = asyncio.get_event_loop().time()
                         logger.info(f"Caller: {transcript}")
                         
                         # Check for DNC
@@ -10775,6 +10947,33 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         messages.append({"role": "assistant", "content": ai_response})
                         
                         await send_tts_to_stream(websocket, stream_sid, ai_response)
+                    else:
+                        # No speech detected - check for silence timeout
+                        time_since_response = asyncio.get_event_loop().time() - last_response_time
+                        if time_since_response > 4:  # 4 seconds of silence
+                            consecutive_silence_count += 1
+                            last_response_time = asyncio.get_event_loop().time()
+                            logger.info(f"Silence detected for call {call_id}, count: {consecutive_silence_count}")
+                            
+                            if consecutive_silence_count >= MAX_CONSECUTIVE_SILENCE:
+                                # Too many silences - schedule callback and end call
+                                logger.info(f"Call {call_id} - max silence reached, scheduling callback")
+                                await send_tts_to_stream(
+                                    websocket, stream_sid,
+                                    "Sounds like this might not be a good time. I'll give you a call back later. Have a great day!"
+                                )
+                                await asyncio.sleep(3)
+                                
+                                # Schedule follow-up call
+                                if user_id:
+                                    await auto_schedule_followup(call_id, "no_response_callback", user_id)
+                                break
+                            elif consecutive_silence_count == 1:
+                                # First silence - gentle prompt
+                                await send_tts_to_stream(websocket, stream_sid, "Are you still there?")
+                            elif consecutive_silence_count == 2:
+                                # Second silence - another prompt
+                                await send_tts_to_stream(websocket, stream_sid, "Hello? Can you hear me?")
                     
                     audio_buffer = b""
                 

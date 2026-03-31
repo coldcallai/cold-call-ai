@@ -606,13 +606,30 @@ A vertical-agnostic B2B SaaS platform that:
   - `GET /api/demo/narration/{step_id}` - Generate audio narration for demo steps
   - Uses 3 distinct ElevenLabs voices to showcase AI variety:
     - Step 1 (Visual Sales Funnel): Rachel - professional female
-    - Step 2 (AI Lead Discovery): Josh - deep narrative male
+    - Step 2 (AI Lead Discovery): Antoni - well-rounded calm male
     - Step 3 (Call Recordings): Bella - soft warm female
   - Audio is cached after first generation for performance
+- **Call Yourself Demo** (New Trial Funnel):
+  - `POST /api/demo/call-yourself` - Let users experience AI by calling their own phone
+  - `GET /api/demo/twiml/{demo_call_id}` - TwiML for demo call
+  - `GET /api/demo/calls-remaining` - Check remaining demo calls (2 free per user)
+  - Low-cost way to prove AI quality without burning leads (~$0.50/call)
+- **Silence Detection & Auto-Callback**:
+  - 3 consecutive no-responses (12+ sec silence) triggers callback scheduling
+  - AI says "Sounds like this might not be a good time. I'll give you a call back later!"
+  - Auto-schedules follow-up call instead of burning the lead
+  - 10-minute max call duration hard cap for cost protection
 
 ---
 
 ## Changelog
 
+### March 2026
+- **New Trial Funnel**: Added $29/50 calls "Test Drive" plan, "Call Yourself" demo feature, and sandbox mode concept
+- **Silence Detection + Auto-Callback**: Protects against runaway calls - 3 silences = schedule callback and hang up
+- **10-Min Max Call Duration**: Hard cap to prevent cost overruns
+- **Landing Page Updates**: Trust section with logos/badges, value prop callout, credit packs mention, feature order fix, GHL added to CRM integrations
+- **Demo Voice Change**: Step 2 now uses Antoni (calm male) instead of Josh
+
 ### December 2025
-- **3 Voice Demo Narrations**: Landing page demo buttons now use 3 distinct ElevenLabs voices (Rachel, Josh, Bella) to showcase AI voice variety to visitors
+- **3 Voice Demo Narrations**: Landing page demo buttons now use 3 distinct ElevenLabs voices (Rachel, Antoni, Bella) to showcase AI voice variety to visitors

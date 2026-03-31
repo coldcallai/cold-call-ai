@@ -162,6 +162,23 @@ const LandingPage = () => {
       isPayg: true,
     },
     {
+      name: "Test Drive",
+      price: "29",
+      period: "/month",
+      description: "Try with real leads",
+      features: [
+        "50 AI calls included",
+        "Upload your own leads",
+        "Full call recordings",
+        "Basic dashboard",
+        "CSV upload",
+        "1 user",
+      ],
+      cta: "Get Started",
+      popular: false,
+      isTestDrive: true,
+    },
+    {
       name: "Starter",
       price: "199",
       period: "/month",

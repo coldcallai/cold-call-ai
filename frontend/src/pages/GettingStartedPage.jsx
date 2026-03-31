@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { 
   CheckCircle, Circle, ChevronRight, Phone, Calendar, Shield, Users,
   Settings, Database, AlertTriangle, Rocket, ExternalLink, Lock, Unlock,
-  Sparkles, Target, Search, Megaphone, HelpCircle, RefreshCw, Play
+  Sparkles, Target, Search, Megaphone, HelpCircle, RefreshCw, Play, PhoneCall
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,9 +14,124 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Call Yourself Demo Component
+const CallYourselfDemo = () => {
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [demoInfo, setDemoInfo] = useState(null);
+
+  useEffect(() => {
+    const fetchDemoInfo = async () => {
+      try {
+        const token = localStorage.getItem("session_token");
+        const response = await axios.get(`${API}/demo/calls-remaining`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setDemoInfo(response.data);
+      } catch (error) {
+        console.error("Failed to fetch demo info:", error);
+      }
+    };
+    fetchDemoInfo();
+  }, []);
+
+  const handleCallYourself = async () => {
+    if (!phoneNumber.trim()) {
+      toast.error("Please enter your phone number");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("session_token");
+      const response = await axios.post(
+        `${API}/demo/call-yourself`,
+        { phone_number: phoneNumber },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success(response.data.message);
+      setDemoInfo(prev => ({
+        ...prev,
+        demo_calls_remaining: response.data.demo_calls_remaining
+      }));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to initiate demo call");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const remainingCalls = demoInfo?.demo_calls_remaining ?? 2;
+
+  return (
+    <Card className="bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200">
+      <CardContent className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+            <PhoneCall className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-lg font-bold text-gray-900">Experience the AI Voice</h3>
+              <Badge className="bg-purple-100 text-purple-700">{remainingCalls} free calls</Badge>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Call your own phone to hear exactly what your prospects will experience. No leads required!
+            </p>
+            
+            {remainingCalls > 0 ? (
+              <div className="flex items-end gap-3">
+                <div className="flex-1 max-w-xs">
+                  <Label htmlFor="demo-phone" className="text-sm text-gray-700">Your Phone Number</Label>
+                  <Input
+                    id="demo-phone"
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="mt-1"
+                    data-testid="demo-phone-input"
+                  />
+                </div>
+                <Button
+                  onClick={handleCallYourself}
+                  disabled={loading}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  data-testid="call-yourself-btn"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Calling...
+                    </>
+                  ) : (
+                    <>
+                      <Phone className="w-4 h-4 mr-2" />
+                      Call Me Now
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded-lg p-4 text-center">
+                <p className="text-gray-600 text-sm">
+                  You've used your free demo calls. Subscribe to a plan to make more calls!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const GettingStartedPage = () => {
   const navigate = useNavigate();
@@ -271,6 +386,9 @@ const GettingStartedPage = () => {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Call Yourself Demo */}
+      <CallYourselfDemo />
 
       {/* Setup Steps */}
       <div className="space-y-4">

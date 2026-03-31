@@ -223,7 +223,7 @@ const LandingPage = () => {
         "90-day recordings",
         "Priority support",
         "5 team seats",
-        "Dedicated manager",
+        "Priority email support",
       ],
       cta: "Start Free Trial",
       popular: false,

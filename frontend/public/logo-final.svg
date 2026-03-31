@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 90" width="350" height="90">
+  <defs>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Tall Oval/Pill Shape -->
+  <ellipse cx="38" cy="45" rx="28" ry="40" fill="url(#cyanGrad)"/>
+  
+  <!-- Phone Icon - Centered -->
+  <path transform="translate(20, 27)" fill="white" d="M24.18 10.95c-1.26-1.26-3.3-1.26-4.56 0l-1.8 1.8c-3.54-1.8-6.48-4.74-8.28-8.28l1.8-1.8c1.26-1.26 1.26-3.3 0-4.56L7.98-5.25c-1.26-1.26-3.3-1.26-4.56 0L1.08-2.91C-.18-1.65-.54.63-.18 2.55c1.26 5.04 4.2 9.72 8.46 13.5 4.26 3.78 8.94 6.72 13.5 8.46 1.92.36 4.2 0 5.46-1.26l2.34-2.34c1.26-1.26 1.26-3.3 0-4.56l-5.4-5.4z"/>
+  
+  <!-- DialGenix.ai Text -->
+  <text x="80" y="55" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="bold" fill="white">DialGenix.ai</text>
+</svg>

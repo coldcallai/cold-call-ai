@@ -1543,7 +1543,7 @@ const LandingPage = () => {
               Try the AI Voice
             </Button>
             <a 
-              href="https://calendly.com/dialgenix/demo" 
+              href="https://calendly.com/dialgenix" 
               target="_blank" 
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-full px-8 py-4 font-medium"

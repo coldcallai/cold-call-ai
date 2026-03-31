@@ -498,8 +498,8 @@ SUBSCRIPTION_PLANS = {
     },
     "unlimited": {
         "name": "Unlimited",
-        "price": 699,
-        "leads_per_month": 5000,
+        "price": 899,
+        "leads_per_month": 3000,
         "calls_per_month": 3000,  # Soft cap - $0.35/call after
         "overage_per_call": 0.35,  # Charged after soft cap
         "features": ["Priority support", "5 team seats", "Custom AI scripts", "90-day recordings", "Priority email support", "3,000 calls included", "$0.35/call after cap"],

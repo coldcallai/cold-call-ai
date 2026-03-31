@@ -308,11 +308,11 @@ const LandingPage = () => {
     },
     {
       name: "Unlimited",
-      price: "699",
+      price: "899",
       period: "/month",
       description: "Scale without limits",
       features: [
-        "5,000 leads/month",
+        "3,000 leads/month",
         "3,000 AI calls included",
         "$0.35/call after cap",
         "90-day recordings",

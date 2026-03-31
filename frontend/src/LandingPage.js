@@ -57,16 +57,16 @@ const CallYourselfHero = () => {
   };
 
   return (
-    <div className="bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border border-purple-500/30 rounded-2xl p-6 md:p-8 mb-16">
+    <div className="bg-gradient-to-r from-cyan-600 to-teal-600 border border-cyan-400/30 rounded-2xl p-6 md:p-8 max-w-4xl mx-auto shadow-lg">
       <div className="flex flex-col md:flex-row items-center gap-6">
-        <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/25 flex-shrink-0">
+        <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
           <PhoneCall className="w-8 h-8 text-white" />
         </div>
         <div className="flex-1 text-center md:text-left">
           <h3 className="text-xl md:text-2xl font-bold text-white mb-2">
             Experience the AI Voice Yourself
           </h3>
-          <p className="text-gray-400">
+          <p className="text-cyan-100">
             Don't just take our word for it — call your own phone and hear exactly what your prospects will experience.
           </p>
         </div>
@@ -78,13 +78,13 @@ const CallYourselfHero = () => {
                 placeholder="+1 (555) 123-4567"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full sm:w-48 bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                className="w-full sm:w-48 bg-white border-white text-gray-900 placeholder:text-gray-400"
                 data-testid="landing-demo-phone"
               />
               <Button
                 onClick={handleCallYourself}
                 disabled={loading}
-                className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-semibold px-6"
+                className="w-full sm:w-auto bg-white hover:bg-gray-100 text-cyan-700 font-semibold px-6"
                 data-testid="landing-call-yourself-btn"
               >
                 {loading ? (
@@ -96,7 +96,7 @@ const CallYourselfHero = () => {
               </Button>
             </>
           ) : (
-            <div className="flex items-center gap-2 text-green-400">
+            <div className="flex items-center gap-2 text-white">
               <CheckCircle className="w-5 h-5" />
               <span>Check your phone!</span>
             </div>

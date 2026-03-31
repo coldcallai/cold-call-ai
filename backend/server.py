@@ -490,7 +490,7 @@ SUBSCRIPTION_PLANS = {
     },
     "professional": {
         "name": "Professional",
-        "price": 399,
+        "price": 499,
         "leads_per_month": 1000,
         "calls_per_month": 1000,
         "features": ["Auto calendar booking", "API access", "Call transcripts", "30-day recordings", "Email notifications"],
@@ -498,7 +498,7 @@ SUBSCRIPTION_PLANS = {
     },
     "unlimited": {
         "name": "Unlimited",
-        "price": 899,
+        "price": 999,
         "leads_per_month": 3000,
         "calls_per_month": 3000,  # Soft cap - $0.35/call after
         "overage_per_call": 0.35,  # Charged after soft cap

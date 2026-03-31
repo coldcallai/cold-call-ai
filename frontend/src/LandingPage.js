@@ -291,7 +291,7 @@ const LandingPage = () => {
     },
     {
       name: "Professional",
-      price: "399",
+      price: "499",
       period: "/month", 
       description: "For growing sales teams",
       features: [
@@ -308,7 +308,7 @@ const LandingPage = () => {
     },
     {
       name: "Unlimited",
-      price: "899",
+      price: "999",
       period: "/month",
       description: "Scale without limits",
       features: [

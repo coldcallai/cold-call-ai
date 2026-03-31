@@ -1529,24 +1529,29 @@ const LandingPage = () => {
       {/* CTA - Dark */}
       <section className="bg-[#0B1628] py-24 px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Need more help?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Ready to automate your outbound?</h2>
           <p className="text-gray-400 text-lg mb-8 max-w-xl mx-auto">
-            Ready to automate your outbound? Get a personalized demo and see DialGenix.ai in action.
+            Experience the AI voice yourself or book a personalized walkthrough with our team.
           </p>
 
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-            <Input
-              type="email"
-              placeholder="Enter your work email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="bg-white/10 border-white/20 text-white placeholder:text-gray-500 rounded-full px-6 py-6 flex-1 focus:ring-teal-500"
-            />
-            <Button type="submit" className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-full px-8 py-6 font-medium border-0">
-              Get a demo
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button 
+              onClick={() => document.getElementById('demo').scrollIntoView({ behavior: 'smooth' })}
+              className="bg-white hover:bg-gray-100 text-gray-900 rounded-full px-8 py-6 font-medium border-0 flex items-center gap-2"
+            >
+              <Phone className="w-5 h-5" />
+              Try the AI Voice
             </Button>
-          </form>
+            <a 
+              href="https://calendly.com/dialgenix/demo" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-full px-8 py-4 font-medium"
+            >
+              <Calendar className="w-5 h-5" />
+              Book a Live Demo
+            </a>
+          </div>
 
           <p className="text-gray-500 text-sm mt-6">
             15 free minutes • No credit card required

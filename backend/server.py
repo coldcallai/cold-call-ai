@@ -10876,9 +10876,15 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                 if stream_sid:
                     await send_tts_to_stream(
                         websocket, stream_sid,
-                        "I appreciate your time today. I'll follow up with you soon. Have a great day!"
+                        "I've really enjoyed our conversation! I'm at my time limit for this call. "
+                        "Would you like me to book a meeting for you, or have one of our agents call you back? "
+                        "Either way, I'll make sure someone follows up with you soon. Have a great day!"
                     )
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(5)
+                    
+                    # Schedule follow-up
+                    if user_id:
+                        await auto_schedule_followup(call_id, "max_duration_callback", user_id)
                 break
             
             data = await websocket.receive_text()

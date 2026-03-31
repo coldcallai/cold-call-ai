@@ -553,11 +553,11 @@ LEAD_PACKS = [
     {"id": "leads_5000", "name": "5,000 Leads", "quantity": 5000, "price": 499, "type": "leads", "per_lead": 0.10},
 ]
 
-# Call Packs (One-time purchase) - Updated pricing
+# Call Packs (One-time purchase) - Profitable pricing
 CALL_PACKS = [
-    {"id": "calls_250", "name": "250 AI Calls", "quantity": 250, "price": 59, "type": "calls", "per_call": 0.236},
-    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 99, "type": "calls", "per_call": 0.198},
-    {"id": "calls_1000", "name": "1,000 AI Calls", "quantity": 1000, "price": 169, "type": "calls", "per_call": 0.169},
+    {"id": "calls_250", "name": "250 AI Calls", "quantity": 250, "price": 99, "type": "calls", "per_call": 0.396},
+    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 179, "type": "calls", "per_call": 0.358},
+    {"id": "calls_1000", "name": "1,000 AI Calls", "quantity": 1000, "price": 349, "type": "calls", "per_call": 0.349},
 ]
 
 # Combo Packs (Best value)

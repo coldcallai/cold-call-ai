@@ -459,59 +459,83 @@ class PackType(str, Enum):
 
 # Subscription Plans
 SUBSCRIPTION_PLANS = {
+    # ============== BYOL PLANS (Bring Your Own List) ==============
+    "byol_starter": {
+        "name": "BYOL Starter",
+        "price": 149,
+        "leads_per_month": 0,  # No leads - they bring their own
+        "calls_per_month": 250,
+        "features": ["250 AI calls", "CSV upload", "Call recordings", "AI qualifying", "Auto booking", "7-day recordings"],
+        "users": 1,
+        "plan_type": "byol"
+    },
+    "byol_pro": {
+        "name": "BYOL Pro",
+        "price": 349,
+        "leads_per_month": 0,  # No leads - they bring their own
+        "calls_per_month": 750,
+        "features": ["750 AI calls", "CSV upload", "Call transcripts", "AI qualifying", "Auto booking", "30-day recordings", "Custom scripts"],
+        "users": 3,
+        "plan_type": "byol"
+    },
+    "byol_scale": {
+        "name": "BYOL Scale",
+        "price": 599,
+        "leads_per_month": 0,  # No leads - they bring their own
+        "calls_per_month": 1500,
+        "features": ["1,500 AI calls", "Unlimited CSV uploads", "Call transcripts", "AI qualifying", "Auto booking", "60-day recordings", "Custom scripts", "Priority support"],
+        "users": 5,
+        "plan_type": "byol"
+    },
+    # ============== FULL SERVICE PLANS (Lead Discovery + Calling) ==============
+    "discovery_starter": {
+        "name": "Discovery Starter",
+        "price": 299,
+        "leads_per_month": 500,
+        "calls_per_month": 250,
+        "features": ["500 intent leads/mo", "250 AI calls", "GPT lead discovery", "AI qualifying", "Auto booking", "7-day recordings"],
+        "users": 1,
+        "plan_type": "full_service"
+    },
+    "discovery_pro": {
+        "name": "Discovery Pro",
+        "price": 699,
+        "leads_per_month": 1500,
+        "calls_per_month": 750,
+        "features": ["1,500 intent leads/mo", "750 AI calls", "GPT lead discovery", "Call transcripts", "Auto booking", "30-day recordings", "Custom scripts"],
+        "users": 3,
+        "plan_type": "full_service"
+    },
+    "discovery_elite": {
+        "name": "Discovery Elite",
+        "price": 1299,
+        "leads_per_month": 3000,
+        "calls_per_month": 2000,
+        "features": ["3,000 intent leads/mo", "2,000 AI calls", "GPT lead discovery", "Call transcripts", "Auto booking", "90-day recordings", "Custom scripts", "Priority support", "5 team seats"],
+        "users": 5,
+        "plan_type": "full_service"
+    },
+    # ============== LEGACY/TEST PLANS ==============
     "test_drive": {
         "name": "Test Drive",
         "price": 29,
-        "leads_per_month": 0,  # No leads included
-        "calls_per_month": 50,  # 50 calls to test with real leads
+        "leads_per_month": 0,
+        "calls_per_month": 50,
         "features": ["50 AI calls", "Call recordings", "Basic dashboard", "CSV upload"],
         "users": 1,
         "is_test_plan": True
     },
     "payg": {
         "name": "Pay-as-you-go",
-        "price": 0,  # No monthly fee
-        "leads_per_month": 0,  # Credits only
-        "calls_per_month": 0,  # Credits only
+        "price": 0,
+        "leads_per_month": 0,
+        "calls_per_month": 0,
         "features": ["No monthly commitment", "Pay per call/lead", "Basic dashboard"],
         "users": 1,
         "credit_cost": {
-            "per_lead": 0.25,  # $0.25 per lead discovered
-            "per_call": 0.50,  # $0.50 per AI call
+            "per_lead": 0.25,
+            "per_call": 0.50,
         }
-    },
-    "starter": {
-        "name": "Starter",
-        "price": 199,
-        "leads_per_month": 250,
-        "calls_per_month": 250,
-        "features": ["CSV export", "GPT-powered search", "Intent signals included", "7-day call recordings"],
-        "users": 1
-    },
-    "professional": {
-        "name": "Professional",
-        "price": 499,
-        "leads_per_month": 1000,
-        "calls_per_month": 1000,
-        "features": ["Auto calendar booking", "API access", "Call transcripts", "30-day recordings", "Email notifications"],
-        "users": 5
-    },
-    "unlimited": {
-        "name": "Unlimited",
-        "price": 999,
-        "leads_per_month": 3000,
-        "calls_per_month": 3000,  # Soft cap - $0.35/call after
-        "overage_per_call": 0.35,  # Charged after soft cap
-        "features": ["Priority support", "5 team seats", "Custom AI scripts", "90-day recordings", "Priority email support", "3,000 calls included", "$0.35/call after cap"],
-        "users": 5
-    },
-    "byl": {
-        "name": "Bring Your List",
-        "price": 349,
-        "leads_per_month": 0,  # No leads - they bring their own
-        "calls_per_month": 1500,
-        "features": ["Unlimited CSV uploads", "Custom scripts", "Auto calendar booking", "Call transcripts"],
-        "users": 3
     }
 }
 

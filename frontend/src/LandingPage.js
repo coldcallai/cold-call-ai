@@ -172,6 +172,7 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [openFaq, setOpenFaq] = useState(null);
+  const [pricingTab, setPricingTab] = useState("full"); // "byol" or "full"
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const goToLogin = () => {
@@ -260,12 +261,12 @@ const LandingPage = () => {
       name: "Test Drive",
       price: "29",
       period: "/month",
-      description: "Try with real leads",
+      description: "Try the AI dialer",
       features: [
         "50 AI calls included",
         "Upload your own leads",
         "Full call recordings",
-        "Basic dashboard",
+        "AI qualifying & booking",
         "CSV upload",
         "1 user",
       ],
@@ -273,52 +274,110 @@ const LandingPage = () => {
       popular: false,
       isTestDrive: true,
     },
+  ];
+
+  // BYOL Plans - Bring Your Own List
+  const byolPlans = [
     {
-      name: "Starter",
-      price: "199",
+      name: "BYOL Starter",
+      price: "149",
       period: "/month",
-      description: "Perfect for getting started",
+      description: "Bring your own leads",
       features: [
-        "250 leads/month",
         "250 AI calls/month",
-        "7-day call recordings",
-        "CSV export",
-        "GPT-powered search",
+        "Upload your CSV",
+        "AI qualifies & books",
+        "Call recordings",
+        "7-day storage",
         "1 user",
       ],
       cta: "Start Free Trial",
       popular: false,
     },
     {
-      name: "Professional",
-      price: "499",
-      period: "/month", 
-      description: "For growing sales teams",
+      name: "BYOL Pro",
+      price: "349",
+      period: "/month",
+      description: "Scale your outreach",
       features: [
-        "1,000 leads/month",
-        "1,000 AI calls/month",
+        "750 AI calls/month",
+        "Upload unlimited CSVs",
+        "AI qualifies & books",
         "Call transcripts",
-        "30-day recordings",
-        "Auto calendar booking",
-        "API access",
-        "5 users",
+        "30-day storage",
+        "Custom scripts",
+        "3 users",
       ],
       cta: "Start Free Trial",
       popular: true,
     },
     {
-      name: "Unlimited",
-      price: "999",
+      name: "BYOL Scale",
+      price: "599",
       period: "/month",
-      description: "Scale without limits",
+      description: "High-volume calling",
       features: [
-        "3,000 leads/month",
-        "3,000 AI calls included",
-        "$0.35/call after cap",
+        "1,500 AI calls/month",
+        "Upload unlimited CSVs",
+        "AI qualifies & books",
+        "Call transcripts",
+        "60-day storage",
+        "Priority support",
+        "5 users",
+      ],
+      cta: "Start Free Trial",
+      popular: false,
+    },
+  ];
+
+  // Full Service Plans - Lead Discovery + Calling
+  const fullServicePlans = [
+    {
+      name: "Discovery Starter",
+      price: "299",
+      period: "/month",
+      description: "We find & call leads",
+      features: [
+        "500 intent leads/mo",
+        "250 AI calls/month",
+        "GPT lead discovery",
+        "AI qualifies & books",
+        "7-day recordings",
+        "1 user",
+      ],
+      cta: "Start Free Trial",
+      popular: false,
+    },
+    {
+      name: "Discovery Pro",
+      price: "699",
+      period: "/month",
+      description: "Full-service sales",
+      features: [
+        "1,500 intent leads/mo",
+        "750 AI calls/month",
+        "GPT lead discovery",
+        "AI qualifies & books",
+        "Call transcripts",
+        "30-day recordings",
+        "3 users",
+      ],
+      cta: "Start Free Trial",
+      popular: true,
+    },
+    {
+      name: "Discovery Elite",
+      price: "1,299",
+      period: "/month",
+      description: "Enterprise lead gen",
+      features: [
+        "3,000 intent leads/mo",
+        "2,000 AI calls/month",
+        "GPT lead discovery",
+        "AI qualifies & books",
         "90-day recordings",
         "Priority support",
-        "5 team seats",
-        "Priority email support",
+        "5 users",
       ],
       cta: "Start Free Trial",
       popular: false,
@@ -1216,28 +1275,62 @@ const LandingPage = () => {
       {/* Pricing - White */}
       <section id="pricing" className="bg-white py-24 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-8">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Simple, transparent pricing</h2>
-            <p className="text-gray-600 text-lg">Start free. Scale as you grow. Cancel anytime.</p>
+            <p className="text-gray-600 text-lg">Choose your path: Bring your own leads or let us find them for you</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {/* Pricing Toggle */}
+          <div className="flex justify-center mb-12">
+            <div className="inline-flex bg-gray-100 rounded-full p-1">
+              <button 
+                onClick={() => setPricingTab('byol')}
+                className={`px-6 py-3 rounded-full text-sm font-medium transition-all ${
+                  pricingTab === 'byol' 
+                    ? 'bg-white shadow text-gray-900' 
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                📋 Bring Your Own List
+              </button>
+              <button 
+                onClick={() => setPricingTab('full')}
+                className={`px-6 py-3 rounded-full text-sm font-medium transition-all ${
+                  pricingTab === 'full' 
+                    ? 'bg-gradient-to-r from-cyan-500 to-teal-500 shadow text-white' 
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                🚀 Full Service (Leads + Calls)
+              </button>
+            </div>
+          </div>
+
+          {/* BYOL Description */}
+          {pricingTab === 'byol' && (
+            <div className="text-center mb-8">
+              <p className="text-gray-600">Already have a lead list? Upload your CSV and let our AI call, qualify, and book meetings.</p>
+            </div>
+          )}
+
+          {/* Full Service Description */}
+          {pricingTab === 'full' && (
+            <div className="text-center mb-8">
+              <p className="text-teal-600 font-medium">✨ Only DialGenix finds high-intent leads with GPT AND calls them automatically</p>
+            </div>
+          )}
+
+          {/* Entry Plans (always shown) */}
+          <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
             {pricingPlans.map((plan, idx) => (
               <div 
                 key={idx}
                 className={`relative bg-white border rounded-2xl p-6 ${
-                  plan.popular 
-                    ? 'border-teal-500 shadow-lg shadow-teal-500/10' 
-                    : plan.isPayg
+                  plan.isPayg
                     ? 'border-purple-300 shadow-md shadow-purple-500/10'
                     : 'border-gray-200'
                 }`}
               >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white rounded-full text-sm font-medium">
-                    Most Popular
-                  </div>
-                )}
                 {plan.isPayg && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-medium">
                     No Commitment
@@ -1256,7 +1349,7 @@ const LandingPage = () => {
                     </div>
                   ) : (
                     <>
-                      <span className="text-3xl font-bold text-gray-900">{plan.price === "Custom" ? "" : "$"}{plan.price}</span>
+                      <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
                       <span className="text-gray-500 text-sm">{plan.period}</span>
                     </>
                   )}
@@ -1273,10 +1366,8 @@ const LandingPage = () => {
 
                 <button 
                   onClick={goToLogin}
-                  className={`w-full rounded-full py-5 text-sm font-medium cursor-pointer transition-all ${
-                    plan.popular 
-                      ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0' 
-                      : plan.isPayg
+                  className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
+                    plan.isPayg
                       ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0'
                       : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
                   }`}
@@ -1287,8 +1378,108 @@ const LandingPage = () => {
             ))}
           </div>
 
+          {/* BYOL Plans */}
+          {pricingTab === 'byol' && (
+            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+              {byolPlans.map((plan, idx) => (
+                <div 
+                  key={idx}
+                  className={`relative bg-white border rounded-2xl p-6 ${
+                    plan.popular 
+                      ? 'border-blue-500 shadow-lg shadow-blue-500/10' 
+                      : 'border-gray-200'
+                  }`}
+                >
+                  {plan.popular && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-full text-sm font-medium">
+                      Most Popular
+                    </div>
+                  )}
+                  
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
+                  <p className="text-gray-500 text-xs mb-4">{plan.description}</p>
+                  
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
+                    <span className="text-gray-500 text-sm">{plan.period}</span>
+                  </div>
+
+                  <ul className="space-y-2 mb-6">
+                    {plan.features.map((feature, fidx) => (
+                      <li key={fidx} className="flex items-center gap-2 text-xs">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0 text-blue-500" />
+                        <span className="text-gray-700">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button 
+                    onClick={goToLogin}
+                    className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
+                      plan.popular 
+                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white border-0' 
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
+                    }`}
+                  >
+                    {plan.cta}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Full Service Plans */}
+          {pricingTab === 'full' && (
+            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+              {fullServicePlans.map((plan, idx) => (
+                <div 
+                  key={idx}
+                  className={`relative bg-white border rounded-2xl p-6 ${
+                    plan.popular 
+                      ? 'border-teal-500 shadow-lg shadow-teal-500/10' 
+                      : 'border-gray-200'
+                  }`}
+                >
+                  {plan.popular && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white rounded-full text-sm font-medium">
+                      Best Value
+                    </div>
+                  )}
+                  
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
+                  <p className="text-gray-500 text-xs mb-4">{plan.description}</p>
+                  
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
+                    <span className="text-gray-500 text-sm">{plan.period}</span>
+                  </div>
+
+                  <ul className="space-y-2 mb-6">
+                    {plan.features.map((feature, fidx) => (
+                      <li key={fidx} className="flex items-center gap-2 text-xs">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0 text-teal-500" />
+                        <span className="text-gray-700">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button 
+                    onClick={goToLogin}
+                    className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
+                      plan.popular 
+                        ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0' 
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
+                    }`}
+                  >
+                    {plan.cta}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <p className="text-center text-gray-500 text-sm mt-8">
-            Start free with 15 minutes of AI calling. No credit card required.
+            Start with Test Drive for $29. No long-term commitment required.
           </p>
           <p className="text-center text-gray-400 text-sm mt-3">
             Need more leads or calls? <span className="text-cyan-600 font-medium">Add credit packs anytime</span> from your dashboard.

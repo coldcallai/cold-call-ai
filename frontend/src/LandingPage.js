@@ -6,11 +6,106 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare
+  Search, MessageSquare, PhoneCall
 } from "lucide-react";
 import axios from "axios";
+import { toast } from "sonner";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
+
+// Call Yourself Demo Component for Landing Page
+const CallYourselfHero = () => {
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [called, setCalled] = useState(false);
+  const navigate = useNavigate();
+
+  const handleCallYourself = async () => {
+    if (!phoneNumber.trim()) {
+      toast.error("Please enter your phone number");
+      return;
+    }
+
+    // Check if user is logged in
+    const token = localStorage.getItem("session_token");
+    if (!token) {
+      toast.info("Sign up free to try the demo call!");
+      navigate("/register");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post(
+        `${API}/demo/call-yourself`,
+        { phone_number: phoneNumber },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success("Your phone will ring in a few seconds!");
+      setCalled(true);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        toast.info("Sign up free to try the demo call!");
+        navigate("/register");
+      } else {
+        toast.error(error.response?.data?.detail || "Failed to initiate demo call");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border border-purple-500/30 rounded-2xl p-6 md:p-8 mb-16">
+      <div className="flex flex-col md:flex-row items-center gap-6">
+        <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/25 flex-shrink-0">
+          <PhoneCall className="w-8 h-8 text-white" />
+        </div>
+        <div className="flex-1 text-center md:text-left">
+          <h3 className="text-xl md:text-2xl font-bold text-white mb-2">
+            Experience the AI Voice Yourself
+          </h3>
+          <p className="text-gray-400">
+            Don't just take our word for it — call your own phone and hear exactly what your prospects will experience.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {!called ? (
+            <>
+              <Input
+                type="tel"
+                placeholder="+1 (555) 123-4567"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="w-full sm:w-48 bg-white/10 border-white/20 text-white placeholder:text-gray-500"
+                data-testid="landing-demo-phone"
+              />
+              <Button
+                onClick={handleCallYourself}
+                disabled={loading}
+                className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-semibold px-6"
+                data-testid="landing-call-yourself-btn"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Phone className="w-4 h-4 mr-2" />
+                )}
+                {loading ? "Calling..." : "Call Me"}
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 text-green-400">
+              <CheckCircle className="w-5 h-5" />
+              <span>Check your phone!</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Audio Player Component for Demo Narration
 const DemoAudioPlayer = ({ stepId }) => {
@@ -489,7 +584,7 @@ const LandingPage = () => {
       {/* Product Demo Section */}
       <section id="demo" className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-12">
             <span className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-full text-cyan-400 text-sm font-medium mb-6">
               <Play className="w-4 h-4" />
               See It In Action
@@ -501,6 +596,9 @@ const LandingPage = () => {
               Watch how DialGenix.ai automates your entire cold calling workflow
             </p>
           </div>
+
+          {/* Call Yourself Demo */}
+          <CallYourselfHero />
 
           {/* Demo Screenshots */}
           <div className="space-y-20">

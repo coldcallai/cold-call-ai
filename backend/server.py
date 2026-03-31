@@ -522,26 +522,33 @@ PAYG_CREDIT_PACKS = [
     {"id": "payg_scale_200", "name": "Scale Pack", "leads": 400, "calls": 400, "price": 249, "per_lead": 0.31, "per_call": 0.31, "bonus": "20% savings"},
 ]
 
-# Lead Packs (Auto-replenishing subscriptions)
+# Lead Packs (One-time purchase)
 LEAD_PACKS = [
-    {"id": "leads_500_sub", "name": "500 Leads/mo", "quantity": 500, "price": 59, "type": "leads", "recurring": True, "per_lead": 0.118},
-    {"id": "leads_1500_sub", "name": "1,500 Leads/mo", "quantity": 1500, "price": 149, "type": "leads", "recurring": True, "per_lead": 0.099},
-    {"id": "leads_5000_sub", "name": "5,000 Leads/mo", "quantity": 5000, "price": 399, "type": "leads", "recurring": True, "per_lead": 0.079},
+    {"id": "leads_500", "name": "500 Leads", "quantity": 500, "price": 79, "type": "leads", "per_lead": 0.158},
+    {"id": "leads_1500", "name": "1,500 Leads", "quantity": 1500, "price": 199, "type": "leads", "per_lead": 0.133},
+    {"id": "leads_5000", "name": "5,000 Leads", "quantity": 5000, "price": 499, "type": "leads", "per_lead": 0.10},
 ]
 
-# Call Packs (Overage protection)
+# Call Packs (One-time purchase) - Updated pricing
 CALL_PACKS = [
-    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 49, "type": "calls", "per_call": 0.098},
-    {"id": "calls_2000", "name": "2,000 AI Calls", "quantity": 2000, "price": 149, "type": "calls", "per_call": 0.0745},
-    {"id": "calls_5000", "name": "5,000 AI Calls", "quantity": 5000, "price": 299, "type": "calls", "per_call": 0.0598},
+    {"id": "calls_250", "name": "250 AI Calls", "quantity": 250, "price": 59, "type": "calls", "per_call": 0.236},
+    {"id": "calls_500", "name": "500 AI Calls", "quantity": 500, "price": 99, "type": "calls", "per_call": 0.198},
+    {"id": "calls_1000", "name": "1,000 AI Calls", "quantity": 1000, "price": 169, "type": "calls", "per_call": 0.169},
 ]
 
-# Top-up Packs (20% premium for one-off purchases)
+# Combo Packs (Best value)
+COMBO_PACKS = [
+    {"id": "combo_starter", "name": "Starter Combo", "leads": 500, "calls": 250, "price": 99, "bonus": "Save $39"},
+    {"id": "combo_growth", "name": "Growth Combo", "leads": 1000, "calls": 500, "price": 179, "bonus": "Save $99"},
+    {"id": "combo_power", "name": "Power Combo", "leads": 2000, "calls": 1000, "price": 299, "bonus": "Save $148"},
+]
+
+# Top-up Packs (Small one-off purchases)
 TOPUP_PACKS = [
     {"id": "topup_test_1", "name": "Test Pack (1 Lead)", "quantity": 1, "price": 1, "type": "topup", "credit_type": "leads", "per_unit": 1.00},
     {"id": "topup_100_leads", "name": "100 Leads Top-up", "quantity": 100, "price": 24, "type": "topup", "credit_type": "leads", "per_unit": 0.24},
     {"id": "topup_250_leads", "name": "250 Leads Top-up", "quantity": 250, "price": 55, "type": "topup", "credit_type": "leads", "per_unit": 0.22},
-    {"id": "topup_100_calls", "name": "100 Calls Top-up", "quantity": 100, "price": 15, "type": "topup", "credit_type": "calls", "per_unit": 0.15},
+    {"id": "topup_100_calls", "name": "100 Calls Top-up", "quantity": 100, "price": 29, "type": "topup", "credit_type": "calls", "per_unit": 0.29},
 ]
 
 # Annual Prepay Discounts
@@ -6975,6 +6982,7 @@ async def get_available_packs():
         "subscription_plans": SUBSCRIPTION_PLANS,
         "lead_packs": LEAD_PACKS,
         "call_packs": CALL_PACKS,
+        "combo_packs": COMBO_PACKS,
         "topup_packs": TOPUP_PACKS,
         "prepay_discounts": PREPAY_DISCOUNTS
     }
@@ -6996,7 +7004,7 @@ async def get_account_usage(current_user: Dict = Depends(get_current_user)):
 async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_user)):
     """Purchase a credit pack (adds to user's balance)"""
     # Find the pack from all pack types
-    all_packs = LEAD_PACKS + CALL_PACKS + TOPUP_PACKS
+    all_packs = LEAD_PACKS + CALL_PACKS + TOPUP_PACKS + COMBO_PACKS
     pack = next((p for p in all_packs if p["id"] == pack_id), None)
     
     if not pack:
@@ -7008,9 +7016,10 @@ async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_u
         "user_id": current_user["user_id"],
         "pack_id": pack_id,
         "pack_name": pack["name"],
-        "pack_type": pack["type"],
+        "pack_type": pack.get("type", "combo"),
         "price": pack["price"],
-        "quantity": pack["quantity"],
+        "leads": pack.get("quantity", pack.get("leads", 0)),
+        "calls": pack.get("calls", 0),
         "purchased_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -7019,16 +7028,22 @@ async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_u
     # Update user credits based on pack type
     update_query = {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
     
-    if pack["type"] == "leads":
+    if pack.get("type") == "leads":
         update_query["$inc"] = {"lead_credits_remaining": pack["quantity"]}
-    elif pack["type"] == "calls":
+    elif pack.get("type") == "calls":
         update_query["$inc"] = {"call_credits_remaining": pack["quantity"]}
-    elif pack["type"] == "topup":
+    elif pack.get("type") == "topup":
         credit_type = pack.get("credit_type", "leads")
         if credit_type == "leads":
             update_query["$inc"] = {"lead_credits_remaining": pack["quantity"]}
         else:
             update_query["$inc"] = {"call_credits_remaining": pack["quantity"]}
+    else:
+        # Combo pack - has both leads and calls
+        update_query["$inc"] = {
+            "lead_credits_remaining": pack.get("leads", 0),
+            "call_credits_remaining": pack.get("calls", 0)
+        }
     
     await db.users.update_one({"user_id": current_user["user_id"]}, update_query)
     

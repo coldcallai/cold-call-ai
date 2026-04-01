@@ -3934,8 +3934,9 @@ async def register(user_data: UserCreate):
             detail="This phone number has already been used for a free trial. Please subscribe to continue."
         )
     
-    # Hash password and create user
-    password_hash = pwd_context.hash(user_data.password)
+    # Hash password and create user (truncate to 72 bytes for bcrypt)
+    password_to_hash = user_data.password[:72] if len(user_data.password) > 72 else user_data.password
+    password_hash = pwd_context.hash(password_to_hash)
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     
     user_doc = {
@@ -4004,7 +4005,10 @@ async def login(user_data: UserLogin, response: Response):
     if not user_doc.get("password_hash"):
         raise HTTPException(status_code=401, detail="Please use Google OAuth to login")
     
-    if not pwd_context.verify(user_data.password, user_doc["password_hash"]):
+    # Truncate password to 72 bytes for bcrypt compatibility
+    password_to_verify = user_data.password[:72] if len(user_data.password) > 72 else user_data.password
+    
+    if not pwd_context.verify(password_to_verify, user_doc["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Create session

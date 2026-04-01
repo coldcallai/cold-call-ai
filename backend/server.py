@@ -9709,39 +9709,56 @@ async def call_yourself_demo(
 
 @api_router.get("/demo/twiml/{demo_call_id}")
 async def demo_call_twiml(demo_call_id: str):
-    """Generate TwiML for the demo call - showcases the AI voice quality"""
+    """Generate TwiML for the demo call - DialGenix sales pitch to potential user"""
     response = VoiceResponse()
     
     # Use a high-quality Polly neural voice
     voice = 'Polly.Matthew-Neural'
     
     response.say(
-        "Hi there! This is a demo call from DialGenix AI. "
-        "I'm calling to show you exactly what your prospects will hear when our AI reaches out to them.",
+        "Hey there! This is Alex calling from DialGenix AI. "
+        "I noticed you've been checking out our platform, and I wanted to quickly show you what we can do for your business.",
         voice=voice
     )
     
     response.pause(length=1)
     
     response.say(
-        "Our AI agents can handle objections, qualify leads, and book meetings automatically. "
-        "They sound natural, respond in real-time, and work twenty four seven.",
+        "Here's the thing. Most sales teams waste hours every day manually dialing leads, "
+        "leaving voicemails, and chasing people who never pick up. Sound familiar?",
         voice=voice
     )
     
     response.pause(length=1)
     
     response.say(
-        "Imagine having a team of AI sales reps making hundreds of calls for you every day, "
-        "while you focus on closing deals. That's what DialGenix delivers.",
+        "What if you had an AI that could make hundreds of calls a day, "
+        "qualify your leads in real-time, handle objections naturally, "
+        "and book meetings directly on your calendar? That's exactly what DialGenix does.",
         voice=voice
     )
     
     response.pause(length=1)
     
     response.say(
-        "Ready to see results? Head back to your dashboard and start your first campaign. "
-        "Thanks for trying DialGenix. Have a great day!",
+        "And here's the best part. You're hearing me right now. "
+        "This is our AI in action. Natural, conversational, and available twenty four seven.",
+        voice=voice
+    )
+    
+    response.pause(length=1)
+    
+    response.say(
+        "We've got a Test Drive plan starting at just twenty nine dollars. "
+        "Upload your leads, and let the AI start booking meetings for you today.",
+        voice=voice
+    )
+    
+    response.pause(length=1)
+    
+    response.say(
+        "Head back to your dashboard to get started, or book a live demo with our team. "
+        "Thanks for checking out DialGenix. Talk soon!",
         voice=voice
     )
     

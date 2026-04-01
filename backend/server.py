@@ -21,7 +21,8 @@ import io
 import httpx
 import base64
 import json
-from passlib.context import CryptContext
+import hashlib
+import secrets
 from jose import JWTError, jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from elevenlabs import ElevenLabs
@@ -53,8 +54,19 @@ JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key'
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-# Password hashing - using pbkdf2_sha256 to avoid bcrypt 72-byte limit issues
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+# Password hashing - using simple hashlib to avoid bcrypt issues
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+    return f"{salt}${hash_obj.hex()}"
+
+def verify_password(password: str, hashed: str) -> bool:
+    try:
+        salt, hash_hex = hashed.split('$')
+        hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+        return hash_obj.hex() == hash_hex
+    except:
+        return False
 
 # Security
 security = HTTPBearer(auto_error=False)
@@ -3934,9 +3946,8 @@ async def register(user_data: UserCreate):
             detail="This phone number has already been used for a free trial. Please subscribe to continue."
         )
     
-    # Hash password and create user (truncate to 72 bytes for bcrypt)
-    password_to_hash = user_data.password[:72] if len(user_data.password) > 72 else user_data.password
-    password_hash = pwd_context.hash(password_to_hash)
+    # Hash password and create user
+    password_hashed = hash_password(user_data.password)
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     
     user_doc = {
@@ -3945,7 +3956,7 @@ async def register(user_data: UserCreate):
         "name": user_data.name,
         "phone_number": phone,
         "phone_verified": True,
-        "password_hash": password_hash,
+        "password_hash": password_hashed,
         "role": UserRole.USER.value,
         "subscription_tier": None,
         "subscription_status": "trialing",
@@ -4005,10 +4016,8 @@ async def login(user_data: UserLogin, response: Response):
     if not user_doc.get("password_hash"):
         raise HTTPException(status_code=401, detail="Please use Google OAuth to login")
     
-    # Truncate password to 72 bytes for bcrypt compatibility
-    password_to_verify = user_data.password[:72] if len(user_data.password) > 72 else user_data.password
-    
-    if not pwd_context.verify(password_to_verify, user_doc["password_hash"]):
+    # Verify password
+    if not verify_password(user_data.password, user_doc["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Create session

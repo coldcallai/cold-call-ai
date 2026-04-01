@@ -519,10 +519,6 @@ const LoginPage = () => {
           </CardContent>
         </Card>
 
-        {/* Free trial note */}
-        <p className="text-center text-gray-500 text-sm mt-6">
-          Start with 15 free minutes of AI calling. No credit card required.
-        </p>
       </div>
     </div>
   );

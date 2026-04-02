@@ -9661,7 +9661,9 @@ async def call_yourself_demo(
     user_id = current_user["user_id"]
     
     # Check if user already used their demo call (limit 2 per user)
-    user = await db.users.find_one({"id": user_id})
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     demo_calls_used = user.get("demo_calls_used", 0)
     MAX_DEMO_CALLS = 2
     
@@ -9787,8 +9789,11 @@ async def demo_call_twiml(demo_call_id: str):
 @api_router.get("/demo/calls-remaining")
 async def get_demo_calls_remaining(current_user: Dict = Depends(get_current_user)):
     """Check how many demo calls the user has remaining"""
-    user = await db.users.find_one({"id": current_user["user_id"]})
-    demo_calls_used = user.get("demo_calls_used", 0)
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    if not user:
+        demo_calls_used = 0
+    else:
+        demo_calls_used = user.get("demo_calls_used", 0)
     MAX_DEMO_CALLS = 2
     
     return {

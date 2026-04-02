@@ -9734,11 +9734,11 @@ async def demo_call_twiml(demo_call_id: str):
     """Generate TwiML for the demo call - DialGenix sales pitch to potential user"""
     response = VoiceResponse()
     
-    # Use a high-quality Polly neural voice
-    voice = 'Polly.Matthew-Neural'
+    # Use a high-quality female Polly neural voice (Joanna - natural American English)
+    voice = 'Polly.Joanna-Neural'
     
     response.say(
-        "Hey there! This is Alex calling from DialGenix AI. "
+        "Hey there! This is Sarah calling from DialGenix AI. "
         "I noticed you've been checking out our platform, and I wanted to quickly show you what we can do for your business.",
         voice=voice
     )

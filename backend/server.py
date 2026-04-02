@@ -9729,7 +9729,7 @@ async def call_yourself_demo(
         logger.error(f"Demo call failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to initiate demo call: {str(e)}")
 
-@api_router.get("/demo/twiml/{demo_call_id}")
+@api_router.api_route("/demo/twiml/{demo_call_id}", methods=["GET", "POST"])
 async def demo_call_twiml(demo_call_id: str):
     """Generate TwiML for the demo call - DialGenix sales pitch to potential user"""
     response = VoiceResponse()

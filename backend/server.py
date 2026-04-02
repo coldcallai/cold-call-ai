@@ -9757,17 +9757,31 @@ async def demo_audio(demo_call_id: str):
     if _demo_audio_cache:
         return Response(content=_demo_audio_cache, media_type="audio/mpeg")
     
-    demo_script = """Hey! This is Sarah from DialGenix. So glad you picked up!
+    demo_script = """Hey! This is Sarah from DialGenix—glad you picked up.
 
-I know, I know - you're probably thinking "great, another sales call." But here's the thing... I'm actually an AI. Pretty wild, right?
+I know what you're thinking… 'great, another sales call.'
+But here's the twist—I'm actually an AI.
 
-And that's exactly why I'm calling. Imagine having me make hundreds of calls like this for YOUR business. Every single day. No breaks, no sick days, no awkward pauses.
+Yeah… a real-time AI having a natural conversation with you right now.
 
-I can qualify leads, handle objections, and even book meetings directly on your calendar. All while sounding like... well, like a real person having a real conversation and the cool part is we can clone your voice or pick the ai voice you like best, write the scripts, use your rebuttals to common objections. All designed to get you more sales.
+And this is exactly what DialGenix lets you do.
 
-The best part? You can try it right now. Head back to your dashboard and set up your first AI agent. It takes about five minutes.
+Imagine having AI agents like me making hundreds of calls for your business every single day—
+no breaks, no missed follow-ups, no awkward pauses.
 
-Anyway, thanks for letting me show off a little! Talk soon!"""
+We can qualify your leads, handle objections, and even book meetings straight onto your calendar…
+all while sounding completely human.
+
+You can even clone your own voice or choose the exact tone you want, plug in your scripts, and use your proven rebuttals—so every call feels like your best salesperson.
+
+And the best part?
+You can try it yourself right now.
+
+Just head back to your dashboard and launch your first AI agent—it takes about five minutes.
+
+Pretty crazy, right?
+
+Anyway, I'll let you get back to it—talk soon!"""
 
     try:
         # Use ElevenLabs with Rachel voice

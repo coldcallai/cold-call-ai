@@ -9745,24 +9745,30 @@ async def demo_call_twiml(demo_call_id: str, http_request: Request):
     return Response(content=str(response), media_type="application/xml")
 
 
+# Cache for demo audio to avoid regenerating each time
+_demo_audio_cache = None
+
 @api_router.get("/demo/audio/{demo_call_id}")
 async def demo_audio(demo_call_id: str):
-    """Generate ElevenLabs audio for the demo call"""
-    demo_script = """Hey there! This is Sarah from DialGenix AI. I noticed you've been checking out our platform, and I wanted to quickly show you what we can do for your business.
+    """Generate ElevenLabs audio for the demo call - cached for speed"""
+    global _demo_audio_cache
+    
+    # Return cached audio if available
+    if _demo_audio_cache:
+        return Response(content=_demo_audio_cache, media_type="audio/mpeg")
+    
+    demo_script = """Hey there! This is Sarah from DialGenix AI. I wanted to quickly show you what we can do for your business.
 
-Here's the thing. Most sales teams waste hours every day manually dialing leads, leaving voicemails, and chasing people who never pick up. Sound familiar?
+Most sales teams waste hours manually dialing leads and chasing people who never pick up. Sound familiar?
 
-What if you had an AI that could make hundreds of calls a day, qualify your leads in real time, handle objections naturally, and book meetings directly on your calendar? That's exactly what DialGenix does.
+What if you had an AI that could make hundreds of calls a day, qualify leads in real time, and book meetings on your calendar? That's exactly what DialGenix does.
 
-And here's the best part. You're hearing me right now. This is our AI in action. Natural, conversational, and available twenty four seven.
+You're hearing our AI right now. Natural, conversational, and available twenty four seven.
 
-We've got a Test Drive plan starting at just twenty nine dollars. Upload your leads, and let the AI start booking meetings for you today.
-
-Head back to your dashboard to get started, or book a live demo with our team. Thanks for checking out DialGenix. Talk soon!"""
+Head back to your dashboard to get started. Thanks for checking out DialGenix!"""
 
     try:
-        # Use ElevenLabs to generate natural audio
-        # Rachel voice ID for natural female voice
+        # Use ElevenLabs with Rachel voice
         voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel
         
         async with httpx.AsyncClient() as client:
@@ -9784,13 +9790,11 @@ Head back to your dashboard to get started, or book a live demo with our team. T
             )
             
             if response.status_code == 200:
-                return Response(
-                    content=response.content,
-                    media_type="audio/mpeg"
-                )
+                # Cache the audio for future calls
+                _demo_audio_cache = response.content
+                return Response(content=response.content, media_type="audio/mpeg")
             else:
                 logger.error(f"ElevenLabs error: {response.status_code} - {response.text}")
-                # Fallback to empty response
                 return Response(content=b"", media_type="audio/mpeg")
     except Exception as e:
         logger.error(f"Demo audio generation failed: {e}")

@@ -9730,61 +9730,72 @@ async def call_yourself_demo(
         raise HTTPException(status_code=500, detail=f"Failed to initiate demo call: {str(e)}")
 
 @api_router.api_route("/demo/twiml/{demo_call_id}", methods=["GET", "POST"])
-async def demo_call_twiml(demo_call_id: str):
-    """Generate TwiML for the demo call - DialGenix sales pitch to potential user"""
+async def demo_call_twiml(demo_call_id: str, http_request: Request):
+    """Generate TwiML for the demo call - uses ElevenLabs voice"""
     response = VoiceResponse()
     
-    # Use a high-quality female Polly neural voice (Joanna - natural American English)
-    voice = 'Polly.Joanna-Neural'
+    # Get the host for audio URL
+    host = http_request.headers.get("host", "dialgenix.ai")
+    protocol = "https" if "dialgenix" in host or "preview" in host else "http"
+    base_url = f"{protocol}://{host}"
     
-    response.say(
-        "Hey there! This is Sarah calling from DialGenix AI. "
-        "I noticed you've been checking out our platform, and I wanted to quickly show you what we can do for your business.",
-        voice=voice
-    )
-    
-    response.pause(length=1)
-    
-    response.say(
-        "Here's the thing. Most sales teams waste hours every day manually dialing leads, "
-        "leaving voicemails, and chasing people who never pick up. Sound familiar?",
-        voice=voice
-    )
-    
-    response.pause(length=1)
-    
-    response.say(
-        "What if you had an AI that could make hundreds of calls a day, "
-        "qualify your leads in real-time, handle objections naturally, "
-        "and book meetings directly on your calendar? That's exactly what DialGenix does.",
-        voice=voice
-    )
-    
-    response.pause(length=1)
-    
-    response.say(
-        "And here's the best part. You're hearing me right now. "
-        "This is our AI in action. Natural, conversational, and available twenty four seven.",
-        voice=voice
-    )
-    
-    response.pause(length=1)
-    
-    response.say(
-        "We've got a Test Drive plan starting at just twenty nine dollars. "
-        "Upload your leads, and let the AI start booking meetings for you today.",
-        voice=voice
-    )
-    
-    response.pause(length=1)
-    
-    response.say(
-        "Head back to your dashboard to get started, or book a live demo with our team. "
-        "Thanks for checking out DialGenix. Talk soon!",
-        voice=voice
-    )
+    # Play pre-generated ElevenLabs audio for the demo
+    response.play(f"{base_url}/api/demo/audio/{demo_call_id}")
     
     return Response(content=str(response), media_type="application/xml")
+
+
+@api_router.get("/demo/audio/{demo_call_id}")
+async def demo_audio(demo_call_id: str):
+    """Generate ElevenLabs audio for the demo call"""
+    demo_script = """Hey there! This is Sarah from DialGenix AI. I noticed you've been checking out our platform, and I wanted to quickly show you what we can do for your business.
+
+Here's the thing. Most sales teams waste hours every day manually dialing leads, leaving voicemails, and chasing people who never pick up. Sound familiar?
+
+What if you had an AI that could make hundreds of calls a day, qualify your leads in real time, handle objections naturally, and book meetings directly on your calendar? That's exactly what DialGenix does.
+
+And here's the best part. You're hearing me right now. This is our AI in action. Natural, conversational, and available twenty four seven.
+
+We've got a Test Drive plan starting at just twenty nine dollars. Upload your leads, and let the AI start booking meetings for you today.
+
+Head back to your dashboard to get started, or book a live demo with our team. Thanks for checking out DialGenix. Talk soon!"""
+
+    try:
+        # Use ElevenLabs to generate natural audio
+        # Rachel voice ID for natural female voice
+        voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                headers={
+                    "xi-api-key": elevenlabs_api_key,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "text": demo_script,
+                    "model_id": "eleven_monolingual_v1",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75
+                    }
+                },
+                timeout=60.0
+            )
+            
+            if response.status_code == 200:
+                return Response(
+                    content=response.content,
+                    media_type="audio/mpeg"
+                )
+            else:
+                logger.error(f"ElevenLabs error: {response.status_code} - {response.text}")
+                # Fallback to empty response
+                return Response(content=b"", media_type="audio/mpeg")
+    except Exception as e:
+        logger.error(f"Demo audio generation failed: {e}")
+        return Response(content=b"", media_type="audio/mpeg")
+
 
 @api_router.get("/demo/calls-remaining")
 async def get_demo_calls_remaining(current_user: Dict = Depends(get_current_user)):

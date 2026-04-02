@@ -9760,8 +9760,8 @@ async def demo_audio(demo_call_id: str):
     demo_script = """Hey, this is Sarah from DialGenix. Glad you picked up. I know what you're thinking, great, another sales call. But here's the twist. I'm actually an AI. Yeah, a real-time AI having a natural conversation with you right now. And this is exactly what DialGenix lets you do. Imagine having AI agents like me making hundreds of calls for your business every single day. No breaks, no missed follow-ups, no awkward pauses. We can qualify your leads, handle objections, and even book meetings straight onto your calendar. All while sounding completely human. You can even clone your own voice or choose the exact tone you want, plug in your scripts, and use your proven rebuttals. So every call feels like your best salesperson. And the best part? You can try it yourself right now. Just head back to your dashboard and launch your first AI agent. It takes about five minutes. Pretty cool, right? Anyway, I'll let you get back to it. Talk soon!"""
 
     try:
-        # Use Charlotte voice - calmer, more professional tone
-        voice_id = "XB0fDUnXU5powFXDhCwa"  # Charlotte - warm, calm female voice
+        # Use Rachel voice - American English female (same as homepage)
+        voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -9772,12 +9772,10 @@ async def demo_audio(demo_call_id: str):
                 },
                 json={
                     "text": demo_script,
-                    "model_id": "eleven_multilingual_v2",
+                    "model_id": "eleven_monolingual_v1",
                     "voice_settings": {
-                        "stability": 0.75,
-                        "similarity_boost": 0.75,
-                        "style": 0.0,
-                        "use_speaker_boost": False
+                        "stability": 0.71,
+                        "similarity_boost": 0.5
                     }
                 },
                 timeout=60.0
@@ -11385,15 +11383,15 @@ async def startup_pre_cache():
         try:
             demo_script = """Hey, this is Sarah from DialGenix. Glad you picked up. I know what you're thinking, great, another sales call. But here's the twist. I'm actually an AI. Yeah, a real-time AI having a natural conversation with you right now. And this is exactly what DialGenix lets you do. Imagine having AI agents like me making hundreds of calls for your business every single day. No breaks, no missed follow-ups, no awkward pauses. We can qualify your leads, handle objections, and even book meetings straight onto your calendar. All while sounding completely human. You can even clone your own voice or choose the exact tone you want, plug in your scripts, and use your proven rebuttals. So every call feels like your best salesperson. And the best part? You can try it yourself right now. Just head back to your dashboard and launch your first AI agent. It takes about five minutes. Pretty cool, right? Anyway, I'll let you get back to it. Talk soon!"""
             
-            voice_id = "XB0fDUnXU5powFXDhCwa"  # Charlotte - calm female voice
+            voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female voice
             async with httpx.AsyncClient() as http_client:
                 response = await http_client.post(
                     f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
                     headers={"xi-api-key": elevenlabs_api_key, "Content-Type": "application/json"},
                     json={
                         "text": demo_script,
-                        "model_id": "eleven_multilingual_v2",
-                        "voice_settings": {"stability": 0.75, "similarity_boost": 0.75, "style": 0.0, "use_speaker_boost": False}
+                        "model_id": "eleven_monolingual_v1",
+                        "voice_settings": {"stability": 0.71, "similarity_boost": 0.5}
                     },
                     timeout=60.0
                 )

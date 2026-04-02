@@ -9757,15 +9757,17 @@ async def demo_audio(demo_call_id: str):
     if _demo_audio_cache:
         return Response(content=_demo_audio_cache, media_type="audio/mpeg")
     
-    demo_script = """Hey there! This is Sarah from DialGenix AI. I wanted to quickly show you what we can do for your business.
+    demo_script = """Hey! This is Sarah from DialGenix. So glad you picked up!
 
-Most sales teams waste hours manually dialing leads and chasing people who never pick up. Sound familiar?
+I know, I know - you're probably thinking "great, another sales call." But here's the thing... I'm actually an AI. Pretty wild, right?
 
-What if you had an AI that could make hundreds of calls a day, qualify leads in real time, and book meetings on your calendar? That's exactly what DialGenix does.
+And that's exactly why I'm calling. Imagine having me make hundreds of calls like this for YOUR business. Every single day. No breaks, no sick days, no awkward pauses.
 
-You're hearing our AI right now. Natural, conversational, and available twenty four seven.
+I can qualify leads, handle objections, and even book meetings directly on your calendar. All while sounding like... well, like a real person having a real conversation and the cool part is we can clone your voice or pick the ai voice you like best, write the scripts, use your rebuttals to common objections. All designed to get you more sales.
 
-Head back to your dashboard to get started. Thanks for checking out DialGenix!"""
+The best part? You can try it right now. Head back to your dashboard and set up your first AI agent. It takes about five minutes.
+
+Anyway, thanks for letting me show off a little! Talk soon!"""
 
     try:
         # Use ElevenLabs with Rachel voice

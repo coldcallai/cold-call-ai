@@ -9678,8 +9678,8 @@ async def call_yourself_demo(
     if not phone.startswith("+"):
         phone = "+1" + phone.replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
     
-    if not twilio_service.client:
-        raise HTTPException(status_code=503, detail="Calling service not configured")
+    if not twilio_client:
+        raise HTTPException(status_code=503, detail="Calling service not configured. Please add TWILIO credentials.")
     
     try:
         # Get the base URL for webhooks
@@ -9691,7 +9691,7 @@ async def call_yourself_demo(
         demo_call_id = str(uuid.uuid4())
         
         # Make the call with demo TwiML
-        call = twilio_service.client.calls.create(
+        call = twilio_client.calls.create(
             to=phone,
             from_=twilio_service.phone_number,
             url=f"{base_url}/api/demo/twiml/{demo_call_id}",

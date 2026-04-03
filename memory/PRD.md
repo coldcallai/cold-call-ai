@@ -624,6 +624,35 @@ A vertical-agnostic B2B SaaS platform that:
 
 ## Changelog
 
+### December 2025 (Latest Session)
+
+#### Completed This Session:
+- **Voice Tuning Improvements**: Updated demo call to use ElevenLabs multilingual_v2 model with expressive settings (stability 0.5, similarity 0.75)
+- **Voice Settings Modal Enhancement**: Added Quick Presets (Professional/Conversational/Energetic), contextual tips for each slider, Quick Setup Guide
+- **Help System Implementation**:
+  - Floating Help Button with interactive walkthroughs (driver.js)
+  - 5 Product Tours (Dashboard, Agents, Voice Settings, Campaigns, Leads)
+  - Full Help Center page (`/help`) with searchable FAQ
+  - Video tutorial placeholders ready for Loom embeds
+- **Video Tutorial Scripts**: Created 5 complete scripts in `/frontend/public/tutorials/VIDEO_SCRIPTS.md`
+
+#### TO-DO LIST (Pending User Action):
+1. **[ ] Record Loom Video Tutorials** - Scripts ready at `/frontend/public/tutorials/VIDEO_SCRIPTS.md`
+   - VIDEO 1: 5-Minute Quickstart (5:00)
+   - VIDEO 2: Setting Up AI Agents (4:15)
+   - VIDEO 3: Voice Tuning Masterclass (3:45)
+   - VIDEO 4: Launching Your First Campaign (5:00)
+   - VIDEO 5: AI Lead Discovery (3:20)
+   - After recording, add YouTube/Loom URLs to `ProductTour.jsx` → `VIDEO_TUTORIALS` object
+
+2. **[ ] Generate AI Voiceover Audio** - Use ElevenLabs to generate MP3s from scripts (optional - user can narrate themselves)
+
+3. **[ ] Update Twilio Inbound Webhook** - Point to current production URL for inbound sales agent testing
+
+#### Technical Debt:
+- [ ] Refactor `server.py` (11,400+ lines) into modular files
+- [ ] Refactor `App.js` (4,200+ lines) into smaller components
+
 ### March 2026
 - **New Trial Funnel**: Added $29/50 calls "Test Drive" plan, "Call Yourself" demo feature, and sandbox mode concept
 - **Silence Detection + Auto-Callback**: Protects against runaway calls - 3 silences = schedule callback and hang up

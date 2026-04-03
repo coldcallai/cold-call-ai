@@ -403,7 +403,7 @@ const LandingPage = () => {
     },
     {
       question: "Is there a free trial?",
-      answer: "Yes! Start with 15 free minutes of AI calling — no credit card required. See results before committing.",
+      answer: "Yes! Start with a free trial — no credit card required. See results before committing.",
     },
   ];
 
@@ -987,7 +987,7 @@ const LandingPage = () => {
               Start Free Trial
               <ArrowRight className="w-5 h-5 ml-2" />
             </button>
-            <p className="text-gray-500 mt-4">15 free minutes of AI calling. No credit card required.</p>
+            <p className="text-gray-500 mt-4">Start your free trial. No credit card required.</p>
           </div>
         </div>
       </section>
@@ -1554,7 +1554,7 @@ const LandingPage = () => {
           </div>
 
           <p className="text-gray-500 text-sm mt-6">
-            15 free minutes • No credit card required
+            Free trial • No credit card required
           </p>
         </div>
       </section>

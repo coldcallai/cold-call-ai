@@ -253,7 +253,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "How many free minutes do I get?",
-        a: "New accounts get 15 free minutes to test the platform. This is enough for approximately 5-10 demo calls. After that, choose a plan that fits your needs."
+        a: "New accounts can test the platform with our free trial. After that, choose a plan that fits your needs."
       },
       {
         q: "Can I test a call to myself?",

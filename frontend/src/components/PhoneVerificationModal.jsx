@@ -147,7 +147,7 @@ const PhoneVerificationModal = ({ isOpen, onClose, onVerified, userEmail }) => {
           <h2 className="text-xl font-bold text-white mb-2">Verify Your Phone</h2>
           <p className="text-gray-400 text-sm">
             {step === 1 
-              ? "To prevent trial abuse, please verify your phone number to activate your 15 free minutes."
+              ? "To prevent trial abuse, please verify your phone number to activate your free trial."
               : `We sent a code to ${formatPhoneDisplay(phoneNumber)}`
             }
           </p>

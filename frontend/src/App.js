@@ -2474,6 +2474,59 @@ Help callers book, reschedule, or cancel appointments. Confirm their contact inf
     }
   };
   
+  // Supported languages for ElevenLabs multilingual_v2
+  const SUPPORTED_LANGUAGES = [
+    { code: "en", name: "English", flag: "🇺🇸" },
+    { code: "es", name: "Spanish", flag: "🇪🇸" },
+    { code: "fr", name: "French", flag: "🇫🇷" },
+    { code: "de", name: "German", flag: "🇩🇪" },
+    { code: "it", name: "Italian", flag: "🇮🇹" },
+    { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+    { code: "pl", name: "Polish", flag: "🇵🇱" },
+    { code: "nl", name: "Dutch", flag: "🇳🇱" },
+    { code: "sv", name: "Swedish", flag: "🇸🇪" },
+    { code: "da", name: "Danish", flag: "🇩🇰" },
+    { code: "fi", name: "Finnish", flag: "🇫🇮" },
+    { code: "no", name: "Norwegian", flag: "🇳🇴" },
+    { code: "ru", name: "Russian", flag: "🇷🇺" },
+    { code: "uk", name: "Ukrainian", flag: "🇺🇦" },
+    { code: "tr", name: "Turkish", flag: "🇹🇷" },
+    { code: "ar", name: "Arabic", flag: "🇸🇦" },
+    { code: "he", name: "Hebrew", flag: "🇮🇱" },
+    { code: "hi", name: "Hindi", flag: "🇮🇳" },
+    { code: "bn", name: "Bengali", flag: "🇧🇩" },
+    { code: "ta", name: "Tamil", flag: "🇮🇳" },
+    { code: "te", name: "Telugu", flag: "🇮🇳" },
+    { code: "mr", name: "Marathi", flag: "🇮🇳" },
+    { code: "id", name: "Indonesian", flag: "🇮🇩" },
+    { code: "ms", name: "Malay", flag: "🇲🇾" },
+    { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
+    { code: "th", name: "Thai", flag: "🇹🇭" },
+    { code: "tl", name: "Filipino", flag: "🇵🇭" },
+    { code: "zh", name: "Chinese (Mandarin)", flag: "🇨🇳" },
+    { code: "ja", name: "Japanese", flag: "🇯🇵" },
+    { code: "ko", name: "Korean", flag: "🇰🇷" },
+    { code: "el", name: "Greek", flag: "🇬🇷" },
+    { code: "cs", name: "Czech", flag: "🇨🇿" },
+    { code: "sk", name: "Slovak", flag: "🇸🇰" },
+    { code: "hu", name: "Hungarian", flag: "🇭🇺" },
+    { code: "ro", name: "Romanian", flag: "🇷🇴" },
+    { code: "bg", name: "Bulgarian", flag: "🇧🇬" },
+    { code: "hr", name: "Croatian", flag: "🇭🇷" },
+    { code: "sr", name: "Serbian", flag: "🇷🇸" },
+    { code: "sl", name: "Slovenian", flag: "🇸🇮" },
+    { code: "et", name: "Estonian", flag: "🇪🇪" },
+    { code: "lv", name: "Latvian", flag: "🇱🇻" },
+    { code: "lt", name: "Lithuanian", flag: "🇱🇹" },
+    { code: "ca", name: "Catalan", flag: "🇪🇸" },
+    { code: "eu", name: "Basque", flag: "🇪🇸" },
+    { code: "gl", name: "Galician", flag: "🇪🇸" },
+    { code: "cy", name: "Welsh", flag: "🇬🇧" },
+    { code: "ga", name: "Irish", flag: "🇮🇪" },
+    { code: "af", name: "Afrikaans", flag: "🇿🇦" },
+    { code: "sw", name: "Swahili", flag: "🇰🇪" }
+  ];
+
   const [newAgent, setNewAgent] = useState({
     name: "",
     email: "",
@@ -2481,7 +2534,8 @@ Help callers book, reschedule, or cancel appointments. Confirm their contact inf
     calendly_link: "",
     max_daily_calls: 50,
     use_case: "sales_cold_calling",
-    system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt
+    system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt,
+    language: "en"
   });
 
   const fetchAgents = async () => {
@@ -2836,6 +2890,27 @@ Help callers book, reschedule, or cancel appointments. Confirm their contact inf
                 placeholder="https://calendly.com/john-doe/30min"
                 className="mt-1"
               />
+            </div>
+
+            {/* Language Selection */}
+            <div>
+              <Label htmlFor="language" className="flex items-center gap-2">
+                Language
+                <span className="text-xs text-gray-400 font-normal">(AI will speak in this language)</span>
+              </Label>
+              <select
+                id="language"
+                value={newAgent.language}
+                onChange={(e) => setNewAgent({...newAgent, language: e.target.value})}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Supports 50+ languages via ElevenLabs multilingual model</p>
             </div>
             
             {/* System Prompt (Advanced) */}
@@ -3395,6 +3470,13 @@ const SettingsPage = () => {
   });
   const [testingWebhook, setTestingWebhook] = useState(null);
   
+  // Team management state
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  
   // Number Pool state
   const [numberPool, setNumberPool] = useState([]);
   const [showAddNumber, setShowAddNumber] = useState(false);
@@ -3490,9 +3572,62 @@ const SettingsPage = () => {
     }
   };
 
+  const fetchTeamMembers = async () => {
+    setLoadingTeam(true);
+    try {
+      const response = await axios.get(`${API}/team/members`);
+      setTeamMembers(response.data);
+    } catch (error) {
+      console.error("Failed to fetch team members:", error);
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  const inviteTeamMember = async () => {
+    if (!inviteEmail) {
+      toast.error("Please enter an email address");
+      return;
+    }
+    try {
+      await axios.post(`${API}/team/invite`, {
+        email: inviteEmail,
+        role: inviteRole
+      });
+      toast.success(`Invitation sent to ${inviteEmail}`);
+      setShowInviteModal(false);
+      setInviteEmail("");
+      fetchTeamMembers();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to send invitation");
+    }
+  };
+
+  const removeTeamMember = async (memberId) => {
+    if (!confirm("Are you sure you want to remove this team member?")) return;
+    try {
+      await axios.delete(`${API}/team/members/${memberId}`);
+      toast.success("Team member removed");
+      fetchTeamMembers();
+    } catch (error) {
+      toast.error("Failed to remove team member");
+    }
+  };
+
+  const updateMemberRole = async (memberId, newRole) => {
+    try {
+      await axios.put(`${API}/team/members/${memberId}`, { role: newRole });
+      toast.success("Role updated");
+      fetchTeamMembers();
+    } catch (error) {
+      toast.error("Failed to update role");
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
     fetchWebhooks();
+    fetchTeamMembers();
   }, []);
 
   const updateSettings = async (updates) => {
@@ -4411,6 +4546,222 @@ const SettingsPage = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Team Management Card */}
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }} className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-indigo-600" />
+                  Team Management
+                </CardTitle>
+                <CardDescription>Invite team members and manage access</CardDescription>
+              </div>
+              <Badge variant={teamMembers.length > 0 ? "default" : "secondary"}>
+                {teamMembers.length + 1} {teamMembers.length === 0 ? "User" : "Users"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Plan Info */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+              <h4 className="font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-indigo-600" />
+                Team Seats by Plan
+              </h4>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className="bg-white rounded-lg p-3 text-center border border-indigo-100">
+                  <p className="font-medium text-gray-900">Starter</p>
+                  <p className="text-2xl font-bold text-indigo-600">1</p>
+                  <p className="text-xs text-gray-500">seat</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center border border-indigo-100">
+                  <p className="font-medium text-gray-900">Professional</p>
+                  <p className="text-2xl font-bold text-indigo-600">5</p>
+                  <p className="text-xs text-gray-500">seats</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center border border-indigo-100">
+                  <p className="font-medium text-gray-900">Unlimited</p>
+                  <p className="text-2xl font-bold text-indigo-600">5</p>
+                  <p className="text-xs text-gray-500">seats</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Current User (Owner) */}
+            <div>
+              <Label className="mb-3 block">Account Owner</Label>
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-semibold">
+                    {settings?.email?.charAt(0)?.toUpperCase() || "U"}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{settings?.email || "Loading..."}</p>
+                    <p className="text-sm text-gray-500">Account Owner</p>
+                  </div>
+                </div>
+                <Badge className="bg-indigo-600">Owner</Badge>
+              </div>
+            </div>
+
+            {/* Team Members List */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <Label>Team Members ({teamMembers.length})</Label>
+                <Button
+                  size="sm"
+                  onClick={() => setShowInviteModal(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Invite Member
+                </Button>
+              </div>
+
+              {loadingTeam ? (
+                <div className="text-center py-8 text-gray-500">Loading team...</div>
+              ) : teamMembers.length === 0 ? (
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                  <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-2">No team members yet</p>
+                  <p className="text-sm text-gray-400">Invite colleagues to collaborate on campaigns</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {teamMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:border-indigo-200 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-600 font-semibold">
+                          {member.email?.charAt(0)?.toUpperCase() || "?"}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{member.email}</p>
+                          <p className="text-sm text-gray-500">
+                            {member.status === "pending" ? "Invitation pending" : `Joined ${new Date(member.joined_at).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={member.role}
+                          onChange={(e) => updateMemberRole(member.id, e.target.value)}
+                          className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        >
+                          <option value="member">Member</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeTeamMember(member.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Role Permissions Info */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <h4 className="font-medium text-gray-900 mb-3">Role Permissions</h4>
+              <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="font-medium text-gray-700 mb-2">👤 Member</p>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• View all campaigns & leads</li>
+                    <li>• Create & edit agents</li>
+                    <li>• Make calls</li>
+                    <li>• View call recordings</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700 mb-2">👑 Admin</p>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• All Member permissions</li>
+                    <li>• Manage team members</li>
+                    <li>• View billing & usage</li>
+                    <li>• Change settings</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Invite Team Member Modal */}
+        {showInviteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Invite Team Member</CardTitle>
+                    <CardDescription>Send an invitation to join your team</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="invite-email">Email Address</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    placeholder="colleague@company.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="invite-role">Role</Label>
+                  <select
+                    id="invite-role"
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="member">Member — Can use platform, view data</option>
+                    <option value="admin">Admin — Can manage team & settings</option>
+                  </select>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm text-blue-800">
+                    <strong>Note:</strong> They'll receive an email invitation to create an account and join your team.
+                  </p>
+                </div>
+              </CardContent>
+              <div className="flex gap-2 p-6 pt-0">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    setInviteEmail("");
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={inviteTeamMember}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Send Invitation
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         <Card className="bg-white border border-gray-200 shadow-sm">
           <CardHeader>

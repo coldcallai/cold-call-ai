@@ -7044,6 +7044,118 @@ async def get_account_usage(current_user: Dict = Depends(get_current_user)):
         "monthly_call_allowance": current_user.get("monthly_call_allowance", 0)
     }
 
+# ============ Team Management ============
+
+@api_router.get("/team/members")
+async def get_team_members(current_user: Dict = Depends(get_current_user)):
+    """Get all team members for the current user's organization"""
+    user_id = current_user["user_id"]
+    
+    # Get team members invited by this user
+    members = await db.team_members.find(
+        {"owner_id": user_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    return members
+
+@api_router.post("/team/invite")
+async def invite_team_member(
+    invite_data: Dict[str, Any],
+    current_user: Dict = Depends(get_current_user)
+):
+    """Invite a new team member"""
+    user_id = current_user["user_id"]
+    email = invite_data.get("email", "").lower().strip()
+    role = invite_data.get("role", "member")
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
+    if role not in ["member", "admin"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    
+    # Check if already invited
+    existing = await db.team_members.find_one({
+        "owner_id": user_id,
+        "email": email
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="This email has already been invited")
+    
+    # Check team seat limits based on subscription
+    tier = current_user.get("subscription_tier", "starter")
+    seat_limits = {"starter": 1, "professional": 5, "unlimited": 5, "bring_your_list": 3}
+    max_seats = seat_limits.get(tier, 1)
+    
+    current_members = await db.team_members.count_documents({"owner_id": user_id})
+    if current_members >= max_seats - 1:  # -1 because owner counts as 1 seat
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Team seat limit reached ({max_seats} seats on {tier} plan). Upgrade to add more members."
+        )
+    
+    # Create team member record
+    member = {
+        "id": str(uuid.uuid4()),
+        "owner_id": user_id,
+        "email": email,
+        "role": role,
+        "status": "pending",
+        "invited_at": datetime.now(timezone.utc).isoformat(),
+        "joined_at": None
+    }
+    
+    await db.team_members.insert_one(member)
+    
+    # TODO: Send invitation email via Resend
+    
+    return {"message": "Invitation sent", "member": {k: v for k, v in member.items() if k != "_id"}}
+
+@api_router.put("/team/members/{member_id}")
+async def update_team_member(
+    member_id: str,
+    update_data: Dict[str, Any],
+    current_user: Dict = Depends(get_current_user)
+):
+    """Update a team member's role"""
+    user_id = current_user["user_id"]
+    
+    member = await db.team_members.find_one({
+        "id": member_id,
+        "owner_id": user_id
+    })
+    
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    
+    new_role = update_data.get("role")
+    if new_role and new_role in ["member", "admin"]:
+        await db.team_members.update_one(
+            {"id": member_id},
+            {"$set": {"role": new_role}}
+        )
+    
+    return {"message": "Member updated"}
+
+@api_router.delete("/team/members/{member_id}")
+async def remove_team_member(
+    member_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Remove a team member"""
+    user_id = current_user["user_id"]
+    
+    result = await db.team_members.delete_one({
+        "id": member_id,
+        "owner_id": user_id
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    
+    return {"message": "Team member removed"}
+
 @api_router.post("/packs/purchase")
 async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_user)):
     """Purchase a credit pack (adds to user's balance)"""

@@ -263,8 +263,8 @@ export const HelpButton = ({ currentPage = "dashboard" }) => {
 
   return (
     <>
-      {/* Floating Help Button */}
-      <div className="fixed bottom-6 right-6 z-50">
+      {/* Floating Help Button - positioned above HelpChat */}
+      <div className="fixed bottom-24 right-6 z-50">
         <Button
           onClick={() => setShowMenu(!showMenu)}
           className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg shadow-blue-500/30"
@@ -274,7 +274,7 @@ export const HelpButton = ({ currentPage = "dashboard" }) => {
 
         {/* Help Menu */}
         {showMenu && (
-          <div className="absolute bottom-16 right-0 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
+          <div className="absolute bottom-16 right-0 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-5 duration-200 max-h-[70vh]">
             <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4">
               <h3 className="text-white font-semibold">Need Help?</h3>
               <p className="text-blue-100 text-sm">Choose a guide or video tutorial</p>

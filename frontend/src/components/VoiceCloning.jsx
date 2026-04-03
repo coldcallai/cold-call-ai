@@ -234,6 +234,34 @@ const VoiceCloneModal = ({ isOpen, onClose, onVoiceCloned }) => {
   );
 };
 
+// Voice presets for one-click setup
+const VOICE_PRESETS = {
+  professional: {
+    name: "Professional",
+    description: "Calm, clear, and trustworthy — ideal for B2B sales",
+    stability: 0.7,
+    similarityBoost: 0.75,
+    style: 0.2,
+    icon: "💼"
+  },
+  conversational: {
+    name: "Conversational", 
+    description: "Natural and friendly — great for warm leads",
+    stability: 0.5,
+    similarityBoost: 0.75,
+    style: 0.4,
+    icon: "💬"
+  },
+  energetic: {
+    name: "Energetic",
+    description: "Upbeat and enthusiastic — perfect for promotions",
+    stability: 0.35,
+    similarityBoost: 0.8,
+    style: 0.6,
+    icon: "⚡"
+  }
+};
+
 const VoiceSettingsModal = ({ isOpen, onClose, agent, onSave }) => {
   const [voiceType, setVoiceType] = useState(agent?.voice_type || "preset");
   const [selectedVoiceId, setSelectedVoiceId] = useState(agent?.preset_voice_id || agent?.cloned_voice_id || "21m00Tcm4TlvDq8ikWAM");
@@ -242,10 +270,20 @@ const VoiceSettingsModal = ({ isOpen, onClose, agent, onSave }) => {
   const [stability, setStability] = useState(agent?.voice_settings?.stability || 0.5);
   const [similarityBoost, setSimilarityBoost] = useState(agent?.voice_settings?.similarity_boost || 0.75);
   const [style, setStyle] = useState(agent?.voice_settings?.style || 0.3);
+  const [activePreset, setActivePreset] = useState(null);
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewAudio, setPreviewAudio] = useState(null);
   const audioRef = useRef(null);
+
+  // Apply a preset
+  const applyPreset = (presetKey) => {
+    const preset = VOICE_PRESETS[presetKey];
+    setStability(preset.stability);
+    setSimilarityBoost(preset.similarityBoost);
+    setStyle(preset.style);
+    setActivePreset(presetKey);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -347,6 +385,16 @@ const VoiceSettingsModal = ({ isOpen, onClose, agent, onSave }) => {
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {/* Quick Start Guide */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm font-medium text-blue-900 mb-2">Quick Setup Guide</p>
+            <p className="text-xs text-blue-700">
+              1. Choose a voice type below (Preset or your Cloned voice)<br/>
+              2. Select a Quick Preset OR fine-tune with sliders<br/>
+              3. Click "Preview Voice" to hear it before saving
+            </p>
+          </div>
+
           {/* Voice Type Selection */}
           <div className="space-y-3">
             <Label>Voice Type</Label>
@@ -424,51 +472,98 @@ const VoiceSettingsModal = ({ isOpen, onClose, agent, onSave }) => {
 
           {/* Voice Tuning */}
           <div className="space-y-4">
-            <Label>Voice Tuning</Label>
-            
-            <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Voice Tuning</Label>
+              <span className="text-xs text-gray-400">Or choose a quick preset below</span>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="grid grid-cols-3 gap-2">
+              {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  onClick={() => applyPreset(key)}
+                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                    activePreset === key
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 hover:border-green-300 hover:bg-green-50/50"
+                  }`}
+                >
+                  <span className="text-xl">{preset.icon}</span>
+                  <p className={`text-xs font-medium mt-1 ${activePreset === key ? "text-green-700" : "text-gray-700"}`}>
+                    {preset.name}
+                  </p>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-center text-gray-500 -mt-1">
+              Click a preset to auto-fill recommended settings
+            </p>
+
+            {/* Stability Slider */}
+            <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Stability</span>
-                <span className="text-sm font-medium">{stability.toFixed(2)}</span>
+                <span className="text-sm font-medium text-gray-700">Stability</span>
+                <span className="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded">{stability.toFixed(2)}</span>
               </div>
               <Slider
                 value={[stability]}
-                onValueChange={([v]) => setStability(v)}
+                onValueChange={([v]) => { setStability(v); setActivePreset(null); }}
                 max={1}
                 step={0.05}
                 className="w-full"
               />
-              <p className="text-xs text-gray-500">Higher = more consistent, Lower = more expressive</p>
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>More expressive</span>
+                <span>More consistent</span>
+              </div>
+              <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                <strong>Tip:</strong> Use 0.3-0.5 for natural conversations, 0.7+ for scripted messages
+              </p>
             </div>
 
-            <div className="space-y-3">
+            {/* Similarity Slider */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Similarity</span>
-                <span className="text-sm font-medium">{similarityBoost.toFixed(2)}</span>
+                <span className="text-sm font-medium text-gray-700">Similarity</span>
+                <span className="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded">{similarityBoost.toFixed(2)}</span>
               </div>
               <Slider
                 value={[similarityBoost]}
-                onValueChange={([v]) => setSimilarityBoost(v)}
+                onValueChange={([v]) => { setSimilarityBoost(v); setActivePreset(null); }}
                 max={1}
                 step={0.05}
                 className="w-full"
               />
-              <p className="text-xs text-gray-500">Higher = closer to original voice</p>
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>More variation</span>
+                <span>Closer to original</span>
+              </div>
+              <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                <strong>Tip:</strong> Keep at 0.7-0.8 for best clarity. Lower only if voice sounds too robotic.
+              </p>
             </div>
 
-            <div className="space-y-3">
+            {/* Style Slider */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Style</span>
-                <span className="text-sm font-medium">{style.toFixed(2)}</span>
+                <span className="text-sm font-medium text-gray-700">Style</span>
+                <span className="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded">{style.toFixed(2)}</span>
               </div>
               <Slider
                 value={[style]}
-                onValueChange={([v]) => setStyle(v)}
+                onValueChange={([v]) => { setStyle(v); setActivePreset(null); }}
                 max={1}
                 step={0.05}
                 className="w-full"
               />
-              <p className="text-xs text-gray-500">Higher = more animated delivery</p>
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Calm delivery</span>
+                <span>Animated delivery</span>
+              </div>
+              <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                <strong>Tip:</strong> Use 0.2-0.4 for sales calls, 0.5+ for promotional/energetic campaigns
+              </p>
             </div>
           </div>
 

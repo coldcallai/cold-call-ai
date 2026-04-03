@@ -3361,11 +3361,24 @@ const SettingsPage = () => {
     notification_emails: ""
   });
   const [testingWebhook, setTestingWebhook] = useState(null);
+  
+  // Number Pool state
+  const [numberPool, setNumberPool] = useState([]);
+  const [showAddNumber, setShowAddNumber] = useState(false);
+  const [newNumber, setNewNumber] = useState("");
+  const [rotationMode, setRotationMode] = useState("round-robin");
+  const [numberPoolEnabled, setNumberPoolEnabled] = useState(false);
 
   const fetchSettings = async () => {
     try {
       const response = await axios.get(`${API}/settings`);
       setSettings(response.data);
+      // Load number pool settings
+      if (response.data.number_pool) {
+        setNumberPool(response.data.number_pool || []);
+        setRotationMode(response.data.rotation_mode || "round-robin");
+        setNumberPoolEnabled(response.data.number_pool_enabled || false);
+      }
     } catch (error) {
       toast.error("Failed to load settings");
     } finally {
@@ -3531,6 +3544,264 @@ const SettingsPage = () => {
                 </div>
               </div>
               <Badge variant="default">Ready</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Number Pool / Caller ID Rotation Card */}
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }} className="flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-blue-600" />
+                  Caller ID Rotation
+                </CardTitle>
+                <CardDescription>Rotate through multiple numbers for higher answer rates</CardDescription>
+              </div>
+              <Badge variant={numberPoolEnabled && numberPool.length >= 2 ? "default" : "secondary"}>
+                {numberPoolEnabled && numberPool.length >= 2 ? `${numberPool.length} Numbers Active` : "Not Active"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Benefits Section */}
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-4">
+              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-500" />
+                Why Use Number Rotation?
+              </h4>
+              <div className="grid md:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>+30-40% answer rates</strong> with local presence</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>Avoid spam flags</strong> by spreading calls</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>Professional appearance</strong> like a real team</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>No easy callbacks</strong> — numbers rotate</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Setup Instructions */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <h4 className="font-semibold text-gray-900 mb-3">How to Set Up:</h4>
+              <ol className="space-y-2 text-sm text-gray-700">
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">1</span>
+                  <span><strong>Buy Twilio numbers</strong> — Go to <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/incoming" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Twilio Console</a> → Phone Numbers → Buy a Number (~$1-2/month each)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">2</span>
+                  <span><strong>Add 5-10 numbers</strong> — Mix of local area codes matching your target regions</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">3</span>
+                  <span><strong>Paste numbers below</strong> — Format: +1XXXXXXXXXX (include country code)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">4</span>
+                  <span><strong>Choose rotation mode</strong> — Round-robin (sequential), Random, or Geographic</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">5</span>
+                  <span><strong>Enable rotation</strong> — Toggle on and your campaigns will auto-rotate</span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Enable Toggle */}
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-white">
+              <div>
+                <p className="font-medium">Enable Number Rotation</p>
+                <p className="text-sm text-gray-500">Requires at least 2 numbers in pool</p>
+              </div>
+              <Button
+                variant={numberPoolEnabled ? "default" : "outline"}
+                onClick={() => {
+                  if (numberPool.length < 2 && !numberPoolEnabled) {
+                    toast.error("Add at least 2 numbers to enable rotation");
+                    return;
+                  }
+                  const newValue = !numberPoolEnabled;
+                  setNumberPoolEnabled(newValue);
+                  updateSettings({ number_pool_enabled: newValue });
+                }}
+                disabled={numberPool.length < 2}
+              >
+                {numberPoolEnabled ? "Enabled" : "Disabled"}
+              </Button>
+            </div>
+
+            {/* Rotation Mode Selector */}
+            <div>
+              <Label className="mb-2 block">Rotation Mode</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: "round-robin", label: "Round Robin", desc: "Sequential order" },
+                  { value: "random", label: "Random", desc: "Randomized each call" },
+                  { value: "geographic", label: "Geographic", desc: "Match lead area code" }
+                ].map((mode) => (
+                  <button
+                    key={mode.value}
+                    onClick={() => {
+                      setRotationMode(mode.value);
+                      updateSettings({ rotation_mode: mode.value });
+                    }}
+                    className={`p-3 rounded-lg border-2 text-center transition-all ${
+                      rotationMode === mode.value
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-blue-300"
+                    }`}
+                  >
+                    <p className={`font-medium text-sm ${rotationMode === mode.value ? "text-blue-700" : "text-gray-700"}`}>
+                      {mode.label}
+                    </p>
+                    <p className="text-xs text-gray-500">{mode.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Number Pool List */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <Label>Your Number Pool ({numberPool.length} numbers)</Label>
+                <Button
+                  size="sm"
+                  onClick={() => setShowAddNumber(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Number
+                </Button>
+              </div>
+
+              {numberPool.length === 0 ? (
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                  <Phone className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-2">No numbers in pool yet</p>
+                  <p className="text-sm text-gray-400">Add Twilio numbers to start rotating caller IDs</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {numberPool.map((number, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-blue-700">{index + 1}</span>
+                        </div>
+                        <div>
+                          <p className="font-mono font-medium text-gray-900">{number}</p>
+                          <p className="text-xs text-gray-500">
+                            Area code: {number.slice(2, 5)}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const updated = numberPool.filter((_, i) => i !== index);
+                          setNumberPool(updated);
+                          updateSettings({ number_pool: updated });
+                          toast.success("Number removed");
+                        }}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add Number Modal */}
+            {showAddNumber && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <Card className="w-full max-w-md mx-4">
+                  <CardHeader>
+                    <CardTitle>Add Twilio Number</CardTitle>
+                    <CardDescription>Enter a phone number from your Twilio account</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label htmlFor="newNumber">Phone Number</Label>
+                      <Input
+                        id="newNumber"
+                        placeholder="+14155551234"
+                        value={newNumber}
+                        onChange={(e) => setNewNumber(e.target.value)}
+                        className="mt-1 font-mono"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Format: +1XXXXXXXXXX (include country code)</p>
+                    </div>
+                    
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-sm text-amber-800">
+                        <strong>Important:</strong> This number must be purchased in your Twilio account and configured for voice calls.
+                      </p>
+                    </div>
+                  </CardContent>
+                  <div className="flex gap-2 p-6 pt-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowAddNumber(false);
+                        setNewNumber("");
+                      }}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        // Validate phone number format
+                        const phoneRegex = /^\+1[0-9]{10}$/;
+                        if (!phoneRegex.test(newNumber)) {
+                          toast.error("Invalid format. Use +1XXXXXXXXXX");
+                          return;
+                        }
+                        if (numberPool.includes(newNumber)) {
+                          toast.error("This number is already in your pool");
+                          return;
+                        }
+                        const updated = [...numberPool, newNumber];
+                        setNumberPool(updated);
+                        updateSettings({ number_pool: updated });
+                        setShowAddNumber(false);
+                        setNewNumber("");
+                        toast.success("Number added to pool!");
+                      }}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    >
+                      Add Number
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Pricing Note */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+              <h4 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Cost Breakdown
+              </h4>
+              <div className="text-sm text-green-800 space-y-1">
+                <p><strong>Twilio numbers:</strong> ~$1-2/month per number (paid to Twilio)</p>
+                <p><strong>Rotation feature:</strong> Included with Professional+ plans, or $39/month add-on</p>
+                <p className="text-green-600 mt-2">💡 Tip: Start with 5-10 numbers for optimal rotation</p>
+              </div>
             </div>
           </CardContent>
         </Card>

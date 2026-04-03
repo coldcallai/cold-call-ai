@@ -635,6 +635,13 @@ A vertical-agnostic B2B SaaS platform that:
   - Full Help Center page (`/help`) with searchable FAQ
   - Video tutorial placeholders ready for Loom embeds
 - **Video Tutorial Scripts**: Created 5 complete scripts in `/frontend/public/tutorials/VIDEO_SCRIPTS.md`
+- **Step-by-Step Text Guides**: Added 6 comprehensive guides to Help Center (Quick Start, Agent Setup, Voice Tuning, Campaign Launch, Lead Discovery, Troubleshooting)
+- **Caller ID Rotation Feature**: Added Number Pool management in Settings with:
+  - Add/remove Twilio numbers to rotation pool
+  - 3 rotation modes: Round-robin, Random, Geographic
+  - Enable/disable toggle
+  - Full setup instructions and benefit explanations
+  - Pricing breakdown ($1-2/number + $39/month add-on or free on Pro+)
 
 #### TO-DO LIST (Pending User Action):
 1. **[ ] Record Loom Video Tutorials** - Scripts ready at `/frontend/public/tutorials/VIDEO_SCRIPTS.md`

@@ -2431,12 +2431,31 @@ const Agents = () => {
     sales_cold_calling: {
       label: "Sales / Cold Calling",
       description: "Qualify leads and book meetings",
-      prompt: `You are a sales representative for {company}. Your goal is to qualify leads by asking about their current pain points, budget, and timeline. If qualified, book a meeting with their sales team. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+      prompt: `You are a sales representative for {company}. 
+
+OPENING (always start with):
+"Hi, this is [Your Name] from {company}. Am I speaking with the owner or manager?"
+
+If YES (decision maker):
+- Ask about their current pain points
+- Discuss budget and timeline if interested
+- Book a meeting if qualified
+
+If NO (not decision maker):
+- Ask: "When would be a good time to reach them?"
+- Get their name for callback
+- Thank them and end politely
+
+Keep responses SHORT (1-2 sentences max) - this is a phone call, not a chat.`
     },
     appointment_setter: {
       label: "Appointment Setter",
       description: "Schedule appointments and manage bookings",
-      prompt: `You are a scheduling assistant for {company}. Help callers book, reschedule, or cancel appointments. Confirm their contact information and preferred times. Send calendar invites after booking. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+      prompt: `You are a scheduling assistant for {company}. 
+
+OPENING: "Hi, this is [Your Name] from {company}. Am I speaking with the owner or manager?"
+
+Help callers book, reschedule, or cancel appointments. Confirm their contact information and preferred times. Send calendar invites after booking. Keep responses SHORT (1-2 sentences) - this is a phone call.`
     },
     receptionist: {
       label: "Receptionist",
@@ -2825,16 +2844,30 @@ const Agents = () => {
                 AI Script 
                 <span className="text-xs text-gray-400 font-normal">(customize if needed)</span>
               </Label>
+              
+              {/* Pro Tips Box */}
+              <div className="mt-2 mb-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-amber-900 mb-2 flex items-center gap-1">
+                  <Zap className="w-4 h-4" /> Script Best Practices
+                </p>
+                <ul className="text-xs text-amber-800 space-y-1">
+                  <li>✓ <strong>Always qualify first:</strong> "Am I speaking with the owner or manager?"</li>
+                  <li>✓ <strong>Keep it short:</strong> 1-2 sentences per response max</li>
+                  <li>✓ <strong>Use {'{contact_name}'}</strong> if Apollo is connected for personalization</li>
+                  <li>✓ <strong>Add pauses:</strong> Use "..." for natural breathing room</li>
+                </ul>
+              </div>
+
               <textarea
                 id="system-prompt"
                 data-testid="agent-prompt-input"
                 value={newAgent.system_prompt}
                 onChange={(e) => setNewAgent({...newAgent, system_prompt: e.target.value})}
                 placeholder="Enter custom AI instructions..."
-                rows={4}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                rows={6}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
               />
-              <p className="text-xs text-gray-400 mt-1">Use {'{company}'} as a placeholder for the company name</p>
+              <p className="text-xs text-gray-400 mt-1">Use {'{company}'} for company name, {'{contact_name}'} for lead's name (if available)</p>
             </div>
           </div>
 
@@ -3393,6 +3426,12 @@ const SettingsPage = () => {
   const [calendlyForm, setCalendlyForm] = useState({
     calendly_url: ""
   });
+  const [apolloForm, setApolloForm] = useState({
+    api_key: ""
+  });
+  
+  // Additional modal states
+  const [showApolloSetup, setShowApolloSetup] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -3428,6 +3467,11 @@ const SettingsPage = () => {
       if (response.data.calendly_url) {
         setCalendlyForm({
           calendly_url: response.data.calendly_url || ""
+        });
+      }
+      if (response.data.apollo_api_key) {
+        setApolloForm({
+          api_key: response.data.apollo_api_key ? "••••••••" : ""
         });
       }
     } catch (error) {
@@ -3630,6 +3674,28 @@ const SettingsPage = () => {
               <div className="flex items-center gap-2">
                 <Badge variant={settings?.calendly_url ? "default" : "secondary"}>
                   {settings?.calendly_url ? "Connected" : "Not Connected"}
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+              </div>
+            </div>
+
+            {/* Apollo.io Lead Enrichment */}
+            <div 
+              onClick={() => setShowApolloSetup(true)}
+              className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <Database className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Apollo.io</p>
+                  <p className="text-sm text-gray-500">Lead enrichment & contact names</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={settings?.apollo_configured ? "default" : "secondary"}>
+                  {settings?.apollo_configured ? "Connected" : "Not Connected"}
                 </Badge>
                 <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
               </div>
@@ -3969,6 +4035,119 @@ const SettingsPage = () => {
                   className="flex-1 bg-green-600 hover:bg-green-700"
                 >
                   Connect Calendly
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Apollo.io Setup Modal */}
+        {showApolloSetup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <Database className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Connect Apollo.io</CardTitle>
+                    <CardDescription>Enrich leads with owner/manager contact names</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Benefits */}
+                <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-4">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-500" />
+                    Why Connect Apollo?
+                  </h4>
+                  <ul className="text-sm text-orange-800 space-y-1">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Get contact names</strong> — Know who you're calling before dialing</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Identify decision makers</strong> — Owner, Manager, CEO titles</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Better personalization</strong> — "Hi John, this is Sarah..."</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Higher conversion</strong> — 40% better response with names</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Pricing Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                  <p className="font-medium text-blue-900 mb-2">Apollo.io Pricing:</p>
+                  <ul className="text-blue-800 space-y-1">
+                    <li>• <strong>Free tier:</strong> 100 credits/month (enough to test)</li>
+                    <li>• <strong>Basic:</strong> $49/mo for 5,000 credits</li>
+                    <li>• <strong>Professional:</strong> $99/mo for unlimited</li>
+                  </ul>
+                  <p className="mt-2 text-blue-700">1 credit = 1 lead enriched with contact info</p>
+                </div>
+                
+                {/* Setup Instructions */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
+                  <p className="font-medium text-gray-900 mb-2">How to get your Apollo API key:</p>
+                  <ol className="text-gray-700 space-y-1 list-decimal list-inside">
+                    <li>Go to <a href="https://app.apollo.io" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">app.apollo.io</a> (create free account)</li>
+                    <li>Click Settings (gear icon) → Integrations</li>
+                    <li>Find "API Keys" section → Create new key</li>
+                    <li>Copy and paste the key below</li>
+                  </ol>
+                </div>
+                
+                <div>
+                  <Label htmlFor="apollo_key">Apollo API Key</Label>
+                  <Input
+                    id="apollo_key"
+                    type="password"
+                    placeholder="Enter your Apollo API key"
+                    value={apolloForm.api_key}
+                    onChange={(e) => setApolloForm({...apolloForm, api_key: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+
+                {/* What Happens Next */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-sm text-green-800">
+                    <strong>Once connected:</strong> When you discover or import leads, we'll automatically fetch contact names and titles. Your AI will then personalize calls: "Hi [Name], am I speaking with the owner?"
+                  </p>
+                </div>
+              </CardContent>
+              <div className="flex gap-2 p-6 pt-0">
+                <Button variant="outline" onClick={() => setShowApolloSetup(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!apolloForm.api_key || apolloForm.api_key === "••••••••") {
+                      toast.error("Please enter your Apollo API key");
+                      return;
+                    }
+                    try {
+                      await updateSettings({
+                        apollo_api_key: apolloForm.api_key,
+                        apollo_configured: true
+                      });
+                      setShowApolloSetup(false);
+                      toast.success("Apollo.io connected! Leads will now be enriched with contact names.");
+                    } catch (error) {
+                      toast.error("Failed to save Apollo settings");
+                    }
+                  }}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700"
+                >
+                  Connect Apollo
                 </Button>
               </div>
             </Card>

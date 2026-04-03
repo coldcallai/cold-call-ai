@@ -264,7 +264,7 @@ export const HelpButton = ({ currentPage = "dashboard" }) => {
   return (
     <>
       {/* Floating Help Button - positioned above HelpChat */}
-      <div className="fixed bottom-24 right-6 z-50">
+      <div className="fixed bottom-36 right-6 z-50">
         <Button
           onClick={() => setShowMenu(!showMenu)}
           className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg shadow-blue-500/30"

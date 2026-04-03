@@ -37,12 +37,14 @@ import ComplianceSetupPage from "@/pages/ComplianceSetupPage";
 import GettingStartedPage from "@/pages/GettingStartedPage";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
+import HelpCenterPage from "@/pages/HelpCenterPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 import SetupWizard from "@/components/SetupWizard";
 import TrialBanner from "@/components/TrialBanner";
 import PhoneVerificationModal from "@/components/PhoneVerificationModal";
 import { VoiceCloneModal, VoiceSettingsModal } from "@/components/VoiceCloning";
+import { HelpButton } from "@/components/ProductTour";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -4185,6 +4187,7 @@ const AppRouter = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/help" element={<HelpCenterPage />} />
         
         {/* Protected Dashboard Routes */}
         <Route path="/app/*" element={
@@ -4215,6 +4218,9 @@ const AppRouter = () => {
                 
                 {/* Help Chat - Always visible in dashboard */}
                 <HelpChat currentPage={location.pathname} />
+                
+                {/* Floating Help Button with Tours */}
+                <HelpButton currentPage={location.pathname} />
               </div>
             </div>
             

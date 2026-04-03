@@ -3368,6 +3368,31 @@ const SettingsPage = () => {
   const [newNumber, setNewNumber] = useState("");
   const [rotationMode, setRotationMode] = useState("round-robin");
   const [numberPoolEnabled, setNumberPoolEnabled] = useState(false);
+  
+  // Integration setup modals
+  const [showTwilioSetup, setShowTwilioSetup] = useState(false);
+  const [showTwitterSetup, setShowTwitterSetup] = useState(false);
+  const [showEmailSetup, setShowEmailSetup] = useState(false);
+  const [showCalendlySetup, setShowCalendlySetup] = useState(false);
+  
+  // Integration form states
+  const [twilioForm, setTwilioForm] = useState({
+    account_sid: "",
+    auth_token: "",
+    phone_number: ""
+  });
+  const [twitterForm, setTwitterForm] = useState({
+    api_key: "",
+    api_secret: "",
+    bearer_token: ""
+  });
+  const [emailForm, setEmailForm] = useState({
+    resend_api_key: "",
+    from_email: ""
+  });
+  const [calendlyForm, setCalendlyForm] = useState({
+    calendly_url: ""
+  });
 
   const fetchSettings = async () => {
     try {
@@ -3378,6 +3403,32 @@ const SettingsPage = () => {
         setNumberPool(response.data.number_pool || []);
         setRotationMode(response.data.rotation_mode || "round-robin");
         setNumberPoolEnabled(response.data.number_pool_enabled || false);
+      }
+      // Load integration settings into forms
+      if (response.data.twilio_account_sid) {
+        setTwilioForm({
+          account_sid: response.data.twilio_account_sid || "",
+          auth_token: response.data.twilio_auth_token ? "••••••••" : "",
+          phone_number: response.data.twilio_phone_number || ""
+        });
+      }
+      if (response.data.twitter_api_key) {
+        setTwitterForm({
+          api_key: response.data.twitter_api_key ? "••••••••" : "",
+          api_secret: response.data.twitter_api_secret ? "••••••••" : "",
+          bearer_token: response.data.twitter_bearer_token ? "••••••••" : ""
+        });
+      }
+      if (response.data.resend_api_key) {
+        setEmailForm({
+          resend_api_key: response.data.resend_api_key ? "••••••••" : "",
+          from_email: response.data.from_email || ""
+        });
+      }
+      if (response.data.calendly_url) {
+        setCalendlyForm({
+          calendly_url: response.data.calendly_url || ""
+        });
       }
     } catch (error) {
       toast.error("Failed to load settings");
@@ -3496,57 +3547,433 @@ const SettingsPage = () => {
             <CardDescription>Connect external services</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+            {/* Twilio Voice */}
+            <div 
+              onClick={() => setShowTwilioSetup(true)}
+              className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer transition-all group"
+            >
               <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Phone className="w-5 h-5 text-blue-600" />
+                </div>
                 <div>
                   <p className="font-medium">Twilio Voice</p>
                   <p className="text-sm text-gray-500">For making real phone calls</p>
                 </div>
               </div>
-              <Badge variant={settings?.twilio_configured ? "default" : "secondary"}>
-                {settings?.twilio_configured ? "Connected" : "Not Connected"}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={settings?.twilio_configured ? "default" : "secondary"}>
+                  {settings?.twilio_configured ? "Connected" : "Not Connected"}
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+              </div>
             </div>
             
-            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+            {/* Twitter/X API */}
+            <div 
+              onClick={() => setShowTwitterSetup(true)}
+              className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer transition-all group"
+            >
               <div className="flex items-center gap-3">
-                <Search className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Search className="w-5 h-5 text-gray-600" />
+                </div>
                 <div>
                   <p className="font-medium">Twitter/X API</p>
                   <p className="text-sm text-gray-500">For intent monitoring</p>
                 </div>
               </div>
-              <Badge variant={settings?.twitter_configured ? "default" : "secondary"}>
-                {settings?.twitter_configured ? "Connected" : "Not Connected"}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={settings?.twitter_configured ? "default" : "secondary"}>
+                  {settings?.twitter_configured ? "Connected" : "Not Connected"}
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+              </div>
             </div>
             
-            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+            {/* Email Notifications */}
+            <div 
+              onClick={() => setShowEmailSetup(true)}
+              className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer transition-all group"
+            >
               <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-purple-600" />
+                </div>
                 <div>
                   <p className="font-medium">Email Notifications</p>
                   <p className="text-sm text-gray-500">Via Resend API</p>
                 </div>
               </div>
-              <Badge variant={settings?.email_notifications_configured ? "default" : "secondary"}>
-                {settings?.email_notifications_configured ? "Connected" : "Not Connected"}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={settings?.email_notifications_configured ? "default" : "secondary"}>
+                  {settings?.email_notifications_configured ? "Connected" : "Not Connected"}
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+              </div>
             </div>
             
-            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+            {/* Calendly */}
+            <div 
+              onClick={() => setShowCalendlySetup(true)}
+              className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer transition-all group"
+            >
               <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-green-600" />
+                </div>
                 <div>
                   <p className="font-medium">Calendly</p>
-                  <p className="text-sm text-gray-500">Via agent booking links</p>
+                  <p className="text-sm text-gray-500">For booking meetings</p>
                 </div>
               </div>
-              <Badge variant="default">Ready</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={settings?.calendly_url ? "default" : "secondary"}>
+                  {settings?.calendly_url ? "Connected" : "Not Connected"}
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Twilio Setup Modal */}
+        {showTwilioSetup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-lg mx-4">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Phone className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Connect Twilio Voice</CardTitle>
+                    <CardDescription>Required for making real phone calls</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                  <p className="font-medium text-blue-900 mb-2">How to get your Twilio credentials:</p>
+                  <ol className="text-blue-800 space-y-1 list-decimal list-inside">
+                    <li>Go to <a href="https://console.twilio.com" target="_blank" rel="noopener noreferrer" className="underline">console.twilio.com</a></li>
+                    <li>Copy your Account SID and Auth Token from the dashboard</li>
+                    <li>Buy a phone number from Phone Numbers → Buy a Number</li>
+                  </ol>
+                </div>
+                
+                <div>
+                  <Label htmlFor="twilio_sid">Account SID</Label>
+                  <Input
+                    id="twilio_sid"
+                    placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    value={twilioForm.account_sid}
+                    onChange={(e) => setTwilioForm({...twilioForm, account_sid: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="twilio_token">Auth Token</Label>
+                  <Input
+                    id="twilio_token"
+                    type="password"
+                    placeholder="Enter your auth token"
+                    value={twilioForm.auth_token}
+                    onChange={(e) => setTwilioForm({...twilioForm, auth_token: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="twilio_phone">Phone Number</Label>
+                  <Input
+                    id="twilio_phone"
+                    placeholder="+14155551234"
+                    value={twilioForm.phone_number}
+                    onChange={(e) => setTwilioForm({...twilioForm, phone_number: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Your Twilio phone number in E.164 format</p>
+                </div>
+              </CardContent>
+              <div className="flex gap-2 p-6 pt-0">
+                <Button variant="outline" onClick={() => setShowTwilioSetup(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!twilioForm.account_sid || !twilioForm.auth_token || !twilioForm.phone_number) {
+                      toast.error("Please fill in all fields");
+                      return;
+                    }
+                    try {
+                      await updateSettings({
+                        twilio_account_sid: twilioForm.account_sid,
+                        twilio_auth_token: twilioForm.auth_token,
+                        twilio_phone_number: twilioForm.phone_number,
+                        twilio_configured: true
+                      });
+                      setShowTwilioSetup(false);
+                      toast.success("Twilio connected successfully!");
+                    } catch (error) {
+                      toast.error("Failed to save Twilio settings");
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  Connect Twilio
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Twitter Setup Modal */}
+        {showTwitterSetup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-lg mx-4">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <Search className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Connect Twitter/X API</CardTitle>
+                    <CardDescription>For monitoring buyer intent signals</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
+                  <p className="font-medium text-gray-900 mb-2">How to get your X API credentials:</p>
+                  <ol className="text-gray-700 space-y-1 list-decimal list-inside">
+                    <li>Go to <a href="https://developer.twitter.com" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">developer.twitter.com</a></li>
+                    <li>Create a project and app</li>
+                    <li>Generate API keys and Bearer Token</li>
+                  </ol>
+                </div>
+                
+                <div>
+                  <Label htmlFor="twitter_key">API Key</Label>
+                  <Input
+                    id="twitter_key"
+                    type="password"
+                    placeholder="Enter your API key"
+                    value={twitterForm.api_key}
+                    onChange={(e) => setTwitterForm({...twitterForm, api_key: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="twitter_secret">API Secret</Label>
+                  <Input
+                    id="twitter_secret"
+                    type="password"
+                    placeholder="Enter your API secret"
+                    value={twitterForm.api_secret}
+                    onChange={(e) => setTwitterForm({...twitterForm, api_secret: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="twitter_bearer">Bearer Token</Label>
+                  <Input
+                    id="twitter_bearer"
+                    type="password"
+                    placeholder="Enter your bearer token"
+                    value={twitterForm.bearer_token}
+                    onChange={(e) => setTwitterForm({...twitterForm, bearer_token: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+              </CardContent>
+              <div className="flex gap-2 p-6 pt-0">
+                <Button variant="outline" onClick={() => setShowTwitterSetup(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!twitterForm.api_key || !twitterForm.api_secret) {
+                      toast.error("Please fill in API key and secret");
+                      return;
+                    }
+                    try {
+                      await updateSettings({
+                        twitter_api_key: twitterForm.api_key,
+                        twitter_api_secret: twitterForm.api_secret,
+                        twitter_bearer_token: twitterForm.bearer_token,
+                        twitter_configured: true
+                      });
+                      setShowTwitterSetup(false);
+                      toast.success("Twitter/X connected successfully!");
+                    } catch (error) {
+                      toast.error("Failed to save Twitter settings");
+                    }
+                  }}
+                  className="flex-1 bg-gray-900 hover:bg-gray-800"
+                >
+                  Connect Twitter/X
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Email Setup Modal */}
+        {showEmailSetup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-lg mx-4">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Connect Email Notifications</CardTitle>
+                    <CardDescription>Get notified when leads are qualified</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-sm">
+                  <p className="font-medium text-purple-900 mb-2">How to get your Resend API key:</p>
+                  <ol className="text-purple-800 space-y-1 list-decimal list-inside">
+                    <li>Go to <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="underline">resend.com</a> and create an account</li>
+                    <li>Verify your domain (or use their test domain)</li>
+                    <li>Go to API Keys → Create API Key</li>
+                  </ol>
+                </div>
+                
+                <div>
+                  <Label htmlFor="resend_key">Resend API Key</Label>
+                  <Input
+                    id="resend_key"
+                    type="password"
+                    placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxx"
+                    value={emailForm.resend_api_key}
+                    onChange={(e) => setEmailForm({...emailForm, resend_api_key: e.target.value})}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="from_email">From Email Address</Label>
+                  <Input
+                    id="from_email"
+                    type="email"
+                    placeholder="notifications@yourdomain.com"
+                    value={emailForm.from_email}
+                    onChange={(e) => setEmailForm({...emailForm, from_email: e.target.value})}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Must be from a verified domain in Resend</p>
+                </div>
+              </CardContent>
+              <div className="flex gap-2 p-6 pt-0">
+                <Button variant="outline" onClick={() => setShowEmailSetup(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!emailForm.resend_api_key) {
+                      toast.error("Please enter your Resend API key");
+                      return;
+                    }
+                    try {
+                      await updateSettings({
+                        resend_api_key: emailForm.resend_api_key,
+                        from_email: emailForm.from_email,
+                        email_notifications_configured: true
+                      });
+                      setShowEmailSetup(false);
+                      toast.success("Email notifications connected!");
+                    } catch (error) {
+                      toast.error("Failed to save email settings");
+                    }
+                  }}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700"
+                >
+                  Connect Email
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Calendly Setup Modal */}
+        {showCalendlySetup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-lg mx-4">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Connect Calendly</CardTitle>
+                    <CardDescription>Let AI book meetings on your calendar</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm">
+                  <p className="font-medium text-green-900 mb-2">How to get your Calendly link:</p>
+                  <ol className="text-green-800 space-y-1 list-decimal list-inside">
+                    <li>Go to <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" className="underline">calendly.com</a></li>
+                    <li>Create an event type (e.g., "15 Min Discovery Call")</li>
+                    <li>Copy the scheduling link</li>
+                  </ol>
+                </div>
+                
+                <div>
+                  <Label htmlFor="calendly_url">Calendly Scheduling Link</Label>
+                  <Input
+                    id="calendly_url"
+                    placeholder="https://calendly.com/yourname/15min"
+                    value={calendlyForm.calendly_url}
+                    onChange={(e) => setCalendlyForm({...calendlyForm, calendly_url: e.target.value})}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">The AI will direct qualified leads to book here</p>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-800">
+                    <strong>Tip:</strong> You can also set different Calendly links per agent in the agent settings.
+                  </p>
+                </div>
+              </CardContent>
+              <div className="flex gap-2 p-6 pt-0">
+                <Button variant="outline" onClick={() => setShowCalendlySetup(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!calendlyForm.calendly_url) {
+                      toast.error("Please enter your Calendly link");
+                      return;
+                    }
+                    try {
+                      await updateSettings({
+                        calendly_url: calendlyForm.calendly_url
+                      });
+                      setShowCalendlySetup(false);
+                      toast.success("Calendly connected!");
+                    } catch (error) {
+                      toast.error("Failed to save Calendly settings");
+                    }
+                  }}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  Connect Calendly
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Number Pool / Caller ID Rotation Card */}
         <Card className="bg-white border border-gray-200 shadow-sm">

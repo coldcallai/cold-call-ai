@@ -1250,7 +1250,7 @@ const LandingPage = () => {
             </div>
 
             {[
-              { metric: "Monthly Cost", ai: "$499-999", human: "$12,000+" },
+              { metric: "Monthly Cost", ai: "$199-899", human: "$12,000+" },
               { metric: "Calls Per Day", ai: "500+", human: "50-80" },
               { metric: "Time to Start", ai: "Same day", human: "2-3 months" },
               { metric: "Consistency", ai: "100%", human: "Variable" },

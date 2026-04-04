@@ -2808,10 +2808,10 @@ const Agents = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              Add New Agent
+              Create AI Agent
             </DialogTitle>
             <DialogDescription>
-              Add a sales agent with their Calendly booking link
+              Configure your virtual AI caller — choose a voice, language, and script
             </DialogDescription>
           </DialogHeader>
           
@@ -2844,52 +2844,56 @@ const Agents = () => {
             </div>
             
             <div>
-              <Label htmlFor="agent-name">Name *</Label>
+              <Label htmlFor="agent-name">AI Agent Name *</Label>
               <Input
                 id="agent-name"
                 data-testid="agent-name-input"
                 value={newAgent.name}
                 onChange={(e) => setNewAgent({...newAgent, name: e.target.value})}
-                placeholder="John Doe"
+                placeholder="Sarah (Sales Agent)"
                 className="mt-1"
               />
+              <p className="text-xs text-gray-500 mt-1">What your AI will call itself on calls</p>
             </div>
             
             <div>
-              <Label htmlFor="agent-email">Email *</Label>
+              <Label htmlFor="agent-email">Notification Email *</Label>
               <Input
                 id="agent-email"
                 data-testid="agent-email-input"
                 type="email"
                 value={newAgent.email}
                 onChange={(e) => setNewAgent({...newAgent, email: e.target.value})}
-                placeholder="john@company.com"
+                placeholder="alerts@yourcompany.com"
                 className="mt-1"
               />
+              <p className="text-xs text-gray-500 mt-1">Receive alerts when this agent qualifies leads</p>
             </div>
             
             <div>
-              <Label htmlFor="agent-phone">Phone</Label>
+              <Label htmlFor="agent-phone">Outbound Phone Number</Label>
               <Input
                 id="agent-phone"
                 data-testid="agent-phone-input"
                 value={newAgent.phone}
                 onChange={(e) => setNewAgent({...newAgent, phone: e.target.value})}
-                placeholder="+1-555-0123"
+                placeholder="+14155551234 (your Twilio number)"
                 className="mt-1"
               />
+              <p className="text-xs text-gray-500 mt-1">Twilio number the AI calls FROM (leave blank to use default)</p>
             </div>
             
             <div>
-              <Label htmlFor="calendly-link">Calendly Link *</Label>
+              <Label htmlFor="calendly-link">Meeting Booking Link *</Label>
               <Input
                 id="calendly-link"
                 data-testid="agent-calendly-input"
                 value={newAgent.calendly_link}
                 onChange={(e) => setNewAgent({...newAgent, calendly_link: e.target.value})}
-                placeholder="https://calendly.com/john-doe/30min"
+                placeholder="https://calendly.com/your-name/30min"
                 className="mt-1"
               />
+              <p className="text-xs text-gray-500 mt-1">Where qualified leads can book meetings</p>
             </div>
 
             {/* Language Selection */}
@@ -2953,7 +2957,7 @@ const Agents = () => {
               onClick={createAgent}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              Add Agent
+              Create AI Agent
             </Button>
           </DialogFooter>
         </DialogContent>

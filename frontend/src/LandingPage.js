@@ -586,6 +586,13 @@ const LandingPage = () => {
                   </svg>
                   <span className="text-white font-bold text-lg">Calendly</span>
                 </div>
+                {/* Apollo.io */}
+                <div className="flex items-center gap-2 bg-gray-800/50 px-5 py-3 rounded-lg">
+                  <svg className="w-6 h-6 text-orange-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                  <span className="text-white font-bold text-lg">Apollo.io</span>
+                </div>
               </div>
             </div>
             

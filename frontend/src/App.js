@@ -532,6 +532,9 @@ const FunnelPage = () => {
             Sales Funnel
           </h1>
           <p className="text-gray-500 mt-1">Track leads through your qualification pipeline</p>
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Drag leads between stages or click to call. Select a campaign first to start calling.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
@@ -1096,6 +1099,9 @@ const LeadDiscovery = () => {
             Lead Discovery
           </h1>
           <p className="text-gray-500 mt-1">Find businesses actively searching for payment solutions</p>
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Powered by Apollo.io's 275M+ B2B database. Search by industry, job title, or buying intent signals.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {unverifiedCount > 0 && (
@@ -2016,6 +2022,9 @@ const Campaigns = () => {
             Campaigns
           </h1>
           <p className="text-gray-500 mt-1">Manage your AI calling campaigns</p>
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Each campaign has its own script and settings. Create separate campaigns for different products or audiences.
+          </p>
         </div>
         <Button 
           data-testid="create-campaign-btn"
@@ -2166,6 +2175,9 @@ const Campaigns = () => {
                 placeholder="Enter the script the AI will use during calls..."
                 className="mt-1 min-h-[150px]"
               />
+              <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">
+                💡 Use {'{company}'} for your company name, {'{contact_name}'} for the lead's name. Keep responses SHORT (1-2 sentences) for natural conversation flow.
+              </p>
             </div>
             
             <div>
@@ -2178,6 +2190,7 @@ const Campaigns = () => {
                 onChange={(e) => setNewCampaign({...newCampaign, calls_per_day: parseInt(e.target.value) || 0})}
                 className="mt-1"
               />
+              <p className="text-xs text-gray-500 mt-1">Recommended: 50-100 for B2B, 200+ for high-volume campaigns</p>
             </div>
 
             <div>
@@ -2705,6 +2718,9 @@ const Agents = () => {
             Agents
           </h1>
           <p className="text-gray-500 mt-1">Manage sales agents and their Calendly links</p>
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Create an agent for each product/service. Qualified leads are auto-routed to book via their Calendly link.
+          </p>
         </div>
         <div className="flex gap-2">
           <Button 
@@ -3194,6 +3210,9 @@ const CallHistory = () => {
             Call History
           </h1>
           <p className="text-gray-500 mt-1">View recordings, transcripts, and qualification results</p>
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Click any call to see the full transcript, qualification score, and play the recording.
+          </p>
         </div>
         
         {/* Feature badges */}
@@ -3783,6 +3802,9 @@ const SettingsPage = () => {
           Settings
         </h1>
         <p className="text-gray-500 mt-1">Configure integrations, notifications, and qualification criteria</p>
+        <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+          💡 Connect Twilio for calls, ElevenLabs for voice, Apollo for lead enrichment, and Stripe for payments.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -5188,6 +5210,9 @@ const CreditPacks = () => {
           Pricing & Plans
         </h1>
         <p className="text-gray-500 mt-1">Choose a plan or purchase additional credits</p>
+        <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+          💡 Subscriptions reset monthly. Buy top-ups anytime for extra leads or calls that never expire.
+        </p>
       </div>
 
       {/* Current Balance */}

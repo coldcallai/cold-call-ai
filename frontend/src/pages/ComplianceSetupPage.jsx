@@ -121,6 +121,9 @@ const ComplianceSetupPage = () => {
             Compliance Setup
           </h1>
           <p className="text-gray-500">Complete these steps before making outbound calls</p>
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Required for TCPA compliance. B2B cold calling is legal, but you must follow calling hours and DNC rules.
+          </p>
         </div>
       </div>
 

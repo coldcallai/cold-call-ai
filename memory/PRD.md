@@ -667,5 +667,29 @@ A vertical-agnostic B2B SaaS platform that:
 - **Landing Page Updates**: Trust section with logos/badges, value prop callout, credit packs mention, feature order fix, GHL added to CRM integrations
 - **Demo Voice Change**: Step 2 now uses Antoni (calm male) instead of Josh
 
+### April 2026
+- **Homepage Pricing Update**: Increased all prices for better profit margins
+  - Test Drive: $29 → $49
+  - BYOL Starter: $149 → $199, Pro: $349 → $449, Scale: $599 → $799
+  - Discovery Starter: $299 → $399, Pro: $699 → $899, Elite: $1,299 → $1,599
+  - Updated comparison table: $499-999 → $199-899
+- **Apollo.io Badge Added**: Added Apollo.io to partner logos section on homepage
+- **Credit Card Processing Script Template**: Added as preset use case in Agent Creation
+  - Full objection handlers for "happy with current rates", "locked in contract", etc.
+  - 20-40% savings hook, contract status qualifying questions
+- **Comprehensive Instruction Tips**: Added 💡 tips across all major pages:
+  - Lead Discovery: "Powered by Apollo.io's 275M+ B2B database..."
+  - Campaigns: "Each campaign has its own script and settings..."
+  - Agents: "Create an agent for each product/service..."
+  - Call History: "Click any call to see the full transcript..."
+  - Settings: "Connect Twilio for calls, ElevenLabs for voice..."
+  - Funnel: "Drag leads between stages or click to call..."
+  - Bookings: "Bookings sync with Calendly automatically..."
+  - Compliance: "Required for TCPA compliance..."
+  - Credit Packs: "Subscriptions reset monthly..."
+  - Campaign Creation Modal: Script tips with {company}, {contact_name} variables
+  - Agent Creation Modal: Use case-specific tips for each template
+- **MongoDB Connection Fix**: Fixed TLS issue for localhost connections
+
 ### December 2025
 - **3 Voice Demo Narrations**: Landing page demo buttons now use 3 distinct ElevenLabs voices (Rachel, Antoni, Bella) to showcase AI voice variety to visitors

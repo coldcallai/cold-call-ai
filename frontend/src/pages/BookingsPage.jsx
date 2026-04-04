@@ -148,6 +148,9 @@ const BookingsPage = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Bookings Dashboard</h1>
             <p className="text-gray-600 mt-1">Manage scheduled meetings with qualified leads</p>
+            <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+              💡 Bookings sync with Calendly automatically. Click any booking to see lead details.
+            </p>
           </div>
           <div className="flex items-center gap-3">
             {calendlyStatus?.configured && (

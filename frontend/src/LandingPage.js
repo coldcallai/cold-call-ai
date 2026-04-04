@@ -220,7 +220,7 @@ const LandingPage = () => {
     {
       icon: Zap,
       title: "Instant Lead Discovery",
-      description: "Find businesses with buying intent through web search and social media monitoring.",
+      description: "Find businesses with buying intent powered by Apollo.io's 275M+ B2B contact database with verified emails & direct dials.",
     },
     {
       icon: BarChart3,
@@ -259,7 +259,7 @@ const LandingPage = () => {
     },
     {
       name: "Test Drive",
-      price: "29",
+      price: "49",
       period: "/month",
       description: "Try the AI dialer",
       features: [
@@ -280,7 +280,7 @@ const LandingPage = () => {
   const byolPlans = [
     {
       name: "BYOL Starter",
-      price: "149",
+      price: "199",
       period: "/month",
       description: "Bring your own leads",
       features: [
@@ -296,7 +296,7 @@ const LandingPage = () => {
     },
     {
       name: "BYOL Pro",
-      price: "349",
+      price: "449",
       period: "/month",
       description: "Scale your outreach",
       features: [
@@ -313,7 +313,7 @@ const LandingPage = () => {
     },
     {
       name: "BYOL Scale",
-      price: "599",
+      price: "799",
       period: "/month",
       description: "High-volume calling",
       features: [
@@ -334,13 +334,13 @@ const LandingPage = () => {
   const fullServicePlans = [
     {
       name: "Discovery Starter",
-      price: "299",
+      price: "399",
       period: "/month",
       description: "We find & call leads",
       features: [
         "500 intent leads/mo",
         "250 AI calls/month",
-        "GPT lead discovery",
+        "Apollo.io lead discovery",
         "AI qualifies & books",
         "7-day recordings",
         "1 user",
@@ -350,13 +350,13 @@ const LandingPage = () => {
     },
     {
       name: "Discovery Pro",
-      price: "699",
+      price: "899",
       period: "/month",
       description: "Full-service sales",
       features: [
         "1,500 intent leads/mo",
         "750 AI calls/month",
-        "GPT lead discovery",
+        "Apollo.io lead discovery",
         "AI qualifies & books",
         "Call transcripts",
         "30-day recordings",
@@ -367,13 +367,13 @@ const LandingPage = () => {
     },
     {
       name: "Discovery Elite",
-      price: "1,299",
+      price: "1,599",
       period: "/month",
       description: "Enterprise lead gen",
       features: [
         "3,000 intent leads/mo",
         "2,000 AI calls/month",
-        "GPT lead discovery",
+        "Apollo.io lead discovery",
         "AI qualifies & books",
         "90-day recordings",
         "Priority support",
@@ -1005,7 +1005,7 @@ const LandingPage = () => {
               <div>
                 <h3 className="text-2xl font-bold text-white mb-1">Already have leads? Upload your list!</h3>
                 <p className="text-gray-400">
-                  Upload your CSV with phone numbers and let our AI call them all. <span className="text-cyan-400 font-medium">Unlimited uploads</span> starting at $349/mo.
+                  Upload your CSV with phone numbers and let our AI call them all. <span className="text-cyan-400 font-medium">Unlimited uploads</span> starting at $199/mo.
                 </p>
               </div>
             </div>
@@ -1486,7 +1486,7 @@ const LandingPage = () => {
           )}
 
           <p className="text-center text-gray-500 text-sm mt-8">
-            Start with Test Drive for $29. No long-term commitment required.
+            Start with Test Drive for $49. No long-term commitment required.
           </p>
           <p className="text-center text-gray-400 text-sm mt-3">
             Need more leads or calls? <span className="text-cyan-600 font-medium">Add credit packs anytime</span> from your dashboard.

@@ -38,6 +38,7 @@ import GettingStartedPage from "@/pages/GettingStartedPage";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import HelpCenterPage from "@/pages/HelpCenterPage";
+import AnalyticsPage from "@/pages/AnalyticsPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
 import SetupWizard from "@/components/SetupWizard";
@@ -206,6 +207,7 @@ const Sidebar = () => {
     { path: "/app/agents", icon: Users, label: "Agents" },
     { path: "/app/bookings", icon: Calendar, label: "Bookings" },
     { path: "/app/calls", icon: History, label: "Call History" },
+    { path: "/app/analytics", icon: TrendingUp, label: "Analytics" },
     { path: "/app/integrations", icon: Database, label: "CRM Integrations" },
     { path: "/app/compliance", icon: Shield, label: "Compliance" },
     { path: "/app/packs", icon: Package, label: "Credit Packs" },
@@ -1922,7 +1924,11 @@ const Campaigns = () => {
       min_intent_signals: 1,
       preferred_roles: ["Owner", "CEO", "Manager", "Director"]
     },
-    min_icp_score: 0
+    min_icp_score: 0,
+    // A/B Testing
+    ab_testing_enabled: false,
+    script_variant_b: "",
+    ab_split_percentage: 50
   });
 
   const fetchCampaigns = async () => {
@@ -2166,7 +2172,7 @@ const Campaigns = () => {
             </div>
             
             <div>
-              <Label htmlFor="ai-script">AI Script *</Label>
+              <Label htmlFor="ai-script">AI Script {newCampaign.ab_testing_enabled ? "(Variant A)" : "*"}</Label>
               <Textarea
                 id="ai-script"
                 data-testid="campaign-script-input"
@@ -2178,6 +2184,75 @@ const Campaigns = () => {
               <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">
                 💡 Use {'{company}'} for your company name, {'{contact_name}'} for the lead's name. Keep responses SHORT (1-2 sentences) for natural conversation flow.
               </p>
+            </div>
+
+            {/* A/B Testing Section */}
+            <div className="border border-purple-200 rounded-lg p-4 bg-purple-50/50">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className="font-medium text-purple-900 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    A/B Script Testing
+                  </h4>
+                  <p className="text-sm text-purple-700">Test two scripts to see which converts better</p>
+                </div>
+                <Button
+                  variant={newCampaign.ab_testing_enabled ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setNewCampaign({...newCampaign, ab_testing_enabled: !newCampaign.ab_testing_enabled})}
+                  className={newCampaign.ab_testing_enabled ? "bg-purple-600 hover:bg-purple-700" : ""}
+                >
+                  {newCampaign.ab_testing_enabled ? "Enabled" : "Enable"}
+                </Button>
+              </div>
+
+              {newCampaign.ab_testing_enabled && (
+                <div className="space-y-4 mt-4 pt-4 border-t border-purple-200">
+                  <div>
+                    <Label htmlFor="script-variant-b">Script Variant B</Label>
+                    <Textarea
+                      id="script-variant-b"
+                      value={newCampaign.script_variant_b}
+                      onChange={(e) => setNewCampaign({...newCampaign, script_variant_b: e.target.value})}
+                      placeholder="Enter an alternative script to test against Variant A..."
+                      className="mt-1 min-h-[120px] bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Traffic Split</Label>
+                    <div className="flex items-center gap-4 mt-2">
+                      <div className="flex-1">
+                        <input
+                          type="range"
+                          min="10"
+                          max="90"
+                          step="10"
+                          value={newCampaign.ab_split_percentage}
+                          onChange={(e) => setNewCampaign({...newCampaign, ab_split_percentage: parseInt(e.target.value)})}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">
+                          A: {newCampaign.ab_split_percentage}%
+                        </span>
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded font-medium">
+                          B: {100 - newCampaign.ab_split_percentage}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <p className="text-sm text-purple-800">
+                      <strong>📊 How it works:</strong> Leads will be randomly assigned to Variant A or B. Track qualification rates in Analytics to see which script performs better.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             
             <div>
@@ -4903,9 +4978,143 @@ const SettingsPage = () => {
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Email Notifications / Webhooks Section */}
+        {/* Low Balance Alerts Card */}
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              Low Balance Alerts
+            </CardTitle>
+            <CardDescription>Get notified when your credits are running low</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div>
+                <p className="font-medium">Enable Low Balance Alerts</p>
+                <p className="text-sm text-gray-500">Receive email when credits drop below threshold</p>
+              </div>
+              <Button
+                variant={settings?.low_balance_alerts_enabled ? "default" : "outline"}
+                data-testid="low-balance-toggle"
+                onClick={() => updateSettings({ low_balance_alerts_enabled: !settings?.low_balance_alerts_enabled })}
+              >
+                {settings?.low_balance_alerts_enabled ? "Enabled" : "Disabled"}
+              </Button>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="lead-threshold">Lead Credit Threshold</Label>
+                <Input
+                  id="lead-threshold"
+                  type="number"
+                  min="0"
+                  value={settings?.low_lead_threshold || 20}
+                  onChange={(e) => updateSettings({ low_lead_threshold: parseInt(e.target.value) || 20 })}
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-500 mt-1">Alert when leads drop below this</p>
+              </div>
+              <div>
+                <Label htmlFor="call-threshold">Call Credit Threshold</Label>
+                <Input
+                  id="call-threshold"
+                  type="number"
+                  min="0"
+                  value={settings?.low_call_threshold || 20}
+                  onChange={(e) => updateSettings({ low_call_threshold: parseInt(e.target.value) || 20 })}
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-500 mt-1">Alert when calls drop below this</p>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm text-blue-800">
+                <strong>💡 Tip:</strong> Set thresholds high enough to give you time to purchase more credits before running out.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Agency White-labeling Card */}
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              Agency White-labeling
+            </CardTitle>
+            <CardDescription>Customize branding for your clients</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div>
+                <p className="font-medium">Hide DialGenix Branding</p>
+                <p className="text-sm text-gray-500">Remove DialGenix logo and mentions from the dashboard</p>
+              </div>
+              <Button
+                variant={settings?.whitelabel_enabled ? "default" : "outline"}
+                data-testid="whitelabel-toggle"
+                onClick={() => updateSettings({ whitelabel_enabled: !settings?.whitelabel_enabled })}
+              >
+                {settings?.whitelabel_enabled ? "Hidden" : "Visible"}
+              </Button>
+            </div>
+
+            {settings?.whitelabel_enabled && (
+              <>
+                <div>
+                  <Label htmlFor="custom-brand">Custom Brand Name</Label>
+                  <Input
+                    id="custom-brand"
+                    placeholder="Your Agency Name"
+                    value={settings?.custom_brand_name || ""}
+                    onChange={(e) => updateSettings({ custom_brand_name: e.target.value })}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Replaces "DialGenix" throughout the app</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="custom-logo">Custom Logo URL</Label>
+                  <Input
+                    id="custom-logo"
+                    placeholder="https://yoursite.com/logo.png"
+                    value={settings?.custom_logo_url || ""}
+                    onChange={(e) => updateSettings({ custom_logo_url: e.target.value })}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Square image, 200x200px recommended (PNG or SVG)</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="custom-color">Primary Brand Color</Label>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="color"
+                      id="custom-color"
+                      value={settings?.custom_brand_color || "#3b82f6"}
+                      onChange={(e) => updateSettings({ custom_brand_color: e.target.value })}
+                      className="w-12 h-10 rounded cursor-pointer border border-gray-300"
+                    />
+                    <Input
+                      value={settings?.custom_brand_color || "#3b82f6"}
+                      onChange={(e) => updateSettings({ custom_brand_color: e.target.value })}
+                      placeholder="#3b82f6"
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <p className="text-sm text-purple-800">
+                <strong>🏢 Agency Feature:</strong> Perfect for reselling DialGenix to your clients under your own brand.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       <Card className="bg-white border border-gray-200 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -5529,6 +5738,7 @@ const AppRouter = () => {
                     <Route path="/agents" element={<Agents />} />
                     <Route path="/bookings" element={<BookingsPage />} />
                     <Route path="/calls" element={<CallHistory />} />
+                    <Route path="/analytics" element={<AnalyticsPage />} />
                     <Route path="/integrations" element={<CRMIntegrationsPage />} />
                     <Route path="/dnc" element={<DNCManagementPage />} />
                     <Route path="/compliance" element={<ComplianceSetupPage />} />

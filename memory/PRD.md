@@ -690,6 +690,10 @@ A vertical-agnostic B2B SaaS platform that:
   - Campaign Creation Modal: Script tips with {company}, {contact_name} variables
   - Agent Creation Modal: Use case-specific tips for each template
 - **MongoDB Connection Fix**: Fixed TLS issue for localhost connections
+- **Call Analytics Dashboard**: New page with key metrics (Total Calls, Answer Rate, Qualified Leads, Booking Rate), daily call charts, call outcomes breakdown, top performing campaigns, and best calling times
+- **A/B Script Testing**: Added to Campaign creation - test two scripts with configurable traffic split (10%-90%), track results in Analytics
+- **Low Balance Alerts**: Settings UI with enable/disable toggle, configurable lead/call credit thresholds, email notifications
+- **Agency White-labeling**: Settings to hide DialGenix branding, custom brand name input, custom logo URL, brand color picker
 
 ### December 2025
 - **3 Voice Demo Narrations**: Landing page demo buttons now use 3 distinct ElevenLabs voices (Rachel, Antoni, Bella) to showcase AI voice variety to visitors

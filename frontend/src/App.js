@@ -49,6 +49,107 @@ import { HelpButton } from "@/components/ProductTour";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Supported languages for ElevenLabs multilingual_v2 (moved outside component)
+const SUPPORTED_LANGUAGES = [
+  { code: "en", name: "English", flag: "🇺🇸" },
+  { code: "es", name: "Spanish", flag: "🇪🇸" },
+  { code: "fr", name: "French", flag: "🇫🇷" },
+  { code: "de", name: "German", flag: "🇩🇪" },
+  { code: "it", name: "Italian", flag: "🇮🇹" },
+  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+  { code: "pl", name: "Polish", flag: "🇵🇱" },
+  { code: "nl", name: "Dutch", flag: "🇳🇱" },
+  { code: "sv", name: "Swedish", flag: "🇸🇪" },
+  { code: "da", name: "Danish", flag: "🇩🇰" },
+  { code: "fi", name: "Finnish", flag: "🇫🇮" },
+  { code: "no", name: "Norwegian", flag: "🇳🇴" },
+  { code: "ru", name: "Russian", flag: "🇷🇺" },
+  { code: "uk", name: "Ukrainian", flag: "🇺🇦" },
+  { code: "tr", name: "Turkish", flag: "🇹🇷" },
+  { code: "ar", name: "Arabic", flag: "🇸🇦" },
+  { code: "he", name: "Hebrew", flag: "🇮🇱" },
+  { code: "hi", name: "Hindi", flag: "🇮🇳" },
+  { code: "bn", name: "Bengali", flag: "🇧🇩" },
+  { code: "ta", name: "Tamil", flag: "🇮🇳" },
+  { code: "te", name: "Telugu", flag: "🇮🇳" },
+  { code: "mr", name: "Marathi", flag: "🇮🇳" },
+  { code: "id", name: "Indonesian", flag: "🇮🇩" },
+  { code: "ms", name: "Malay", flag: "🇲🇾" },
+  { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
+  { code: "th", name: "Thai", flag: "🇹🇭" },
+  { code: "tl", name: "Filipino", flag: "🇵🇭" },
+  { code: "zh", name: "Chinese (Mandarin)", flag: "🇨🇳" },
+  { code: "ja", name: "Japanese", flag: "🇯🇵" },
+  { code: "ko", name: "Korean", flag: "🇰🇷" },
+  { code: "el", name: "Greek", flag: "🇬🇷" },
+  { code: "cs", name: "Czech", flag: "🇨🇿" },
+  { code: "sk", name: "Slovak", flag: "🇸🇰" },
+  { code: "hu", name: "Hungarian", flag: "🇭🇺" },
+  { code: "ro", name: "Romanian", flag: "🇷🇴" },
+  { code: "bg", name: "Bulgarian", flag: "🇧🇬" },
+  { code: "hr", name: "Croatian", flag: "🇭🇷" },
+  { code: "sr", name: "Serbian", flag: "🇷🇸" },
+  { code: "sl", name: "Slovenian", flag: "🇸🇮" },
+  { code: "et", name: "Estonian", flag: "🇪🇪" },
+  { code: "lv", name: "Latvian", flag: "🇱🇻" },
+  { code: "lt", name: "Lithuanian", flag: "🇱🇹" },
+  { code: "ca", name: "Catalan", flag: "🇪🇸" },
+  { code: "eu", name: "Basque", flag: "🇪🇸" },
+  { code: "gl", name: "Galician", flag: "🇪🇸" },
+  { code: "cy", name: "Welsh", flag: "🇬🇧" },
+  { code: "ga", name: "Irish", flag: "🇮🇪" },
+  { code: "af", name: "Afrikaans", flag: "🇿🇦" },
+  { code: "sw", name: "Swahili", flag: "🇰🇪" }
+];
+
+// Use case templates (moved outside component)
+const USE_CASE_TEMPLATES = {
+  sales_cold_calling: {
+    label: "Sales / Cold Calling",
+    description: "Qualify leads and book meetings",
+    prompt: `You are a sales representative for {company}. 
+
+OPENING (always start with):
+"Hi, this is [Your Name] from {company}. Am I speaking with the owner or manager?"
+
+If YES (decision maker):
+- Ask about their current pain points
+- Discuss budget and timeline if interested
+- Book a meeting if qualified
+
+If NO (not decision maker):
+- Ask: "When would be a good time to reach them?"
+- Get their name for callback
+- Thank them and end politely
+
+Keep responses SHORT (1-2 sentences max) - this is a phone call, not a chat.`
+  },
+  appointment_setter: {
+    label: "Appointment Setter",
+    description: "Schedule appointments and manage bookings",
+    prompt: `You are a scheduling assistant for {company}. 
+
+OPENING: "Hi, this is [Your Name] from {company}. Am I speaking with the owner or manager?"
+
+Help callers book, reschedule, or cancel appointments. Confirm their contact information and preferred times. Send calendar invites after booking. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+  },
+  receptionist: {
+    label: "Receptionist",
+    description: "Answer calls and route to departments",
+    prompt: `You are the front desk receptionist for {company}. Greet callers warmly, ask how you can help, and route them to the appropriate department or person. Take messages if someone is unavailable. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+  },
+  customer_service: {
+    label: "Customer Service",
+    description: "Handle support inquiries and issues",
+    prompt: `You are a customer support agent for {company}. Listen to the customer's issue, troubleshoot common problems, and provide solutions. Escalate to a human agent if needed. Always confirm the issue is resolved before ending the call. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+  },
+  answering_service: {
+    label: "Answering Service",
+    description: "After-hours message taking",
+    prompt: `You are the after-hours answering service for {company}. Take the caller's name, phone number, and a brief message about their inquiry. Let them know someone will return their call during business hours. Keep responses SHORT (1-2 sentences) - this is a phone call.`
+  }
+};
+
 // Navigation Sidebar with Auth
 const Sidebar = () => {
   const location = useLocation();
@@ -2425,107 +2526,6 @@ const Agents = () => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(null); // agent for voice settings
   const [previewingVoice, setPreviewingVoice] = useState(null); // agent id being previewed
   const [playingAudio, setPlayingAudio] = useState(null); // audio element reference
-  
-  // Use case templates with pre-filled prompts
-  const USE_CASE_TEMPLATES = {
-    sales_cold_calling: {
-      label: "Sales / Cold Calling",
-      description: "Qualify leads and book meetings",
-      prompt: `You are a sales representative for {company}. 
-
-OPENING (always start with):
-"Hi, this is [Your Name] from {company}. Am I speaking with the owner or manager?"
-
-If YES (decision maker):
-- Ask about their current pain points
-- Discuss budget and timeline if interested
-- Book a meeting if qualified
-
-If NO (not decision maker):
-- Ask: "When would be a good time to reach them?"
-- Get their name for callback
-- Thank them and end politely
-
-Keep responses SHORT (1-2 sentences max) - this is a phone call, not a chat.`
-    },
-    appointment_setter: {
-      label: "Appointment Setter",
-      description: "Schedule appointments and manage bookings",
-      prompt: `You are a scheduling assistant for {company}. 
-
-OPENING: "Hi, this is [Your Name] from {company}. Am I speaking with the owner or manager?"
-
-Help callers book, reschedule, or cancel appointments. Confirm their contact information and preferred times. Send calendar invites after booking. Keep responses SHORT (1-2 sentences) - this is a phone call.`
-    },
-    receptionist: {
-      label: "Receptionist",
-      description: "Answer calls and route to departments",
-      prompt: `You are the front desk receptionist for {company}. Greet callers warmly, ask how you can help, and route them to the appropriate department or person. Take messages if someone is unavailable. Keep responses SHORT (1-2 sentences) - this is a phone call.`
-    },
-    customer_service: {
-      label: "Customer Service",
-      description: "Handle support inquiries and issues",
-      prompt: `You are a customer support agent for {company}. Listen to the customer's issue, troubleshoot common problems, and provide solutions. Escalate to a human agent if needed. Always confirm the issue is resolved before ending the call. Keep responses SHORT (1-2 sentences) - this is a phone call.`
-    },
-    answering_service: {
-      label: "Answering Service",
-      description: "After-hours message taking",
-      prompt: `You are the after-hours answering service for {company}. Take the caller's name, phone number, and a brief message about their inquiry. Let them know someone will return their call during business hours. Keep responses SHORT (1-2 sentences) - this is a phone call.`
-    }
-  };
-  
-  // Supported languages for ElevenLabs multilingual_v2
-  const SUPPORTED_LANGUAGES = [
-    { code: "en", name: "English", flag: "🇺🇸" },
-    { code: "es", name: "Spanish", flag: "🇪🇸" },
-    { code: "fr", name: "French", flag: "🇫🇷" },
-    { code: "de", name: "German", flag: "🇩🇪" },
-    { code: "it", name: "Italian", flag: "🇮🇹" },
-    { code: "pt", name: "Portuguese", flag: "🇵🇹" },
-    { code: "pl", name: "Polish", flag: "🇵🇱" },
-    { code: "nl", name: "Dutch", flag: "🇳🇱" },
-    { code: "sv", name: "Swedish", flag: "🇸🇪" },
-    { code: "da", name: "Danish", flag: "🇩🇰" },
-    { code: "fi", name: "Finnish", flag: "🇫🇮" },
-    { code: "no", name: "Norwegian", flag: "🇳🇴" },
-    { code: "ru", name: "Russian", flag: "🇷🇺" },
-    { code: "uk", name: "Ukrainian", flag: "🇺🇦" },
-    { code: "tr", name: "Turkish", flag: "🇹🇷" },
-    { code: "ar", name: "Arabic", flag: "🇸🇦" },
-    { code: "he", name: "Hebrew", flag: "🇮🇱" },
-    { code: "hi", name: "Hindi", flag: "🇮🇳" },
-    { code: "bn", name: "Bengali", flag: "🇧🇩" },
-    { code: "ta", name: "Tamil", flag: "🇮🇳" },
-    { code: "te", name: "Telugu", flag: "🇮🇳" },
-    { code: "mr", name: "Marathi", flag: "🇮🇳" },
-    { code: "id", name: "Indonesian", flag: "🇮🇩" },
-    { code: "ms", name: "Malay", flag: "🇲🇾" },
-    { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
-    { code: "th", name: "Thai", flag: "🇹🇭" },
-    { code: "tl", name: "Filipino", flag: "🇵🇭" },
-    { code: "zh", name: "Chinese (Mandarin)", flag: "🇨🇳" },
-    { code: "ja", name: "Japanese", flag: "🇯🇵" },
-    { code: "ko", name: "Korean", flag: "🇰🇷" },
-    { code: "el", name: "Greek", flag: "🇬🇷" },
-    { code: "cs", name: "Czech", flag: "🇨🇿" },
-    { code: "sk", name: "Slovak", flag: "🇸🇰" },
-    { code: "hu", name: "Hungarian", flag: "🇭🇺" },
-    { code: "ro", name: "Romanian", flag: "🇷🇴" },
-    { code: "bg", name: "Bulgarian", flag: "🇧🇬" },
-    { code: "hr", name: "Croatian", flag: "🇭🇷" },
-    { code: "sr", name: "Serbian", flag: "🇷🇸" },
-    { code: "sl", name: "Slovenian", flag: "🇸🇮" },
-    { code: "et", name: "Estonian", flag: "🇪🇪" },
-    { code: "lv", name: "Latvian", flag: "🇱🇻" },
-    { code: "lt", name: "Lithuanian", flag: "🇱🇹" },
-    { code: "ca", name: "Catalan", flag: "🇪🇸" },
-    { code: "eu", name: "Basque", flag: "🇪🇸" },
-    { code: "gl", name: "Galician", flag: "🇪🇸" },
-    { code: "cy", name: "Welsh", flag: "🇬🇧" },
-    { code: "ga", name: "Irish", flag: "🇮🇪" },
-    { code: "af", name: "Afrikaans", flag: "🇿🇦" },
-    { code: "sw", name: "Swahili", flag: "🇰🇪" }
-  ];
 
   const [newAgent, setNewAgent] = useState({
     name: "",

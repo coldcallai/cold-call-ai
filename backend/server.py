@@ -10269,11 +10269,116 @@ async def twilio_book_webhook(request: Request):
 # ============== INBOUND SALES CALL HANDLER ==============
 # Handles incoming calls to the DialGenix.ai sales line (888) 513-1913
 
+# Cache for pre-generated inbound audio
+_inbound_audio_cache = {}
+
+async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
+    """Generate natural-sounding audio using ElevenLabs for inbound calls.
+    Returns a data URI that can be played by Twilio."""
+    global _inbound_audio_cache
+    
+    # Check cache first
+    if cache_key and cache_key in _inbound_audio_cache:
+        return _inbound_audio_cache[cache_key]
+    
+    if not elevenlabs_api_key:
+        return None
+    
+    try:
+        # Use Rachel voice with natural settings (same as demo call)
+        voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                headers={
+                    "xi-api-key": elevenlabs_api_key,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "text": text,
+                    "model_id": "eleven_multilingual_v2",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75,
+                        "style": 0.4
+                    }
+                },
+                timeout=30.0
+            )
+            
+            if response.status_code == 200:
+                # Convert to base64 data URI for Twilio
+                import base64
+                audio_base64 = base64.b64encode(response.content).decode('utf-8')
+                audio_uri = f"data:audio/mpeg;base64,{audio_base64}"
+                
+                # Cache if key provided
+                if cache_key:
+                    _inbound_audio_cache[cache_key] = audio_uri
+                
+                return audio_uri
+    except Exception as e:
+        logger.error(f"ElevenLabs inbound audio error: {e}")
+    
+    return None
+
+# Pre-generate common inbound responses on startup
+@app.on_event("startup")
+async def cache_inbound_audio():
+    """Pre-generate common inbound call responses for faster playback."""
+    global _inbound_audio_cache
+    
+    if not elevenlabs_api_key:
+        logger.info("No ElevenLabs key, skipping inbound audio cache")
+        return
+    
+    common_responses = {
+        "greeting": "Hi, thanks for calling DialGenix! This is Sarah, your AI sales assistant. I can answer questions about our platform, help you understand if we're a good fit, and even book a demo with our team. How can I help you today?",
+        "pricing": "Great question! We have flexible plans. Our Starter plan is $199 per month and includes 250 leads and 500 AI calls. Our Pro plan at $499 gives you 1,000 leads and 2,000 calls with advanced features. We also offer a free trial, no credit card required. Would you like me to book a quick demo so our team can walk you through which plan fits your needs?",
+        "how_it_works": "Here's how DialGenix works... First, our AI discovers leads by finding businesses actively searching for services like yours. Second, our voice agents call these leads with natural, human-like conversations. Third, the AI qualifies leads based on your criteria. Fourth, qualified leads get booked directly into your calendar. You basically wake up to booked meetings! Would you like to see a demo?",
+        "book_demo": "Perfect! I'd love to get you scheduled with one of our product specialists. They can give you a personalized walkthrough. Can you tell me your email address so I can send you a calendar invite?",
+        "features": "DialGenix has some powerful features. We offer AI lead discovery, natural voice conversations, voicemail drops, automatic call transcription, CRM integrations with HubSpot and Salesforce, and Calendly integration for auto-booking meetings. Our AI agents can even handle objections and qualify leads. What's most important to you?",
+        "not_interested": "No problem at all! Thanks for calling DialGenix. If you ever want to explore AI-powered sales automation, we're here. Have a great day!",
+        "default": "I'd be happy to help with that. DialGenix is an AI-powered cold calling platform that automates your sales outreach. Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. Would you like to know about pricing, see how it works, or schedule a demo?",
+        "didnt_catch": "I didn't quite catch that. Feel free to ask me anything about DialGenix... pricing, how it works, or if you'd like a demo.",
+        "anything_else": "Is there anything else you'd like to know?"
+    }
+    
+    logger.info("Pre-generating inbound call audio with ElevenLabs...")
+    for key, text in common_responses.items():
+        try:
+            await generate_inbound_audio(text, cache_key=f"inbound_{key}")
+            logger.info(f"Cached inbound audio: {key}")
+        except Exception as e:
+            logger.error(f"Failed to cache inbound audio {key}: {e}")
+    
+    logger.info("Inbound audio caching complete")
+
+# Endpoint to serve cached inbound audio
+@api_router.get("/inbound-audio/{audio_key}")
+async def serve_inbound_audio(audio_key: str):
+    """Serve pre-cached ElevenLabs audio for inbound calls."""
+    cache_key = f"inbound_{audio_key}"
+    
+    if cache_key not in _inbound_audio_cache:
+        raise HTTPException(status_code=404, detail="Audio not found")
+    
+    audio_data = _inbound_audio_cache[cache_key]
+    
+    # If it's a data URI, extract the base64 content
+    if audio_data.startswith("data:audio/mpeg;base64,"):
+        import base64
+        audio_bytes = base64.b64decode(audio_data.split(",")[1])
+        return Response(content=audio_bytes, media_type="audio/mpeg")
+    
+    return Response(content=audio_data, media_type="audio/mpeg")
+
 @api_router.post("/twilio/inbound")
 async def handle_inbound_sales_call(request: Request):
     """
     Handle incoming calls to the DialGenix.ai sales line.
-    AI Sales Assistant 'Alex' answers and qualifies callers.
+    AI Sales Assistant 'Sarah' answers and qualifies callers.
     """
     form_data = await request.form()
     caller = form_data.get("From", "Unknown")
@@ -10292,15 +10397,20 @@ async def handle_inbound_sales_call(request: Request):
     
     response = VoiceResponse()
     
-    # Greeting from Alex, the AI Sales Assistant
-    response.say(
-        "Hi, thanks for calling DialGenix.ai! "
-        "This is Alex, your AI sales assistant. "
-        "I can answer questions about our platform, help you understand if we're a good fit, "
-        "and even book a demo with our team. "
-        "How can I help you today?",
-        voice='Polly.Joanna'
-    )
+    # Try to use cached ElevenLabs audio, fallback to Polly
+    cached_audio = _inbound_audio_cache.get("inbound_greeting")
+    if cached_audio and cached_audio.startswith("data:"):
+        # For data URI, we need to serve it via an endpoint
+        response.play(f"{os.environ.get('BACKEND_URL', '')}/api/inbound-audio/greeting")
+    else:
+        response.say(
+            "Hi, thanks for calling DialGenix! "
+            "This is Sarah, your AI sales assistant. "
+            "I can answer questions about our platform, help you understand if we're a good fit, "
+            "and even book a demo with our team. "
+            "How can I help you today?",
+            voice='Polly.Joanna-Neural'
+        )
     
     # Gather caller's response
     gather = Gather(
@@ -10313,7 +10423,7 @@ async def handle_inbound_sales_call(request: Request):
     response.append(gather)
     
     # Fallback if no response
-    response.say("I didn't catch that. Feel free to ask me anything about DialGenix.", voice='Polly.Joanna')
+    response.say("I didn't catch that. Feel free to ask me anything about DialGenix.", voice='Polly.Joanna-Neural')
     response.redirect('/api/twilio/inbound')
     
     return Response(content=str(response), media_type="application/xml")
@@ -10329,6 +10439,7 @@ async def handle_inbound_response(request: Request):
     logger.info(f"Inbound caller said: {speech_result}")
     
     response = VoiceResponse()
+    backend_url = os.environ.get('BACKEND_URL', '')
     
     # Update conversation log
     await db.inbound_calls.update_one(
@@ -10336,37 +10447,40 @@ async def handle_inbound_response(request: Request):
         {"$push": {"conversation": {"caller": speech_result, "timestamp": datetime.now(timezone.utc).isoformat()}}}
     )
     
+    # Helper to play cached audio or fallback to Polly
+    def play_or_say(audio_key: str, fallback_text: str):
+        if f"inbound_{audio_key}" in _inbound_audio_cache:
+            response.play(f"{backend_url}/api/inbound-audio/{audio_key}")
+        else:
+            response.say(fallback_text, voice='Polly.Joanna-Neural')
+    
     # Pricing questions
     if any(word in speech_result for word in ["price", "cost", "pricing", "how much", "expensive", "afford"]):
-        response.say(
+        play_or_say("pricing", 
             "Great question! We have flexible plans. "
             "Our Starter plan is $199 per month and includes 250 leads and 500 AI calls. "
-            "Our Pro plan at $499 gives you 1,000 leads and 2,000 calls with advanced features like CRM integrations. "
-            "We also offer a free trial with 15 minutes of AI calling, no credit card required. "
-            "Would you like me to book a quick demo so our team can walk you through which plan fits your needs?",
-            voice='Polly.Joanna'
+            "Our Pro plan at $499 gives you 1,000 leads and 2,000 calls with advanced features. "
+            "We also offer a free trial, no credit card required. "
+            "Would you like me to book a quick demo so our team can walk you through which plan fits your needs?"
         )
     
     # How it works
     elif any(word in speech_result for word in ["how", "work", "what do", "tell me", "explain", "more"]):
-        response.say(
-            "Here's how DialGenix works in 4 simple steps. "
+        play_or_say("how_it_works",
+            "Here's how DialGenix works... "
             "First, our AI discovers leads by finding businesses actively searching for services like yours. "
             "Second, our voice agents call these leads with natural, human-like conversations. "
-            "Third, the AI qualifies leads based on your criteria and scores them automatically. "
+            "Third, the AI qualifies leads based on your criteria. "
             "Fourth, qualified leads get booked directly into your calendar. "
-            "You basically wake up to booked meetings! Would you like to see a demo?",
-            voice='Polly.Joanna'
+            "You basically wake up to booked meetings! Would you like to see a demo?"
         )
     
     # Demo / meeting request
     elif any(word in speech_result for word in ["demo", "meeting", "schedule", "book", "yes", "sure", "okay", "interested"]):
-        response.say(
+        play_or_say("book_demo",
             "Perfect! I'd love to get you scheduled with one of our product specialists. "
-            "They can give you a personalized walkthrough and answer any specific questions. "
-            "Can you tell me your email address so I can send you a calendar invite? "
-            "Please spell it out slowly.",
-            voice='Polly.Joanna'
+            "They can give you a personalized walkthrough. "
+            "Can you tell me your email address so I can send you a calendar invite?"
         )
         
         gather = Gather(
@@ -10381,23 +10495,21 @@ async def handle_inbound_response(request: Request):
     
     # Features
     elif any(word in speech_result for word in ["feature", "can it", "does it", "integration", "crm", "calendly"]):
-        response.say(
+        play_or_say("features",
             "DialGenix has some powerful features. "
             "We offer AI lead discovery, natural voice conversations, voicemail drops, "
-            "automatic call transcription and recording, CRM integrations with HubSpot and Salesforce, "
+            "automatic call transcription, CRM integrations with HubSpot and Salesforce, "
             "and Calendly integration for auto-booking meetings. "
-            "Our AI agents can even handle objections and qualify leads based on your custom criteria. "
-            "What's most important to you?",
-            voice='Polly.Joanna'
+            "Our AI agents can even handle objections and qualify leads. "
+            "What's most important to you?"
         )
     
     # Not interested / end call
     elif any(word in speech_result for word in ["not interested", "no thanks", "goodbye", "bye", "no"]):
-        response.say(
+        play_or_say("not_interested",
             "No problem at all! Thanks for calling DialGenix. "
             "If you ever want to explore AI-powered sales automation, we're here. "
-            "Have a great day!",
-            voice='Polly.Joanna'
+            "Have a great day!"
         )
         response.hangup()
         
@@ -10409,12 +10521,11 @@ async def handle_inbound_response(request: Request):
     
     # Default response
     else:
-        response.say(
+        play_or_say("default",
             "I'd be happy to help with that. "
             "DialGenix is an AI-powered cold calling platform that automates your sales outreach. "
             "Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. "
-            "Would you like to know about pricing, see how it works, or schedule a demo?",
-            voice='Polly.Joanna'
+            "Would you like to know about pricing, see how it works, or schedule a demo?"
         )
     
     # Continue conversation
@@ -10427,7 +10538,7 @@ async def handle_inbound_response(request: Request):
     )
     response.append(gather)
     
-    response.say("Is there anything else you'd like to know?", voice='Polly.Joanna')
+    play_or_say("anything_else", "Is there anything else you'd like to know?")
     response.redirect('/api/twilio/inbound/respond')
     
     return Response(content=str(response), media_type="application/xml")

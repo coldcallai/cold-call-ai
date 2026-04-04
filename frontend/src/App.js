@@ -2805,7 +2805,7 @@ const Agents = () => {
 
       {/* Create Agent Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               Create AI Agent
@@ -2943,8 +2943,8 @@ const Agents = () => {
                 value={newAgent.system_prompt}
                 onChange={(e) => setNewAgent({...newAgent, system_prompt: e.target.value})}
                 placeholder="Enter custom AI instructions..."
-                rows={6}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+                rows={12}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono resize-y min-h-[200px]"
               />
               <p className="text-xs text-gray-400 mt-1">Use {'{company}'} for company name, {'{contact_name}'} for lead's name (if available)</p>
             </div>

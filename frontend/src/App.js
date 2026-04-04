@@ -2529,6 +2529,7 @@ const Agents = () => {
 
   const [newAgent, setNewAgent] = useState({
     name: "",
+    company_name: "",
     email: "",
     phone: "",
     calendly_link: "",
@@ -2854,6 +2855,19 @@ const Agents = () => {
                 className="mt-1"
               />
               <p className="text-xs text-gray-500 mt-1">What your AI will call itself on calls</p>
+            </div>
+
+            <div>
+              <Label htmlFor="company-name">Company Name *</Label>
+              <Input
+                id="company-name"
+                data-testid="agent-company-input"
+                value={newAgent.company_name}
+                onChange={(e) => setNewAgent({...newAgent, company_name: e.target.value})}
+                placeholder="DialGenix"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">Company the AI represents (replaces {'{company}'} in script)</p>
             </div>
             
             <div>

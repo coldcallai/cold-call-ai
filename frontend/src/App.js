@@ -107,6 +107,7 @@ const USE_CASE_TEMPLATES = {
   sales_cold_calling: {
     label: "Sales / Cold Calling",
     description: "Qualify leads and book meetings",
+    tips: "Best for: General B2B sales. Customize the opening with your value proposition.",
     prompt: `You are a sales representative for {company}. Your name is {agent_name}.
 
 OPENING (always start with):
@@ -127,6 +128,7 @@ Keep responses SHORT (1-2 sentences max) - this is a phone call, not a chat.`
   credit_card_processing: {
     label: "Credit Card Processing",
     description: "Merchant services & payment processing sales",
+    tips: "Best for: Payment processors, merchant services. Edit the savings percentage and objection handlers to match your offer.",
     prompt: `You are a merchant services consultant for {company}. Your name is {agent_name}.
 
 OPENING:
@@ -162,6 +164,7 @@ Keep responses SHORT (1-2 sentences) - this is a phone call.`
   appointment_setter: {
     label: "Appointment Setter",
     description: "Schedule appointments and manage bookings",
+    tips: "Best for: Service businesses, consultants. Add your available time slots and booking rules.",
     prompt: `You are a scheduling assistant for {company}. Your name is {agent_name}.
 
 OPENING: "Hi, this is {agent_name} from {company}. Am I speaking with the owner or manager?"
@@ -171,16 +174,19 @@ Help callers book, reschedule, or cancel appointments. Confirm their contact inf
   receptionist: {
     label: "Receptionist",
     description: "Answer calls and route to departments",
+    tips: "Best for: Offices, clinics. Add your department list and common FAQs.",
     prompt: `You are the front desk receptionist for {company}. Your name is {agent_name}. Greet callers warmly, ask how you can help, and route them to the appropriate department or person. Take messages if someone is unavailable. Keep responses SHORT (1-2 sentences) - this is a phone call.`
   },
   customer_service: {
     label: "Customer Service",
     description: "Handle support inquiries and issues",
+    tips: "Best for: Support teams. Add common issues and troubleshooting steps for your product.",
     prompt: `You are a customer support agent for {company}. Your name is {agent_name}. Listen to the customer's issue, troubleshoot common problems, and provide solutions. Escalate to a human agent if needed. Always confirm the issue is resolved before ending the call. Keep responses SHORT (1-2 sentences) - this is a phone call.`
   },
   answering_service: {
     label: "Answering Service",
     description: "After-hours message taking",
+    tips: "Best for: After-hours coverage. Customize the callback timeframe for your business hours.",
     prompt: `You are the after-hours answering service for {company}. Your name is {agent_name}. Take the caller's name, phone number, and a brief message about their inquiry. Let them know someone will return their call during business hours. Keep responses SHORT (1-2 sentences) - this is a phone call.`
   }
 };
@@ -2877,6 +2883,11 @@ const Agents = () => {
               <p className="text-xs text-gray-500 mt-1">
                 {USE_CASE_TEMPLATES[newAgent.use_case]?.description}
               </p>
+              {USE_CASE_TEMPLATES[newAgent.use_case]?.tips && (
+                <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">
+                  💡 {USE_CASE_TEMPLATES[newAgent.use_case]?.tips}
+                </p>
+              )}
             </div>
             
             <div>

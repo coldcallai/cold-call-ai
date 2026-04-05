@@ -51,10 +51,15 @@
 - Feature flag: USE_NEW_CAMPAIGNS_ROUTES=true (set in .env)
 - Endpoints migrated: /api/campaigns (CRUD), /api/campaigns/{id}/start, /api/campaigns/{id}/pause, /api/campaigns/{id}/score-all-leads, /api/campaigns/{id}/followup-settings
 
-### Phase 6: Calls/Twilio (Higher risk - core feature)
-- [ ] Create `routes/calls.py`
-- [ ] Create `services/twilio_service.py`
-- [ ] Create `services/elevenlabs_service.py`
+### Phase 6: Calls ✅ DONE
+- [x] Create `routes/calls.py`
+- [x] Create `services/call_service.py`
+- [x] Add feature flag `USE_NEW_CALLS_ROUTES`
+- [x] Test and deploy
+- Files: /app/backend/routes/calls.py, /app/backend/services/call_service.py
+- Feature flag: USE_NEW_CALLS_ROUTES=true (set in .env)
+- Endpoints migrated: /api/calls (list), /api/calls/{id}, /api/calls/twilio-status, /api/calls/{id}/amd-status, /api/calls/{id}/recording, /api/calls/{id}/transcript, /api/calls/{id}/transcribe, /api/analytics
+- NOTE: Twilio webhooks, /api/calls/initiate, and realtime WebSocket remain in server.py for stability
 
 ### Phase 7: Remaining (Final cleanup)
 - [ ] routes/campaigns.py

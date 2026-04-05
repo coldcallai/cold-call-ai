@@ -1,0 +1,136 @@
+{
+  "summary": "Calls Module (Phase 6 Strangler Fig) testing completed. All 31 backend API tests passed, 2 skipped. The new modular calls routes from /app/backend/routes/calls.py are working correctly with USE_NEW_CALLS_ROUTES=true.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_calls_module.py",
+    "/app/test_reports/pytest/pytest_calls_module.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Calls module extraction is clean and follows Strangler Fig pattern correctly",
+    "routes/calls.py properly imports from services/call_service.py and services/auth_service.py",
+    "Feature flag USE_NEW_CALLS_ROUTES=true correctly routes to new modular calls routes",
+    "User isolation is properly enforced - users can only access their own calls",
+    "All READ operations work correctly: list calls, get single call, analytics, AMD status",
+    "Tier-restricted endpoints (recording, transcript) properly check user tier features",
+    "Service injection pattern (set_services) properly injects get_tier_features_fn, twilio_service, twilio_phone_number, recording_service",
+    "MongoDB _id is properly excluded from responses using {'_id': 0} projection",
+    "Analytics calculation in call_service.py correctly handles date ranges (7d, 30d, 90d, all)",
+    "Twilio status endpoint correctly masks phone number for security"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_calls_module.py"
+  ],
+  "success_rate": {
+    "backend": "100% (31/31 tests passed, 2 skipped)",
+    "frontend": "N/A - backend only testing requested"
+  },
+  "test_credentials": {
+    "admin_user": "test@example.com / Test123! (unlimited tier)",
+    "user_b": "test_user_b@example.com / Test456! (used for isolation tests)"
+  },
+  "seed_data_creation": "None - used existing test users and calls",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Calls module (Phase 6 Strangler Fig) fully tested. New modular routes in /app/backend/routes/calls.py and /app/backend/services/call_service.py are working correctly. Feature flag USE_NEW_CALLS_ROUTES=true in backend/.env enables the new routes. All READ operations tested: list calls, get single call, analytics (7d/30d/90d/all), AMD status, recording, transcript. User isolation verified - users can only see/modify their own calls. Tier restrictions verified - recording requires Starter tier, transcript requires Professional tier. Note: Twilio webhooks and call initiation (/calls/initiate) remain in server.py and were NOT tested as they are out of scope for this extraction.",
+  "features_tested": {
+    "GET /api/calls/twilio-status": {
+      "status": "PASS",
+      "tests": [
+        "Returns Twilio configuration status",
+        "Phone number is partially masked for security"
+      ]
+    },
+    "GET /api/calls": {
+      "status": "PASS",
+      "tests": [
+        "List calls for authenticated user",
+        "Returns only user's own calls",
+        "Requires authentication (401 without token)",
+        "Supports status filter (?status=completed)",
+        "Supports limit parameter (?limit=5)"
+      ]
+    },
+    "GET /api/calls/{call_id}": {
+      "status": "PASS",
+      "tests": [
+        "Get specific call by ID",
+        "Returns 404 for non-existent call",
+        "Returns 404 for other user's call (isolation)"
+      ]
+    },
+    "GET /api/analytics": {
+      "status": "PASS",
+      "tests": [
+        "Returns analytics for authenticated user",
+        "Supports range parameter (7d, 30d, 90d, all)",
+        "Returns 422 for invalid range",
+        "Includes calls_by_day, calls_by_outcome, top_campaigns, best_call_times"
+      ]
+    },
+    "GET /api/calls/{call_id}/amd-status": {
+      "status": "PASS",
+      "tests": [
+        "Returns AMD status for call",
+        "Requires authentication",
+        "Returns 404 for non-existent call"
+      ]
+    },
+    "GET /api/calls/{call_id}/recording": {
+      "status": "PASS",
+      "tests": [
+        "Requires authentication",
+        "Unlimited tier user has access",
+        "Returns 404 for non-existent call",
+        "Returns 404 if no recording available"
+      ]
+    },
+    "GET /api/calls/{call_id}/transcript": {
+      "status": "PASS",
+      "tests": [
+        "Requires authentication",
+        "Unlimited tier user has access",
+        "Returns 404 for non-existent call",
+        "Returns 404 if no transcript available"
+      ]
+    },
+    "Authentication": {
+      "status": "PASS",
+      "tests": [
+        "All endpoints require authentication",
+        "Returns 401/403 without auth token"
+      ]
+    },
+    "User Isolation": {
+      "status": "PASS",
+      "tests": [
+        "User cannot access other user's call",
+        "User cannot access other user's AMD status",
+        "User cannot access other user's recording",
+        "User cannot access other user's transcript",
+        "Users see only their own calls in list"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "skipped_tests": {
+    "TestTierRestrictions::test_free_user_recording_access": "Free trial user has no calls to test",
+    "TestTierRestrictions::test_free_user_transcript_access": "Free trial user has no calls to test"
+  },
+  "not_tested": {
+    "POST /api/calls/initiate": "Remains in server.py - out of scope for Phase 6 extraction",
+    "Twilio webhooks": "Remain in server.py - out of scope for Phase 6 extraction",
+    "POST /api/calls/{call_id}/transcribe": "Requires recording_service background task - not tested"
+  }
+}

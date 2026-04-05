@@ -43,6 +43,7 @@ USE_NEW_AUTH_ROUTES = os.getenv("USE_NEW_AUTH_ROUTES", "false").lower() == "true
 USE_NEW_LEADS_ROUTES = os.getenv("USE_NEW_LEADS_ROUTES", "false").lower() == "true"
 USE_NEW_AGENTS_ROUTES = os.getenv("USE_NEW_AGENTS_ROUTES", "false").lower() == "true"
 USE_NEW_CAMPAIGNS_ROUTES = os.getenv("USE_NEW_CAMPAIGNS_ROUTES", "false").lower() == "true"
+USE_NEW_CALLS_ROUTES = os.getenv("USE_NEW_CALLS_ROUTES", "false").lower() == "true"
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -11840,6 +11841,21 @@ if USE_NEW_CAMPAIGNS_ROUTES:
     logger.info("Using NEW modular campaigns routes (USE_NEW_CAMPAIGNS_ROUTES=true)")
 else:
     logger.info("Using LEGACY inline campaigns routes (USE_NEW_CAMPAIGNS_ROUTES=false)")
+
+# Conditionally mount new modular calls routes (Phase 6)
+if USE_NEW_CALLS_ROUTES:
+    from routes.calls import router as calls_router, set_services as set_calls_services
+    # Inject service references into calls module
+    set_calls_services(
+        get_tier_features_fn=get_tier_features,
+        twilio_service=twilio_service,
+        twilio_phone_number=twilio_phone_number,
+        recording_service=recording_service
+    )
+    app.include_router(calls_router, prefix="/api")
+    logger.info("Using NEW modular calls routes (USE_NEW_CALLS_ROUTES=true)")
+else:
+    logger.info("Using LEGACY inline calls routes (USE_NEW_CALLS_ROUTES=false)")
 
 # Include main api_router (legacy routes)
 app.include_router(api_router)

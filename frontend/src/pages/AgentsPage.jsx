@@ -1,0 +1,578 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { VoiceCloneModal, VoiceSettingsModal } from "@/components/VoiceCloning";
+import {
+  Users, Plus, Trash2, Edit3, Mic, Volume2, RefreshCw, Phone, Play, Pause, Mail, Zap, Settings, Calendar
+} from "lucide-react";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+// Supported languages for ElevenLabs multilingual_v2
+const SUPPORTED_LANGUAGES = [
+  { code: "en", name: "English", flag: "🇺🇸" },
+  { code: "es", name: "Spanish", flag: "🇪🇸" },
+  { code: "fr", name: "French", flag: "🇫🇷" },
+  { code: "de", name: "German", flag: "🇩🇪" },
+  { code: "it", name: "Italian", flag: "🇮🇹" },
+  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+  { code: "pl", name: "Polish", flag: "🇵🇱" },
+  { code: "nl", name: "Dutch", flag: "🇳🇱" },
+  { code: "sv", name: "Swedish", flag: "🇸🇪" },
+  { code: "da", name: "Danish", flag: "🇩🇰" },
+  { code: "fi", name: "Finnish", flag: "🇫🇮" },
+  { code: "no", name: "Norwegian", flag: "🇳🇴" },
+  { code: "ru", name: "Russian", flag: "🇷🇺" },
+  { code: "uk", name: "Ukrainian", flag: "🇺🇦" },
+  { code: "tr", name: "Turkish", flag: "🇹🇷" },
+  { code: "ar", name: "Arabic", flag: "🇸🇦" },
+  { code: "he", name: "Hebrew", flag: "🇮🇱" },
+  { code: "hi", name: "Hindi", flag: "🇮🇳" },
+  { code: "zh", name: "Chinese (Mandarin)", flag: "🇨🇳" },
+  { code: "ja", name: "Japanese", flag: "🇯🇵" },
+  { code: "ko", name: "Korean", flag: "🇰🇷" }
+];
+
+// Use case templates
+const USE_CASE_TEMPLATES = {
+  sales_cold_calling: {
+    label: "Sales / Cold Calling",
+    description: "Qualify leads and book meetings",
+    tips: "Best for: General B2B sales. Customize the opening with your value proposition.",
+    prompt: "You are a sales representative for {company}. Your name is {agent_name}. Keep responses SHORT (1-2 sentences max) - this is a phone call."
+  },
+  credit_card_processing: {
+    label: "Credit Card Processing",
+    description: "Merchant services & payment processing sales",
+    tips: "Best for: Payment processors, merchant services.",
+    prompt: "You are a merchant services consultant for {company}. Your name is {agent_name}. Keep responses SHORT (1-2 sentences) - this is a phone call."
+  },
+  appointment_setter: {
+    label: "Appointment Setter",
+    description: "Schedule appointments and manage bookings",
+    tips: "Best for: Service businesses, consultants.",
+    prompt: "You are a scheduling assistant for {company}. Your name is {agent_name}. Keep responses SHORT (1-2 sentences) - this is a phone call."
+  },
+  receptionist: {
+    label: "Receptionist",
+    description: "Answer calls and route to departments",
+    tips: "Best for: Offices, clinics.",
+    prompt: "You are the front desk receptionist for {company}. Your name is {agent_name}. Keep responses SHORT (1-2 sentences) - this is a phone call."
+  },
+  customer_service: {
+    label: "Customer Service",
+    description: "Handle support inquiries and issues",
+    tips: "Best for: Support teams.",
+    prompt: "You are a customer support agent for {company}. Your name is {agent_name}. Keep responses SHORT (1-2 sentences) - this is a phone call."
+  }
+};
+
+const Agents = () => {
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showVoiceClone, setShowVoiceClone] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(null); // agent for voice settings
+  const [previewingVoice, setPreviewingVoice] = useState(null); // agent id being previewed
+  const [playingAudio, setPlayingAudio] = useState(null); // audio element reference
+
+  const [newAgent, setNewAgent] = useState({
+    name: "",
+    company_name: "",
+    email: "",
+    phone: "",
+    calendly_link: "",
+    max_daily_calls: 50,
+    use_case: "sales_cold_calling",
+    system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt,
+    language: "en"
+  });
+
+  const fetchAgents = async () => {
+    try {
+      const response = await axios.get(`${API}/agents`);
+      setAgents(response.data);
+    } catch (error) {
+      toast.error("Failed to load agents");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (playingAudio) {
+        playingAudio.pause();
+        playingAudio.src = "";
+      }
+    };
+  }, [playingAudio]);
+
+  const previewAgentVoice = async (agent) => {
+    // If already previewing this agent, stop it
+    if (previewingVoice === agent.id && playingAudio) {
+      playingAudio.pause();
+      setPlayingAudio(null);
+      setPreviewingVoice(null);
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (playingAudio) {
+      playingAudio.pause();
+    }
+
+    setPreviewingVoice(agent.id);
+    const voiceId = agent.voice_type === "cloned" ? agent.cloned_voice_id : (agent.preset_voice_id || "21m00Tcm4TlvDq8ikWAM");
+    const previewText = `Hi, this is ${agent.name}. I'm your AI sales agent, ready to help you connect with qualified leads and close more deals!`;
+
+    const formData = new FormData();
+    formData.append("text", previewText);
+    formData.append("voice_id", voiceId);
+
+    try {
+      const response = await axios.post(`${API}/voices/preview`, formData);
+      const audio = new Audio(response.data.audio);
+      
+      audio.onended = () => {
+        setPlayingAudio(null);
+        setPreviewingVoice(null);
+      };
+      
+      audio.onerror = () => {
+        toast.error("Failed to play audio");
+        setPlayingAudio(null);
+        setPreviewingVoice(null);
+      };
+
+      setPlayingAudio(audio);
+      await audio.play();
+      toast.success(`Playing ${agent.name}'s voice...`);
+    } catch (error) {
+      console.error("Preview failed:", error);
+      toast.error("Failed to generate voice preview");
+      setPreviewingVoice(null);
+    }
+  };
+
+  const createAgent = async () => {
+    if (!newAgent.name || !newAgent.email || !newAgent.calendly_link) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      await axios.post(`${API}/agents`, newAgent);
+      toast.success("Agent created!");
+      setShowCreate(false);
+      setNewAgent({ 
+        name: "", 
+        email: "", 
+        phone: "", 
+        calendly_link: "", 
+        max_daily_calls: 50,
+        use_case: "sales_cold_calling",
+        system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt
+      });
+      fetchAgents();
+    } catch (error) {
+      toast.error("Failed to create agent");
+    }
+  };
+
+  const toggleAgent = async (agent) => {
+    try {
+      await axios.put(`${API}/agents/${agent.id}`, { is_active: !agent.is_active });
+      toast.success(`Agent ${agent.is_active ? 'deactivated' : 'activated'}`);
+      fetchAgents();
+    } catch (error) {
+      toast.error("Failed to update agent");
+    }
+  };
+
+  const deleteAgent = async (id) => {
+    try {
+      await axios.delete(`${API}/agents/${id}`);
+      toast.success("Agent deleted");
+      fetchAgents();
+    } catch (error) {
+      toast.error("Failed to delete agent");
+    }
+  };
+
+  return (
+    <div className="p-6 md:p-8 space-y-6" data-testid="agents-page">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Agents
+          </h1>
+          <p className="text-gray-500 mt-1">Manage sales agents and their Calendly links</p>
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Create an agent for each product/service. Qualified leads are auto-routed to book via their Calendly link.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            data-testid="clone-voice-btn"
+            onClick={() => setShowVoiceClone(true)}
+            variant="outline"
+            className="border-purple-300 text-purple-700 hover:bg-purple-50"
+          >
+            <Mic className="w-4 h-4 mr-2" />
+            Clone Voice
+          </Button>
+          <Button 
+            data-testid="create-agent-btn"
+            onClick={() => setShowCreate(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Agent
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-48" />)}
+        </div>
+      ) : agents.length === 0 ? (
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardContent className="p-12 text-center">
+            <Users className="w-16 h-16 text-gray-300 mx-auto" />
+            <p className="text-gray-500 mt-4">No agents yet. Add agents to receive qualified leads.</p>
+            <Button 
+              onClick={() => setShowCreate(true)}
+              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Add Agent
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {agents.map(agent => (
+            <Card key={agent.id} className={`bg-white border shadow-sm hover:shadow-md transition-shadow ${agent.is_active ? 'border-gray-200' : 'border-gray-300 opacity-60'}`} data-testid={`agent-card-${agent.id}`}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${agent.is_active ? 'bg-blue-600' : 'bg-gray-400'}`}>
+                      {agent.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{agent.name}</h3>
+                      <Badge variant={agent.is_active ? "default" : "secondary"}>
+                        {agent.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    data-testid={`delete-agent-${agent.id}`}
+                    onClick={() => deleteAgent(agent.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                <div className="space-y-2 text-sm mb-4">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Mail className="w-4 h-4" />
+                    {agent.email}
+                  </div>
+                  {agent.phone && (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Phone className="w-4 h-4" />
+                      {agent.phone}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <Calendar className="w-4 h-4" />
+                    <a href={agent.calendly_link} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">
+                      Calendly Link
+                    </a>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg mb-4">
+                  <span className="text-sm text-gray-600">Assigned Leads</span>
+                  <span className="text-lg font-semibold text-gray-900">{agent.assigned_leads}</span>
+                </div>
+
+                {/* Voice Settings Indicator */}
+                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg mb-4">
+                  <Volume2 className="w-4 h-4 text-purple-600" />
+                  <div className="flex-1">
+                    <span className="text-sm text-gray-700">
+                      {agent.voice_type === "cloned" ? agent.cloned_voice_name || "Cloned Voice" : "Preset Voice"}
+                    </span>
+                    {agent.voice_type === "cloned" && (
+                      <Badge className="ml-2 bg-purple-100 text-purple-700 text-xs">Custom</Badge>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => previewAgentVoice(agent)}
+                    disabled={previewingVoice && previewingVoice !== agent.id}
+                    className={`${previewingVoice === agent.id ? 'text-green-600 hover:text-green-700 hover:bg-green-100' : 'text-purple-600 hover:text-purple-700 hover:bg-purple-100'}`}
+                    data-testid={`preview-voice-${agent.id}`}
+                    title={previewingVoice === agent.id ? "Stop preview" : "Preview voice"}
+                  >
+                    {previewingVoice === agent.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowVoiceSettings(agent)}
+                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-100"
+                    data-testid={`voice-settings-${agent.id}`}
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    variant="outline"
+                    data-testid={`toggle-agent-${agent.id}`}
+                    onClick={() => toggleAgent(agent)}
+                  >
+                    {agent.is_active ? "Deactivate" : "Activate"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Create Agent Dialog */}
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              Create AI Agent
+            </DialogTitle>
+            <DialogDescription>
+              Configure your virtual AI caller — choose a voice, language, and script
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Use Case Selector */}
+            <div>
+              <Label htmlFor="use-case">Use Case *</Label>
+              <select
+                id="use-case"
+                data-testid="agent-use-case-select"
+                value={newAgent.use_case}
+                onChange={(e) => {
+                  const useCase = e.target.value;
+                  const template = USE_CASE_TEMPLATES[useCase];
+                  setNewAgent({
+                    ...newAgent, 
+                    use_case: useCase,
+                    system_prompt: template.prompt
+                  });
+                }}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {Object.entries(USE_CASE_TEMPLATES).map(([key, template]) => (
+                  <option key={key} value={key}>{template.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {USE_CASE_TEMPLATES[newAgent.use_case]?.description}
+              </p>
+              {USE_CASE_TEMPLATES[newAgent.use_case]?.tips && (
+                <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">
+                  💡 {USE_CASE_TEMPLATES[newAgent.use_case]?.tips}
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <Label htmlFor="agent-name">AI Agent Name *</Label>
+              <Input
+                id="agent-name"
+                data-testid="agent-name-input"
+                value={newAgent.name}
+                onChange={(e) => setNewAgent({...newAgent, name: e.target.value})}
+                placeholder="Sarah (Sales Agent)"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">What your AI will call itself on calls</p>
+            </div>
+
+            <div>
+              <Label htmlFor="company-name">Company Name *</Label>
+              <Input
+                id="company-name"
+                data-testid="agent-company-input"
+                value={newAgent.company_name}
+                onChange={(e) => setNewAgent({...newAgent, company_name: e.target.value})}
+                placeholder="DialGenix"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">Company the AI represents (replaces {'{company}'} in script)</p>
+            </div>
+            
+            <div>
+              <Label htmlFor="agent-email">Notification Email *</Label>
+              <Input
+                id="agent-email"
+                data-testid="agent-email-input"
+                type="email"
+                value={newAgent.email}
+                onChange={(e) => setNewAgent({...newAgent, email: e.target.value})}
+                placeholder="alerts@yourcompany.com"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">Receive alerts when this agent qualifies leads</p>
+            </div>
+            
+            <div>
+              <Label htmlFor="agent-phone">Outbound Phone Number</Label>
+              <Input
+                id="agent-phone"
+                data-testid="agent-phone-input"
+                value={newAgent.phone}
+                onChange={(e) => setNewAgent({...newAgent, phone: e.target.value})}
+                placeholder="+14155551234 (your Twilio number)"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">Twilio number the AI calls FROM (leave blank to use default)</p>
+            </div>
+            
+            <div>
+              <Label htmlFor="calendly-link">Meeting Booking Link *</Label>
+              <Input
+                id="calendly-link"
+                data-testid="agent-calendly-input"
+                value={newAgent.calendly_link}
+                onChange={(e) => setNewAgent({...newAgent, calendly_link: e.target.value})}
+                placeholder="https://calendly.com/your-name/30min"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">Where qualified leads can book meetings</p>
+            </div>
+
+            {/* Language Selection */}
+            <div>
+              <Label htmlFor="language" className="flex items-center gap-2">
+                Language
+                <span className="text-xs text-gray-400 font-normal">(AI will speak in this language)</span>
+              </Label>
+              <select
+                id="language"
+                value={newAgent.language}
+                onChange={(e) => setNewAgent({...newAgent, language: e.target.value})}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Supports 50+ languages via ElevenLabs multilingual model</p>
+            </div>
+            
+            {/* System Prompt (Advanced) */}
+            <div>
+              <Label htmlFor="system-prompt" className="flex items-center gap-2">
+                AI Script 
+                <span className="text-xs text-gray-400 font-normal">(customize if needed)</span>
+              </Label>
+              
+              {/* Pro Tips Box */}
+              <div className="mt-2 mb-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-amber-900 mb-2 flex items-center gap-1">
+                  <Zap className="w-4 h-4" /> Script Best Practices
+                </p>
+                <ul className="text-xs text-amber-800 space-y-1">
+                  <li>✓ <strong>Always qualify first:</strong> "Am I speaking with the owner or manager?"</li>
+                  <li>✓ <strong>Keep it short:</strong> 1-2 sentences per response max</li>
+                  <li>✓ <strong>Use {'{contact_name}'}</strong> if Apollo is connected for personalization</li>
+                  <li>✓ <strong>Add pauses:</strong> Use "..." for natural breathing room</li>
+                </ul>
+              </div>
+
+              <textarea
+                id="system-prompt"
+                data-testid="agent-prompt-input"
+                value={newAgent.system_prompt}
+                onChange={(e) => setNewAgent({...newAgent, system_prompt: e.target.value})}
+                placeholder="Enter custom AI instructions..."
+                rows={12}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono resize-y min-h-[200px]"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Variables: <code className="bg-gray-100 px-1 rounded">{'{agent_name}'}</code> = AI's name, 
+                <code className="bg-gray-100 px-1 rounded ml-1">{'{company}'}</code> = company name, 
+                <code className="bg-gray-100 px-1 rounded ml-1">{'{contact_name}'}</code> = lead's name (if available)
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button 
+              data-testid="save-agent-btn"
+              onClick={createAgent}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Create AI Agent
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Voice Clone Modal */}
+      <VoiceCloneModal
+        isOpen={showVoiceClone}
+        onClose={() => setShowVoiceClone(false)}
+        onVoiceCloned={(voice) => {
+          toast.success(`Voice "${voice.name}" cloned successfully!`);
+          setShowVoiceClone(false);
+        }}
+      />
+
+      {/* Voice Settings Modal */}
+      {showVoiceSettings && (
+        <VoiceSettingsModal
+          isOpen={!!showVoiceSettings}
+          onClose={() => setShowVoiceSettings(null)}
+          agent={showVoiceSettings}
+          onSave={() => {
+            fetchAgents();
+            setShowVoiceSettings(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Call History Page
+
+export default Agents;

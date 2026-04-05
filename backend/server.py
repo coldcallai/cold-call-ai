@@ -9904,6 +9904,59 @@ async def get_dnc_refresh_reminder(
             "error": str(e)
         }
 
+# ============== DEMO REQUEST FORM ==============
+
+class DemoRequestForm(BaseModel):
+    name: str
+    email: str
+    phone: str
+    companySize: str
+
+@api_router.post("/demo-requests")
+async def submit_demo_request(request: DemoRequestForm):
+    """
+    Store demo request from homepage form.
+    No authentication required - this is for leads visiting the homepage.
+    """
+    try:
+        demo_request = {
+            "id": str(uuid.uuid4()),
+            "name": request.name,
+            "email": request.email,
+            "phone": request.phone,
+            "company_size": request.companySize,
+            "status": "new",
+            "source": "homepage_form",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.demo_requests.insert_one(demo_request)
+        
+        # Try to send email notification (non-blocking)
+        try:
+            if notification_service:
+                await notification_service.send_email(
+                    to_email=os.environ.get("ADMIN_EMAIL", "admin@dialgenix.ai"),
+                    subject=f"New Demo Request: {request.name} from {request.companySize} company",
+                    html_content=f"""
+                    <h2>New Demo Request</h2>
+                    <p><strong>Name:</strong> {request.name}</p>
+                    <p><strong>Email:</strong> {request.email}</p>
+                    <p><strong>Phone:</strong> {request.phone}</p>
+                    <p><strong>Company Size:</strong> {request.companySize}</p>
+                    <p><strong>Submitted:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
+                    """
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send demo request notification: {e}")
+        
+        return {"success": True, "message": "Demo request submitted successfully"}
+    
+    except Exception as e:
+        logger.error(f"Failed to store demo request: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit demo request")
+
+
 # ============== CALL YOURSELF DEMO FEATURE ==============
 
 class DemoCallRequest(BaseModel):

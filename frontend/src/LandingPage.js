@@ -174,6 +174,33 @@ const LandingPage = () => {
   const [openFaq, setOpenFaq] = useState(null);
   const [pricingTab, setPricingTab] = useState("full"); // "byol" or "full"
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Demo request form state
+  const [demoForm, setDemoForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    companySize: ""
+  });
+  const [demoSubmitting, setDemoSubmitting] = useState(false);
+  const [demoSuccess, setDemoSuccess] = useState(false);
+
+  const handleDemoRequest = async (e) => {
+    e.preventDefault();
+    setDemoSubmitting(true);
+    
+    try {
+      await axios.post(`${API}/demo-requests`, demoForm);
+      setDemoSuccess(true);
+      setDemoForm({ name: "", email: "", phone: "", companySize: "" });
+      toast.success("Demo request submitted! We'll contact you shortly.");
+    } catch (error) {
+      console.error("Demo request failed:", error);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setDemoSubmitting(false);
+    }
+  };
 
   const goToLogin = () => {
     navigate('/login');
@@ -502,6 +529,77 @@ const LandingPage = () => {
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
             Stop wasting time on manual dialing. Let our AI agents find leads, have natural, human-like conversations, and book meetings for you <span className="text-cyan-400">➤</span> on autopilot.
           </p>
+
+          {/* Lead Capture Form */}
+          <div className="mt-10 max-w-2xl mx-auto">
+            <form onSubmit={handleDemoRequest} className="bg-gray-800/60 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6 shadow-xl shadow-cyan-500/5">
+              <p className="text-white font-semibold text-lg mb-4 text-center">Get a Free Demo</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  value={demoForm.name}
+                  onChange={(e) => setDemoForm({...demoForm, name: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+                  required
+                />
+                <input
+                  type="email"
+                  placeholder="Business Email"
+                  value={demoForm.email}
+                  onChange={(e) => setDemoForm({...demoForm, email: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+                  required
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone Number"
+                  value={demoForm.phone}
+                  onChange={(e) => setDemoForm({...demoForm, phone: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+                  required
+                />
+                <select
+                  value={demoForm.companySize}
+                  onChange={(e) => setDemoForm({...demoForm, companySize: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+                  required
+                >
+                  <option value="" className="text-gray-500">Company Size</option>
+                  <option value="1-10">1-10 employees</option>
+                  <option value="11-50">11-50 employees</option>
+                  <option value="51-200">51-200 employees</option>
+                  <option value="201-500">201-500 employees</option>
+                  <option value="500+">500+ employees</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={demoSubmitting}
+                className="w-full mt-4 py-3 px-6 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {demoSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="w-5 h-5" />
+                    Book Your Free Demo
+                  </>
+                )}
+              </button>
+              {demoSuccess && (
+                <p className="mt-3 text-center text-emerald-400 text-sm">
+                  ✓ Thanks! We'll contact you within 24 hours to schedule your demo.
+                </p>
+              )}
+              <p className="text-xs text-gray-500 text-center mt-3">
+                No credit card required • Free 15-min consultation
+              </p>
+            </form>
+          </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
             <a href="#demo">

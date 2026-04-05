@@ -683,10 +683,24 @@ A vertical-agnostic B2B SaaS platform that:
   - Feature flag: `USE_NEW_CALLS_ROUTES=true` (enabled in production)
   - 31/31 tests passing
   - NOTE: Twilio webhooks and /calls/initiate remain in server.py for stability
-- [ ] Phase 7: Continue refactoring `server.py` - Remaining modules (Bookings, Settings, Billing, Demo)
-- [ ] Refactor `App.js` (4,200+ lines) into smaller components
+- [x] **Phase 7: Remaining Modules Extraction** (Strangler Fig) - DONE (April 2026)
+  - Extracted bookings routes to `/app/backend/routes/bookings.py`
+  - Extracted settings routes to `/app/backend/routes/settings.py`
+  - Extracted billing routes to `/app/backend/routes/billing.py`
+  - Feature flags: `USE_NEW_BOOKINGS_ROUTES=true`, `USE_NEW_SETTINGS_ROUTES=true`, `USE_NEW_BILLING_ROUTES=true`
+  - 24/24 tests passing
+  - NOTE: Twilio webhooks, Stripe webhooks, and demo endpoints remain in server.py for stability
+- [ ] Refactor `App.js` (4,200+ lines) into smaller React components
 
 ### April 2026
+- **Phase 7 Modules Refactoring (Bookings, Settings, Billing) Complete**:
+  - Extracted 3 modules from monolithic `server.py` using Strangler Fig pattern
+  - New files: `/app/backend/routes/bookings.py`, `/app/backend/routes/settings.py`, `/app/backend/routes/billing.py`, `/app/backend/services/booking_service.py`
+  - Feature flags for safe rollback capability
+  - 24 tests passing: settings CRUD, packs, account usage, bookings CRUD, subscription features, invoices, team management
+  - Bug fixed: team_seats -> max_team_seats feature check
+  - Endpoints: /api/settings, /api/packs, /api/account/usage, /api/bookings, /api/subscription/features, /api/subscriptions/current, /api/subscriptions/invoices, /api/team/members
+
 - **Calls Module Refactoring (Phase 6 Complete)**:
   - Extracted calls routes from monolithic `server.py` using Strangler Fig pattern
   - New files: `/app/backend/routes/calls.py`, `/app/backend/services/call_service.py`

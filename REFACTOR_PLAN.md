@@ -42,12 +42,21 @@
 - Feature flag: USE_NEW_AGENTS_ROUTES=true (set in .env)
 - Endpoints migrated: /api/agents (CRUD), /api/voices/presets, /api/voices/cloned, /api/voices/clone, /api/voices/preview, /api/agents/{id}/voice
 
-### Phase 5: Calls/Twilio (Higher risk - core feature)
+### Phase 5: Campaigns ✅ DONE
+- [x] Create `routes/campaigns.py`
+- [x] Create `services/campaign_service.py`
+- [x] Add feature flag `USE_NEW_CAMPAIGNS_ROUTES`
+- [x] Test and deploy
+- Files: /app/backend/routes/campaigns.py, /app/backend/services/campaign_service.py
+- Feature flag: USE_NEW_CAMPAIGNS_ROUTES=true (set in .env)
+- Endpoints migrated: /api/campaigns (CRUD), /api/campaigns/{id}/start, /api/campaigns/{id}/pause, /api/campaigns/{id}/score-all-leads, /api/campaigns/{id}/followup-settings
+
+### Phase 6: Calls/Twilio (Higher risk - core feature)
 - [ ] Create `routes/calls.py`
 - [ ] Create `services/twilio_service.py`
 - [ ] Create `services/elevenlabs_service.py`
 
-### Phase 6: Remaining (Final cleanup)
+### Phase 7: Remaining (Final cleanup)
 - [ ] routes/campaigns.py
 - [ ] routes/bookings.py
 - [ ] routes/settings.py

@@ -667,10 +667,22 @@ A vertical-agnostic B2B SaaS platform that:
   - Extracted leads services to `/app/backend/services/lead_service.py`
   - Feature flag: `USE_NEW_LEADS_ROUTES=true` (enabled in production)
   - 28/28 tests passing
-- [ ] Continue refactoring `server.py` - Phases 4-6 remaining (Agents, Campaigns, Calls)
+- [x] **Phase 4: Agents Module Extraction** (Strangler Fig) - DONE (April 2026)
+  - Extracted agents routes to `/app/backend/routes/agents.py`
+  - Extracted agents services to `/app/backend/services/agent_service.py`
+  - Feature flag: `USE_NEW_AGENTS_ROUTES=true` (enabled in production)
+  - 21/21 tests passing
+- [ ] Continue refactoring `server.py` - Phases 5-6 remaining (Campaigns, Calls)
 - [ ] Refactor `App.js` (4,200+ lines) into smaller components
 
 ### April 2026
+- **Agents Module Refactoring (Phase 4 Complete)**:
+  - Extracted agents routes from monolithic `server.py` using Strangler Fig pattern
+  - New files: `/app/backend/routes/agents.py`, `/app/backend/services/agent_service.py`
+  - Feature flag `USE_NEW_AGENTS_ROUTES=true` for safe rollback capability
+  - 21 tests passing: CRUD, voice presets, cloned voices, voice settings, user isolation
+  - Endpoints: /api/agents, /api/agents/{id}, /api/agents/{id}/voice, /api/voices/presets, /api/voices/cloned, /api/voices/clone, /api/voices/preview
+
 - **Leads Module Refactoring (Phase 3 Complete)**:
   - Extracted leads routes from monolithic `server.py` using Strangler Fig pattern
   - New files: `/app/backend/routes/leads.py`, `/app/backend/services/lead_service.py`

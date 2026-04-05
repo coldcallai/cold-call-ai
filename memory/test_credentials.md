@@ -36,6 +36,7 @@ Last Updated: April 2026
 ## Notes
 - Auth module has been refactored (Phase 2 Strangler Fig) - USE_NEW_AUTH_ROUTES=true
 - Leads module has been refactored (Phase 3 Strangler Fig) - USE_NEW_LEADS_ROUTES=true
+- Agents module has been refactored (Phase 4 Strangler Fig) - USE_NEW_AGENTS_ROUTES=true
 - All auth endpoints work with both Bearer tokens and session cookies
 
 ## Additional Test User

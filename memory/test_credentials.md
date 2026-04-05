@@ -31,4 +31,9 @@
 - **Tier**: starter
 
 ---
-Last Updated: March 2026
+Last Updated: April 2026
+
+## Notes
+- Auth module has been refactored (Phase 2 Strangler Fig)
+- USE_NEW_AUTH_ROUTES=true is enabled in backend/.env
+- All auth endpoints work with both Bearer tokens and session cookies

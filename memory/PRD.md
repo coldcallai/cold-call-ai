@@ -657,10 +657,21 @@ A vertical-agnostic B2B SaaS platform that:
 3. **[ ] Update Twilio Inbound Webhook** - Point to current production URL for inbound sales agent testing
 
 #### Technical Debt:
-- [ ] Refactor `server.py` (11,400+ lines) into modular files
+- [x] **Phase 2: Auth Module Extraction** (Strangler Fig) - DONE (April 2026)
+  - Extracted auth routes to `/app/backend/routes/auth.py`
+  - Extracted auth services to `/app/backend/services/auth_service.py`
+  - Feature flag: `USE_NEW_AUTH_ROUTES=true` (enabled in production)
+  - 17/17 tests passing
+- [ ] Continue refactoring `server.py` (11,800+ lines) - Phases 3-6 remaining
 - [ ] Refactor `App.js` (4,200+ lines) into smaller components
 
-### March 2026
+### April 2026
+- **Auth Module Refactoring (Phase 2 Complete)**:
+  - Extracted authentication routes from monolithic `server.py` using Strangler Fig pattern
+  - New files: `/app/backend/routes/auth.py`, `/app/backend/services/auth_service.py`
+  - Feature flag `USE_NEW_AUTH_ROUTES` for safe rollback capability
+  - 17 tests passing: login, logout, me, session, phone verification
+  - Endpoints: /api/auth/login, /api/auth/register, /api/auth/me, /api/auth/logout, /api/auth/session, /api/auth/send-verification, /api/auth/verify-phone, /api/auth/verify-phone-oauth
 - **New Trial Funnel**: Added $29/50 calls "Test Drive" plan, "Call Yourself" demo feature, and sandbox mode concept
 - **Silence Detection + Auto-Callback**: Protects against runaway calls - 3 silences = schedule callback and hang up
 - **10-Min Max Call Duration**: Hard cap to prevent cost overruns

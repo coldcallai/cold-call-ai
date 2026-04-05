@@ -28,6 +28,7 @@
 - [ ] Create `routes/leads.py`
 - [ ] Create `services/lead_service.py`
 - [ ] Add feature flag `USE_NEW_LEADS_ROUTES`
+- Endpoints to migrate: /api/leads, /api/leads/discover, /api/leads/gpt-intent-search, /api/leads/upload-csv, /api/leads/export-csv, /api/leads/{id}, /api/leads/{id}/verify-phone, /api/leads/batch-icp-score
 
 ### Phase 4: Agents (Medium risk)
 - [ ] Create `routes/agents.py`

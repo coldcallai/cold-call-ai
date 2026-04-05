@@ -126,7 +126,13 @@ const DemoAudioPlayer = ({ stepId }) => {
 
     try {
       const response = await axios.get(`${API}/demo/narration/${stepId}`);
-      const { audio_url } = response.data;
+      const { audio_url, error: apiError } = response.data;
+      
+      // Handle case when audio is not available (quota exceeded, etc.)
+      if (!audio_url || apiError) {
+        setError("Audio temporarily unavailable");
+        return;
+      }
       
       if (audioRef.current) {
         audioRef.current.src = audio_url;
@@ -163,7 +169,7 @@ const DemoAudioPlayer = ({ stepId }) => {
         )}
         <span className="ml-2 text-sm">{isPlaying ? "Pause" : "Listen"}</span>
       </Button>
-      {error && <span className="text-xs text-red-400">{error}</span>}
+      {error && <span className="text-xs text-yellow-400">{error}</span>}
     </div>
   );
 };

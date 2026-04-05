@@ -11751,19 +11751,25 @@ async def get_demo_narration(step_id: str):
     if step_id in demo_audio_cache:
         return demo_audio_cache[step_id]
     
+    narration = DEMO_NARRATIONS[step_id]
+    voice_info = DEMO_VOICE_MAP.get(step_id, {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel"})
+    
+    # If ElevenLabs not configured or quota exhausted, return text-only response
     if not eleven_client:
-        raise HTTPException(status_code=503, detail="ElevenLabs not configured. Add ELEVENLABS_API_KEY to .env")
+        return {
+            "step_id": step_id,
+            "title": narration["title"],
+            "text": narration["text"],
+            "voice_name": voice_info["name"],
+            "audio_url": None,
+            "error": "Audio not available - ElevenLabs not configured"
+        }
     
     try:
-        narration = DEMO_NARRATIONS[step_id]
-        
         voice_settings = VoiceSettings(
             stability=0.5,
             similarity_boost=0.75
         )
-        
-        # Use distinct voice for each step to showcase AI voice variety
-        voice_info = DEMO_VOICE_MAP.get(step_id, {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel"})
         
         audio_generator = eleven_client.text_to_speech.convert(
             text=narration["text"],
@@ -11794,8 +11800,21 @@ async def get_demo_narration(step_id: str):
         return result
         
     except Exception as e:
-        logger.error(f"Error generating demo narration: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generating narration: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error generating demo narration: {error_msg}")
+        
+        # Check if it's a quota error - return graceful fallback
+        if "quota" in error_msg.lower() or "credit" in error_msg.lower():
+            return {
+                "step_id": step_id,
+                "title": narration["title"],
+                "text": narration["text"],
+                "voice_name": voice_info["name"],
+                "audio_url": None,
+                "error": "ElevenLabs quota exceeded - audio temporarily unavailable"
+            }
+        
+        raise HTTPException(status_code=500, detail=f"Error generating narration: {error_msg}")
 
 @api_router.get("/demo/narrations")
 async def get_all_demo_narrations():

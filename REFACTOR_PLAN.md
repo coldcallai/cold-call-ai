@@ -16,11 +16,13 @@
 - Created `/app/backend/models/` directory
 - Files: enums.py, user.py, lead.py, agent.py, campaign.py, call.py, booking.py, followup.py, compliance.py, billing.py, crm.py
 
-### Phase 2: Auth (Low risk, self-contained)
-- [ ] Create `routes/auth.py`
-- [ ] Create `services/auth_service.py`
-- [ ] Add feature flag `USE_NEW_AUTH_ROUTES`
-- [ ] Test and deploy
+### Phase 2: Auth ✅ DONE
+- [x] Create `routes/auth.py`
+- [x] Create `services/auth_service.py`
+- [x] Add feature flag `USE_NEW_AUTH_ROUTES`
+- [x] Test and deploy
+- Files: /app/backend/routes/auth.py, /app/backend/services/auth_service.py
+- Feature flag: USE_NEW_AUTH_ROUTES=true (set in .env)
 
 ### Phase 3: Leads (Medium risk)
 - [ ] Create `routes/leads.py`

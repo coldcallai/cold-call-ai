@@ -37,6 +37,10 @@ from emergentintegrations.llm.openai import OpenAISpeechToText
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# ============== FEATURE FLAGS FOR GRADUAL MIGRATION ==============
+# These flags allow incremental refactoring with instant rollback capability
+USE_NEW_AUTH_ROUTES = os.getenv("USE_NEW_AUTH_ROUTES", "false").lower() == "true"
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 # Only use TLS for remote connections (not localhost)
@@ -3727,6 +3731,8 @@ async def root():
     return {"message": "AI Cold Calling Machine API", "status": "running"}
 
 # ============== AUTHENTICATION ROUTES ==============
+# NOTE: When USE_NEW_AUTH_ROUTES=true, the modular routes from routes/auth.py
+# take precedence (they are mounted first). These legacy routes remain as fallback.
 
 # Phone verification for trial abuse prevention
 def normalize_phone_number(phone: str) -> str:
@@ -11773,6 +11779,20 @@ async def get_all_demo_narrations():
     }
 
 # Include router
+# Conditionally mount new modular auth routes FIRST (Strangler Fig pattern)
+# This ensures new routes take precedence over legacy inline routes
+if USE_NEW_AUTH_ROUTES:
+    from routes.auth import router as auth_router, set_twilio_client
+    # Inject Twilio client into auth module
+    if twilio_client:
+        set_twilio_client(twilio_client, twilio_phone_number)
+    # Mount auth router - NOTE: routes are /api/auth/* due to prefix in router
+    app.include_router(auth_router, prefix="/api")
+    logger.info("Using NEW modular auth routes (USE_NEW_AUTH_ROUTES=true)")
+else:
+    logger.info("Using LEGACY inline auth routes (USE_NEW_AUTH_ROUTES=false)")
+
+# Include main api_router (legacy routes)
 app.include_router(api_router)
 
 app.add_middleware(

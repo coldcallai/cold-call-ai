@@ -44,6 +44,9 @@ USE_NEW_LEADS_ROUTES = os.getenv("USE_NEW_LEADS_ROUTES", "false").lower() == "tr
 USE_NEW_AGENTS_ROUTES = os.getenv("USE_NEW_AGENTS_ROUTES", "false").lower() == "true"
 USE_NEW_CAMPAIGNS_ROUTES = os.getenv("USE_NEW_CAMPAIGNS_ROUTES", "false").lower() == "true"
 USE_NEW_CALLS_ROUTES = os.getenv("USE_NEW_CALLS_ROUTES", "false").lower() == "true"
+USE_NEW_BOOKINGS_ROUTES = os.getenv("USE_NEW_BOOKINGS_ROUTES", "false").lower() == "true"
+USE_NEW_SETTINGS_ROUTES = os.getenv("USE_NEW_SETTINGS_ROUTES", "false").lower() == "true"
+USE_NEW_BILLING_ROUTES = os.getenv("USE_NEW_BILLING_ROUTES", "false").lower() == "true"
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -11856,6 +11859,51 @@ if USE_NEW_CALLS_ROUTES:
     logger.info("Using NEW modular calls routes (USE_NEW_CALLS_ROUTES=true)")
 else:
     logger.info("Using LEGACY inline calls routes (USE_NEW_CALLS_ROUTES=false)")
+
+# Conditionally mount new modular bookings routes (Phase 7)
+if USE_NEW_BOOKINGS_ROUTES:
+    from routes.bookings import router as bookings_router, set_services as set_bookings_services
+    set_bookings_services(
+        get_tier_features_fn=get_tier_features,
+        calendly_service=calendly_service,
+        LeadStatus=LeadStatus
+    )
+    app.include_router(bookings_router, prefix="/api")
+    logger.info("Using NEW modular bookings routes (USE_NEW_BOOKINGS_ROUTES=true)")
+else:
+    logger.info("Using LEGACY inline bookings routes (USE_NEW_BOOKINGS_ROUTES=false)")
+
+# Conditionally mount new modular settings routes (Phase 7)
+if USE_NEW_SETTINGS_ROUTES:
+    from routes.settings import router as settings_router, set_services as set_settings_services
+    set_settings_services(
+        notification_service=notification_service,
+        get_tier_features_fn=get_tier_features,
+        subscription_plans=SUBSCRIPTION_PLANS,
+        lead_packs=LEAD_PACKS,
+        call_packs=CALL_PACKS,
+        combo_packs=COMBO_PACKS,
+        topup_packs=TOPUP_PACKS,
+        prepay_discounts=PREPAY_DISCOUNTS
+    )
+    app.include_router(settings_router, prefix="/api")
+    logger.info("Using NEW modular settings routes (USE_NEW_SETTINGS_ROUTES=true)")
+else:
+    logger.info("Using LEGACY inline settings routes (USE_NEW_SETTINGS_ROUTES=false)")
+
+# Conditionally mount new modular billing routes (Phase 7)
+if USE_NEW_BILLING_ROUTES:
+    from routes.billing import router as billing_router, set_services as set_billing_services
+    set_billing_services(
+        subscription_plans=SUBSCRIPTION_PLANS,
+        get_or_create_stripe_customer_fn=get_or_create_stripe_customer,
+        get_or_create_stripe_price_fn=get_or_create_stripe_price,
+        get_tier_features_fn=get_tier_features
+    )
+    app.include_router(billing_router, prefix="/api")
+    logger.info("Using NEW modular billing routes (USE_NEW_BILLING_ROUTES=true)")
+else:
+    logger.info("Using LEGACY inline billing routes (USE_NEW_BILLING_ROUTES=false)")
 
 # Include main api_router (legacy routes)
 app.include_router(api_router)

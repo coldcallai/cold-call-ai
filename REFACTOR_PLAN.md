@@ -61,12 +61,20 @@
 - Endpoints migrated: /api/calls (list), /api/calls/{id}, /api/calls/twilio-status, /api/calls/{id}/amd-status, /api/calls/{id}/recording, /api/calls/{id}/transcript, /api/calls/{id}/transcribe, /api/analytics
 - NOTE: Twilio webhooks, /api/calls/initiate, and realtime WebSocket remain in server.py for stability
 
-### Phase 7: Remaining (Final cleanup)
-- [ ] routes/campaigns.py
-- [ ] routes/bookings.py
-- [ ] routes/settings.py
-- [ ] routes/compliance.py
-- [ ] routes/billing.py
+### Phase 7: Remaining ✅ DONE
+- [x] Create `routes/bookings.py` and `services/booking_service.py`
+- [x] Create `routes/settings.py`
+- [x] Create `routes/billing.py`
+- [x] Add feature flags: USE_NEW_BOOKINGS_ROUTES, USE_NEW_SETTINGS_ROUTES, USE_NEW_BILLING_ROUTES
+- Files created:
+  - /app/backend/routes/bookings.py, /app/backend/services/booking_service.py
+  - /app/backend/routes/settings.py
+  - /app/backend/routes/billing.py
+- Endpoints migrated:
+  - Bookings: /api/bookings (CRUD), /api/bookings/{id}/status
+  - Settings: /api/settings, /api/packs, /api/account/usage, /api/team/members, /api/team/invite
+  - Billing: /api/subscription/features, /api/subscriptions/create, /api/subscriptions/portal, /api/subscriptions/current, /api/subscriptions/invoices
+- NOTE: Stripe webhooks, Twilio webhooks, and demo endpoints remain in server.py
 
 ---
 

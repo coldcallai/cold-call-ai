@@ -40,6 +40,7 @@ load_dotenv(ROOT_DIR / '.env')
 # ============== FEATURE FLAGS FOR GRADUAL MIGRATION ==============
 # These flags allow incremental refactoring with instant rollback capability
 USE_NEW_AUTH_ROUTES = os.getenv("USE_NEW_AUTH_ROUTES", "false").lower() == "true"
+USE_NEW_LEADS_ROUTES = os.getenv("USE_NEW_LEADS_ROUTES", "false").lower() == "true"
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -11791,6 +11792,23 @@ if USE_NEW_AUTH_ROUTES:
     logger.info("Using NEW modular auth routes (USE_NEW_AUTH_ROUTES=true)")
 else:
     logger.info("Using LEGACY inline auth routes (USE_NEW_AUTH_ROUTES=false)")
+
+# Conditionally mount new modular leads routes (Phase 3)
+if USE_NEW_LEADS_ROUTES:
+    from routes.leads import router as leads_router, set_services as set_leads_services
+    # Inject service references into leads module
+    set_leads_services(
+        ai_service=ai_service,
+        compliance_service=compliance_service,
+        icp_service=icp_service,
+        crm_service=crm_service,
+        get_tier_features_fn=get_tier_features,
+        check_subscription_limit_fn=check_subscription_limit
+    )
+    app.include_router(leads_router, prefix="/api")
+    logger.info("Using NEW modular leads routes (USE_NEW_LEADS_ROUTES=true)")
+else:
+    logger.info("Using LEGACY inline leads routes (USE_NEW_LEADS_ROUTES=false)")
 
 # Include main api_router (legacy routes)
 app.include_router(api_router)

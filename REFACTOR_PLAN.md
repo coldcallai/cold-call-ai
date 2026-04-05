@@ -24,11 +24,14 @@
 - Files: /app/backend/routes/auth.py, /app/backend/services/auth_service.py
 - Feature flag: USE_NEW_AUTH_ROUTES=true (set in .env)
 
-### Phase 3: Leads (Medium risk)
-- [ ] Create `routes/leads.py`
-- [ ] Create `services/lead_service.py`
-- [ ] Add feature flag `USE_NEW_LEADS_ROUTES`
-- Endpoints to migrate: /api/leads, /api/leads/discover, /api/leads/gpt-intent-search, /api/leads/upload-csv, /api/leads/export-csv, /api/leads/{id}, /api/leads/{id}/verify-phone, /api/leads/batch-icp-score
+### Phase 3: Leads ✅ DONE
+- [x] Create `routes/leads.py`
+- [x] Create `services/lead_service.py`
+- [x] Add feature flag `USE_NEW_LEADS_ROUTES`
+- [x] Test and deploy
+- Files: /app/backend/routes/leads.py, /app/backend/services/lead_service.py
+- Feature flag: USE_NEW_LEADS_ROUTES=true (set in .env)
+- Endpoints migrated: /api/leads, /api/leads/discover, /api/leads/gpt-intent-search, /api/leads/upload-csv, /api/leads/export-csv, /api/leads/{id}, /api/leads/{id}/verify-phone, /api/leads/batch-icp-score, /api/leads/preview-examples, /api/leads/phone-stats
 
 ### Phase 4: Agents (Medium risk)
 - [ ] Create `routes/agents.py`

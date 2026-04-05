@@ -662,10 +662,22 @@ A vertical-agnostic B2B SaaS platform that:
   - Extracted auth services to `/app/backend/services/auth_service.py`
   - Feature flag: `USE_NEW_AUTH_ROUTES=true` (enabled in production)
   - 17/17 tests passing
-- [ ] Continue refactoring `server.py` (11,800+ lines) - Phases 3-6 remaining
+- [x] **Phase 3: Leads Module Extraction** (Strangler Fig) - DONE (April 2026)
+  - Extracted leads routes to `/app/backend/routes/leads.py`
+  - Extracted leads services to `/app/backend/services/lead_service.py`
+  - Feature flag: `USE_NEW_LEADS_ROUTES=true` (enabled in production)
+  - 28/28 tests passing
+- [ ] Continue refactoring `server.py` - Phases 4-6 remaining (Agents, Campaigns, Calls)
 - [ ] Refactor `App.js` (4,200+ lines) into smaller components
 
 ### April 2026
+- **Leads Module Refactoring (Phase 3 Complete)**:
+  - Extracted leads routes from monolithic `server.py` using Strangler Fig pattern
+  - New files: `/app/backend/routes/leads.py`, `/app/backend/services/lead_service.py`
+  - Feature flag `USE_NEW_LEADS_ROUTES=true` for safe rollback capability
+  - 28 tests passing: CRUD, phone-stats, preview-examples, export-csv, user isolation
+  - Endpoints: /api/leads, /api/leads/{id}, /api/leads/phone-stats, /api/leads/preview-examples, /api/leads/export-csv, /api/leads/gpt-intent-search, /api/leads/discover, /api/leads/upload-csv
+  
 - **Auth Module Refactoring (Phase 2 Complete)**:
   - Extracted authentication routes from monolithic `server.py` using Strangler Fig pattern
   - New files: `/app/backend/routes/auth.py`, `/app/backend/services/auth_service.py`

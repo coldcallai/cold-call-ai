@@ -672,10 +672,22 @@ A vertical-agnostic B2B SaaS platform that:
   - Extracted agents services to `/app/backend/services/agent_service.py`
   - Feature flag: `USE_NEW_AGENTS_ROUTES=true` (enabled in production)
   - 21/21 tests passing
-- [ ] Continue refactoring `server.py` - Phases 5-6 remaining (Campaigns, Calls)
+- [x] **Phase 5: Campaigns Module Extraction** (Strangler Fig) - DONE (April 2026)
+  - Extracted campaigns routes to `/app/backend/routes/campaigns.py`
+  - Extracted campaigns services to `/app/backend/services/campaign_service.py`
+  - Feature flag: `USE_NEW_CAMPAIGNS_ROUTES=true` (enabled in production)
+  - 27/27 tests passing
+- [ ] Continue refactoring `server.py` - Phase 6 remaining (Calls, Bookings, Settings)
 - [ ] Refactor `App.js` (4,200+ lines) into smaller components
 
 ### April 2026
+- **Campaigns Module Refactoring (Phase 5 Complete)**:
+  - Extracted campaigns routes from monolithic `server.py` using Strangler Fig pattern
+  - New files: `/app/backend/routes/campaigns.py`, `/app/backend/services/campaign_service.py`
+  - Feature flag `USE_NEW_CAMPAIGNS_ROUTES=true` for safe rollback capability
+  - 27 tests passing: CRUD, start/pause, followup settings, user isolation
+  - Endpoints: /api/campaigns, /api/campaigns/{id}, /api/campaigns/{id}/start, /api/campaigns/{id}/pause, /api/campaigns/{id}/followup-settings, /api/campaigns/{id}/score-all-leads
+
 - **Agents Module Refactoring (Phase 4 Complete)**:
   - Extracted agents routes from monolithic `server.py` using Strangler Fig pattern
   - New files: `/app/backend/routes/agents.py`, `/app/backend/services/agent_service.py`

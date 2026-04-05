@@ -125,18 +125,12 @@ const DemoAudioPlayer = ({ stepId }) => {
     setError(null);
 
     try {
-      const response = await axios.get(`${API}/demo/narration/${stepId}`);
-      const { audio_url, error: apiError } = response.data;
-      
-      // Handle case when audio is not available (quota exceeded, etc.)
-      if (!audio_url || apiError) {
-        setError("Audio temporarily unavailable");
-        return;
-      }
+      // Use static pre-generated audio files
+      const audioUrl = `/audio/demo_${stepId}.mp3`;
       
       if (audioRef.current) {
-        audioRef.current.src = audio_url;
-        audioRef.current.play();
+        audioRef.current.src = audioUrl;
+        await audioRef.current.play();
         setIsPlaying(true);
       }
     } catch (err) {

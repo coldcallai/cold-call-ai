@@ -41,6 +41,7 @@ load_dotenv(ROOT_DIR / '.env')
 # These flags allow incremental refactoring with instant rollback capability
 USE_NEW_AUTH_ROUTES = os.getenv("USE_NEW_AUTH_ROUTES", "false").lower() == "true"
 USE_NEW_LEADS_ROUTES = os.getenv("USE_NEW_LEADS_ROUTES", "false").lower() == "true"
+USE_NEW_AGENTS_ROUTES = os.getenv("USE_NEW_AGENTS_ROUTES", "false").lower() == "true"
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -11809,6 +11810,21 @@ if USE_NEW_LEADS_ROUTES:
     logger.info("Using NEW modular leads routes (USE_NEW_LEADS_ROUTES=true)")
 else:
     logger.info("Using LEGACY inline leads routes (USE_NEW_LEADS_ROUTES=false)")
+
+# Conditionally mount new modular agents routes (Phase 4)
+if USE_NEW_AGENTS_ROUTES:
+    from routes.agents import router as agents_router, set_services as set_agents_services
+    # Inject service references into agents module
+    set_agents_services(
+        eleven_client=eleven_client,
+        check_subscription_limit_fn=check_subscription_limit,
+        get_tier_features_fn=get_tier_features,
+        VoiceSettings=VoiceSettings
+    )
+    app.include_router(agents_router, prefix="/api")
+    logger.info("Using NEW modular agents routes (USE_NEW_AGENTS_ROUTES=true)")
+else:
+    logger.info("Using LEGACY inline agents routes (USE_NEW_AGENTS_ROUTES=false)")
 
 # Include main api_router (legacy routes)
 app.include_router(api_router)

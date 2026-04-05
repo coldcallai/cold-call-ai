@@ -33,9 +33,14 @@
 - Feature flag: USE_NEW_LEADS_ROUTES=true (set in .env)
 - Endpoints migrated: /api/leads, /api/leads/discover, /api/leads/gpt-intent-search, /api/leads/upload-csv, /api/leads/export-csv, /api/leads/{id}, /api/leads/{id}/verify-phone, /api/leads/batch-icp-score, /api/leads/preview-examples, /api/leads/phone-stats
 
-### Phase 4: Agents (Medium risk)
-- [ ] Create `routes/agents.py`
-- [ ] Create `services/agent_service.py`
+### Phase 4: Agents ✅ DONE
+- [x] Create `routes/agents.py`
+- [x] Create `services/agent_service.py`
+- [x] Add feature flag `USE_NEW_AGENTS_ROUTES`
+- [x] Test and deploy
+- Files: /app/backend/routes/agents.py, /app/backend/services/agent_service.py
+- Feature flag: USE_NEW_AGENTS_ROUTES=true (set in .env)
+- Endpoints migrated: /api/agents (CRUD), /api/voices/presets, /api/voices/cloned, /api/voices/clone, /api/voices/preview, /api/agents/{id}/voice
 
 ### Phase 5: Calls/Twilio (Higher risk - core feature)
 - [ ] Create `routes/calls.py`

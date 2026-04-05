@@ -677,10 +677,24 @@ A vertical-agnostic B2B SaaS platform that:
   - Extracted campaigns services to `/app/backend/services/campaign_service.py`
   - Feature flag: `USE_NEW_CAMPAIGNS_ROUTES=true` (enabled in production)
   - 27/27 tests passing
-- [ ] Continue refactoring `server.py` - Phase 6 remaining (Calls, Bookings, Settings)
+- [x] **Phase 6: Calls Module Extraction** (Strangler Fig) - DONE (April 2026)
+  - Extracted calls routes to `/app/backend/routes/calls.py`
+  - Extracted calls services to `/app/backend/services/call_service.py`
+  - Feature flag: `USE_NEW_CALLS_ROUTES=true` (enabled in production)
+  - 31/31 tests passing
+  - NOTE: Twilio webhooks and /calls/initiate remain in server.py for stability
+- [ ] Phase 7: Continue refactoring `server.py` - Remaining modules (Bookings, Settings, Billing, Demo)
 - [ ] Refactor `App.js` (4,200+ lines) into smaller components
 
 ### April 2026
+- **Calls Module Refactoring (Phase 6 Complete)**:
+  - Extracted calls routes from monolithic `server.py` using Strangler Fig pattern
+  - New files: `/app/backend/routes/calls.py`, `/app/backend/services/call_service.py`
+  - Feature flag `USE_NEW_CALLS_ROUTES=true` for safe rollback capability
+  - 31 tests passing: list calls, get call, analytics (7d/30d/90d/all), AMD status, recording, transcript, user isolation
+  - Endpoints: /api/calls, /api/calls/{id}, /api/calls/twilio-status, /api/calls/{id}/amd-status, /api/calls/{id}/recording, /api/calls/{id}/transcript, /api/calls/{id}/transcribe, /api/analytics
+  - NOTE: Twilio webhooks and /calls/initiate remain in server.py for stability
+
 - **Campaigns Module Refactoring (Phase 5 Complete)**:
   - Extracted campaigns routes from monolithic `server.py` using Strangler Fig pattern
   - New files: `/app/backend/routes/campaigns.py`, `/app/backend/services/campaign_service.py`

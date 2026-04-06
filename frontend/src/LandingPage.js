@@ -6,7 +6,7 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare, PhoneCall
+  Search, MessageSquare, PhoneCall, Mail
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -1679,6 +1679,56 @@ const LandingPage = () => {
           <p className="text-gray-500 text-sm mt-6">
             Book a free demo today
           </p>
+        </div>
+      </section>
+
+      {/* Support/Contact Section */}
+      <section className="bg-gradient-to-b from-[#0f1c32] to-[#0B1628] py-16 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Need Help? We're Here.
+          </h2>
+          <p className="text-gray-400 mb-8 max-w-2xl mx-auto">
+            Questions about DialGenix? Want to see a live demo? Our team is ready to help you get started.
+          </p>
+          
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Email Support */}
+            <a 
+              href="mailto:support@dialgenix.ai" 
+              className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Mail className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-white font-semibold mb-2">Email Us</h3>
+              <p className="text-cyan-400 group-hover:text-cyan-300 transition-colors">support@dialgenix.ai</p>
+            </a>
+            
+            {/* Phone */}
+            <a 
+              href="tel:+18885131913" 
+              className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Phone className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-white font-semibold mb-2">Call Us</h3>
+              <p className="text-cyan-400 group-hover:text-cyan-300 transition-colors">(888) 513-1913</p>
+            </a>
+            
+            {/* Book a Demo */}
+            <button 
+              onClick={goToCalendly}
+              className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer text-left"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Calendar className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-white font-semibold mb-2 text-center">Book a Demo</h3>
+              <p className="text-cyan-400 group-hover:text-cyan-300 transition-colors text-center">Free 15-min consultation</p>
+            </button>
+          </div>
         </div>
       </section>
 

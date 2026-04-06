@@ -318,7 +318,7 @@ const LandingPage = () => {
         "7-day storage",
         "1 user",
       ],
-      cta: "Start Free Trial",
+      cta: "Get Started",
       popular: false,
     },
     {
@@ -335,7 +335,7 @@ const LandingPage = () => {
         "Custom scripts",
         "3 users",
       ],
-      cta: "Start Free Trial",
+      cta: "Get Started",
       popular: true,
     },
     {
@@ -352,7 +352,7 @@ const LandingPage = () => {
         "Priority support",
         "5 users",
       ],
-      cta: "Start Free Trial",
+      cta: "Get Started",
       popular: false,
     },
   ];
@@ -372,7 +372,7 @@ const LandingPage = () => {
         "7-day recordings",
         "1 user",
       ],
-      cta: "Start Free Trial",
+      cta: "Get Started",
       popular: false,
     },
     {
@@ -389,7 +389,7 @@ const LandingPage = () => {
         "30-day recordings",
         "3 users",
       ],
-      cta: "Start Free Trial",
+      cta: "Get Started",
       popular: true,
     },
     {
@@ -406,7 +406,7 @@ const LandingPage = () => {
         "Priority support",
         "5 users",
       ],
-      cta: "Start Free Trial",
+      cta: "Get Started",
       popular: false,
     },
   ];
@@ -429,8 +429,8 @@ const LandingPage = () => {
       answer: "Absolutely. You write the script, set the qualification criteria, and the AI follows your playbook.",
     },
     {
-      question: "Is there a free trial?",
-      answer: "Yes! Start with a free trial — no credit card required. See results before committing.",
+      question: "How do I get started?",
+      answer: "Book a free demo with our team. We'll show you how DialGenix works and help you set up your first campaign.",
     },
   ];
 
@@ -596,7 +596,7 @@ const LandingPage = () => {
                 </p>
               )}
               <p className="text-xs text-gray-500 text-center mt-3">
-                No credit card required • Free 15-min consultation
+                Free 15-min consultation • See results first
               </p>
             </form>
           </div>
@@ -1103,10 +1103,10 @@ const LandingPage = () => {
               onClick={goToLogin}
               className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-6 text-lg font-medium border-0 inline-flex items-center cursor-pointer transition-all"
             >
-              Start Free Trial
+              Get Started
               <ArrowRight className="w-5 h-5 ml-2" />
             </button>
-            <p className="text-gray-500 mt-4">Start your free trial. No credit card required.</p>
+            <p className="text-gray-500 mt-4">Book a demo and see DialGenix in action.</p>
           </div>
         </div>
       </section>
@@ -1673,7 +1673,7 @@ const LandingPage = () => {
           </div>
 
           <p className="text-gray-500 text-sm mt-6">
-            Free trial • No credit card required
+            Book a free demo today
           </p>
         </div>
       </section>

@@ -206,6 +206,10 @@ const LandingPage = () => {
     navigate('/login');
   };
 
+  const goToCalendly = () => {
+    window.open('https://calendly.com/dialgenix/15-30min', '_blank');
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     alert(`Thanks! We'll contact you at ${email}`);
@@ -469,10 +473,10 @@ const LandingPage = () => {
                 Log in
               </button>
               <button 
-                onClick={goToLogin}
+                onClick={goToCalendly}
                 className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-4 py-2 text-sm cursor-pointer"
               >
-                Get started free
+                Get started
               </button>
             </div>
 
@@ -500,10 +504,10 @@ const LandingPage = () => {
                     Log in
                   </button>
                   <button 
-                    onClick={() => { setMobileMenuOpen(false); goToLogin(); }}
+                    onClick={() => { setMobileMenuOpen(false); goToCalendly(); }}
                     className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-4 py-3 text-sm text-center cursor-pointer"
                   >
-                    Get started free
+                    Get started
                   </button>
                 </div>
               </div>
@@ -1100,7 +1104,7 @@ const LandingPage = () => {
           {/* CTA after demo */}
           <div className="text-center mt-20">
             <button 
-              onClick={goToLogin}
+              onClick={goToCalendly}
               className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-6 text-lg font-medium border-0 inline-flex items-center cursor-pointer transition-all"
             >
               Get Started

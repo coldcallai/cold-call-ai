@@ -457,16 +457,16 @@ const Campaigns = () => {
               
               {newCampaign.voicemail_enabled && (
                 <div>
-                  <Label htmlFor="voicemail-message">Custom Voicemail (optional)</Label>
+                  <Label htmlFor="voicemail-message">Voicemail Drop Script</Label>
                   <Textarea
                     id="voicemail-message"
                     value={newCampaign.voicemail_message}
                     onChange={(e) => setNewCampaign({...newCampaign, voicemail_message: e.target.value})}
-                    placeholder="Hi {contact_name}, this is a quick message for {business_name}. I'm calling from {company_name} about an opportunity..."
-                    className="mt-1 min-h-[80px]"
+                    placeholder="Hi {contact_name}, this is {agent_name} calling for {business_name}. I tried reaching you about an opportunity that could help your business. Visit dialgenix.ai to learn more, or I'll try you again soon. Thanks!"
+                    className="mt-1 min-h-[100px]"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    Variables: {'{contact_name}'}, {'{business_name}'}, {'{company_name}'}
+                    Variables: {'{contact_name}'}, {'{business_name}'}, {'{company_name}'}, {'{agent_name}'} • Include your website URL!
                   </p>
                 </div>
               )}

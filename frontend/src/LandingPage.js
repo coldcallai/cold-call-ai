@@ -26,31 +26,17 @@ const CallYourselfHero = () => {
       return;
     }
 
-    // Check if user is logged in
-    const token = localStorage.getItem("session_token");
-    if (!token) {
-      toast.info("Sign up free to try the demo call!");
-      navigate("/register");
-      return;
-    }
-
     setLoading(true);
     try {
       const response = await axios.post(
         `${API}/demo/call-yourself`,
-        { phone_number: phoneNumber },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { phone_number: phoneNumber }
       );
       
       toast.success("Your phone will ring in a few seconds!");
       setCalled(true);
     } catch (error) {
-      if (error.response?.status === 401) {
-        toast.info("Sign up free to try the demo call!");
-        navigate("/register");
-      } else {
-        toast.error(error.response?.data?.detail || "Failed to initiate demo call");
-      }
+      toast.error(error.response?.data?.detail || "Failed to initiate demo call");
     } finally {
       setLoading(false);
     }

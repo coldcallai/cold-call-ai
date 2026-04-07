@@ -9979,27 +9979,37 @@ class DemoCallRequest(BaseModel):
 async def call_yourself_demo(
     request: DemoCallRequest,
     http_request: Request,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Optional[Dict] = Depends(get_optional_user)
 ):
     """
-    Let users experience the AI by calling their own phone.
-    This is a low-cost way to demonstrate the AI quality without burning leads.
+    Let anyone experience the AI by calling their own phone.
+    No login required - this is the main conversion tool.
     Cost: ~$0.50 per demo call
     """
-    user_id = current_user["user_id"]
+    # Rate limit by IP for anonymous users
+    client_ip = http_request.client.host if http_request.client else "unknown"
     
-    # Check if user already used their demo call (limit 2 per user)
-    user = await db.users.find_one({"user_id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    demo_calls_used = user.get("demo_calls_used", 0)
-    MAX_DEMO_CALLS = 2
-    
-    if demo_calls_used >= MAX_DEMO_CALLS:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"You've already used your {MAX_DEMO_CALLS} free demo calls. Subscribe to make more calls!"
-        )
+    if current_user:
+        user_id = current_user["user_id"]
+        # Check if user already used their demo call (limit 3 per user)
+        user = await db.users.find_one({"user_id": user_id})
+        if user:
+            demo_calls_used = user.get("demo_calls_used", 0)
+            MAX_DEMO_CALLS = 3
+            if demo_calls_used >= MAX_DEMO_CALLS:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"You've already used your {MAX_DEMO_CALLS} free demo calls. Subscribe to make more calls!"
+                )
+    else:
+        # Anonymous user - rate limit by IP (max 2 calls per IP)
+        user_id = f"anon_{client_ip}"
+        anon_demo = await db.demo_calls.count_documents({"ip_address": client_ip})
+        if anon_demo >= 2:
+            raise HTTPException(
+                status_code=400,
+                detail="You've used your free demo calls. Create an account for more!"
+            )
     
     # Validate phone number format
     phone = request.phone_number.strip()
@@ -10028,11 +10038,12 @@ async def call_yourself_demo(
             timeout=30
         )
         
-        # Update user's demo call count
-        await db.users.update_one(
-            {"id": user_id},
-            {"$inc": {"demo_calls_used": 1}}
-        )
+        # Update user's demo call count (only for logged in users)
+        if current_user:
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$inc": {"demo_calls_used": 1}}
+            )
         
         # Log the demo call
         await db.demo_calls.insert_one({
@@ -10040,17 +10051,17 @@ async def call_yourself_demo(
             "user_id": user_id,
             "phone_number": phone,
             "twilio_sid": call.sid,
+            "ip_address": client_ip,
             "status": "initiated",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
-        logger.info(f"Demo call initiated for user {user_id} to {phone}")
+        logger.info(f"Demo call initiated for {user_id} to {phone}")
         
         return {
             "success": True,
             "message": "Demo call initiated! Your phone will ring in a few seconds.",
-            "call_id": demo_call_id,
-            "demo_calls_remaining": MAX_DEMO_CALLS - demo_calls_used - 1
+            "call_id": demo_call_id
         }
         
     except Exception as e:

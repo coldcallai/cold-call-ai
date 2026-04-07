@@ -461,6 +461,10 @@ const LandingPage = () => {
       answer: "Our AI uses advanced speech synthesis and natural language processing to have real conversations. It sounds natural, handles objections, and knows when to hand off to a human.",
     },
     {
+      question: "How does AI handle inbound calls to book meetings?",
+      answer: "When a customer calls your business, our AI answers instantly—24/7. It greets them naturally, asks qualifying questions, answers FAQs about your services, and books appointments directly on your calendar. No hold music, no missed calls, no voicemail tag.",
+    },
+    {
       question: "What if someone asks to speak to a human?",
       answer: "The AI immediately offers to schedule a callback with your team or can transfer to a live agent if you have that set up.",
     },

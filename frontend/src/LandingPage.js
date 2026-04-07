@@ -404,17 +404,34 @@ const LandingPage = () => {
   // Inbound AI Plans - Answer incoming calls
   const inboundPlans = [
     {
+      name: "Inbound Lite",
+      price: "99",
+      period: "/month",
+      description: "For small businesses",
+      features: [
+        "50 inbound calls/month",
+        "24/7 AI answering",
+        "Basic call routing",
+        "SMS notifications",
+        "Call recordings",
+        "1 phone number",
+      ],
+      cta: "Get Started",
+      popular: false,
+    },
+    {
       name: "Inbound Starter",
       price: "199",
       period: "/month",
       description: "Never miss a call",
       features: [
-        "100 inbound calls/month",
+        "150 inbound calls/month",
         "24/7 AI answering",
         "Call qualification",
         "Instant booking",
-        "Call recordings",
+        "Call transcripts",
         "SMS notifications",
+        "2 phone numbers",
       ],
       cta: "Get Started",
       popular: false,
@@ -431,27 +448,10 @@ const LandingPage = () => {
         "Calendar integration",
         "Call transcripts",
         "CRM sync",
-        "3 phone numbers",
+        "5 phone numbers",
       ],
       cta: "Get Started",
       popular: true,
-    },
-    {
-      name: "Inbound Scale",
-      price: "699",
-      period: "/month",
-      description: "Enterprise inbound",
-      features: [
-        "Unlimited inbound calls",
-        "24/7 AI answering",
-        "Custom voice cloning",
-        "Multi-location routing",
-        "Advanced analytics",
-        "Priority support",
-        "10 phone numbers",
-      ],
-      cta: "Get Started",
-      popular: false,
     },
   ];
 
@@ -1802,11 +1802,18 @@ const LandingPage = () => {
             </>
           )}
 
-          <p className="text-center text-gray-500 text-sm mt-8">
-            Start with Test Drive for $49. No long-term commitment required.
-          </p>
+          {pricingTab !== 'inbound' && (
+            <p className="text-center text-gray-500 text-sm mt-8">
+              Start with Test Drive for $49. No long-term commitment required.
+            </p>
+          )}
+          {pricingTab === 'inbound' && (
+            <p className="text-center text-gray-500 text-sm mt-8">
+              Start with Inbound Lite for $99/mo. Never miss a customer call again.
+            </p>
+          )}
           <p className="text-center text-gray-400 text-sm mt-3">
-            Need more leads or calls? <span className="text-cyan-600 font-medium">Add credit packs anytime</span> from your dashboard.
+            Need more capacity? <span className="text-cyan-600 font-medium">Upgrade anytime</span> from your dashboard.
           </p>
         </div>
       </section>

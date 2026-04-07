@@ -415,6 +415,60 @@ const LandingPage = () => {
     },
   ];
 
+  // Inbound AI Plans - Answer incoming calls
+  const inboundPlans = [
+    {
+      name: "Inbound Starter",
+      price: "199",
+      period: "/month",
+      description: "Never miss a call",
+      features: [
+        "100 inbound calls/month",
+        "24/7 AI answering",
+        "Call qualification",
+        "Instant booking",
+        "Call recordings",
+        "SMS notifications",
+      ],
+      cta: "Get Started",
+      popular: false,
+    },
+    {
+      name: "Inbound Pro",
+      price: "399",
+      period: "/month",
+      description: "High-volume inbound",
+      features: [
+        "500 inbound calls/month",
+        "24/7 AI answering",
+        "Custom scripts",
+        "Calendar integration",
+        "Call transcripts",
+        "CRM sync",
+        "3 phone numbers",
+      ],
+      cta: "Get Started",
+      popular: true,
+    },
+    {
+      name: "Inbound Scale",
+      price: "699",
+      period: "/month",
+      description: "Enterprise inbound",
+      features: [
+        "Unlimited inbound calls",
+        "24/7 AI answering",
+        "Custom voice cloning",
+        "Multi-location routing",
+        "Advanced analytics",
+        "Priority support",
+        "10 phone numbers",
+      ],
+      cta: "Get Started",
+      popular: false,
+    },
+  ];
+
   const faqs = [
     {
       question: "How does the AI make phone calls?",
@@ -1347,6 +1401,95 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Inbound AI Section - NEW */}
+      <section className="bg-gradient-to-b from-[#0B1628] to-[#0f1c32] py-24 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <span className="text-cyan-400 text-sm font-medium uppercase tracking-wide">AI-Powered Inbound</span>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Turn Every Missed Call Into a Booking—Automatically
+              </h2>
+              <p className="text-gray-400 text-lg mb-8">
+                Never lose a lead to voicemail again. Our AI answers every call 24/7, qualifies prospects, 
+                and books appointments directly on your calendar—even at 2am.
+              </p>
+              
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">24/7 Call Answering</h4>
+                    <p className="text-gray-400 text-sm">AI picks up instantly—no hold music, no missed opportunities</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Natural Conversations</h4>
+                    <p className="text-gray-400 text-sm">Answers questions, handles objections, sounds completely human</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Calendar className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Instant Booking</h4>
+                    <p className="text-gray-400 text-sm">Books appointments directly on your calendar in real-time</p>
+                  </div>
+                </div>
+              </div>
+              
+              <button 
+                onClick={goToCalendly}
+                className="mt-8 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-8 py-4 text-lg font-medium inline-flex items-center gap-2 cursor-pointer transition-all"
+              >
+                See Inbound AI in Action
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
+              <div className="text-center mb-6">
+                <h3 className="text-white text-xl font-semibold mb-2">Perfect For</h3>
+                <p className="text-gray-400">Service businesses that can't afford to miss calls</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { icon: "🏠", name: "Roofers" },
+                  { icon: "⚡", name: "Electricians" },
+                  { icon: "🔧", name: "Plumbers" },
+                  { icon: "❄️", name: "HVAC" },
+                  { icon: "🏢", name: "Real Estate" },
+                  { icon: "⚖️", name: "Law Firms" },
+                  { icon: "🦷", name: "Dental" },
+                  { icon: "🏥", name: "Medical" },
+                ].map((industry, idx) => (
+                  <div key={idx} className="bg-white/5 rounded-lg p-3 text-center">
+                    <span className="text-2xl">{industry.icon}</span>
+                    <p className="text-white text-sm mt-1">{industry.name}</p>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-6 p-4 bg-gradient-to-r from-cyan-500/20 to-teal-500/20 rounded-lg border border-cyan-500/30">
+                <p className="text-cyan-300 text-sm text-center">
+                  <span className="font-semibold">💡 Did you know?</span> 80% of callers won't leave a voicemail—they'll just call your competitor.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Comparison - Light Gray */}
       <section className="bg-gray-50 py-24 px-6">
         <div className="max-w-4xl mx-auto">
@@ -1412,26 +1555,36 @@ const LandingPage = () => {
 
           {/* Pricing Toggle */}
           <div className="flex justify-center mb-12">
-            <div className="inline-flex bg-gray-100 rounded-full p-1">
+            <div className="inline-flex bg-gray-100 rounded-full p-1 flex-wrap justify-center gap-1">
               <button 
                 onClick={() => setPricingTab('byol')}
-                className={`px-6 py-3 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
                   pricingTab === 'byol' 
                     ? 'bg-white shadow text-gray-900' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                📋 Bring Your Own List
+                📋 Outbound (BYOL)
               </button>
               <button 
                 onClick={() => setPricingTab('full')}
-                className={`px-6 py-3 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
                   pricingTab === 'full' 
                     ? 'bg-gradient-to-r from-cyan-500 to-teal-500 shadow text-white' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                🚀 Full Service (Leads + Calls)
+                🚀 Outbound (Full Service)
+              </button>
+              <button 
+                onClick={() => setPricingTab('inbound')}
+                className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
+                  pricingTab === 'inbound' 
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow text-white' 
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                📞 Inbound AI
               </button>
             </div>
           </div>
@@ -1606,6 +1759,57 @@ const LandingPage = () => {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Inbound Plans */}
+          {pricingTab === 'inbound' && (
+            <>
+              <div className="text-center mb-8">
+                <p className="text-gray-600">Turn every incoming call into a booked appointment—24/7, even when you're busy.</p>
+              </div>
+              <div className="grid md:grid-cols-3 gap-6">
+                {inboundPlans.map((plan, idx) => (
+                  <div 
+                    key={idx}
+                    className={`bg-white rounded-2xl p-8 border-2 transition-all ${
+                      plan.popular 
+                        ? 'border-purple-500 shadow-xl shadow-purple-100 scale-105' 
+                        : 'border-gray-100 hover:border-purple-200'
+                    }`}
+                  >
+                    {plan.popular && (
+                      <span className="inline-block bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold px-3 py-1 rounded-full mb-4">
+                        MOST POPULAR
+                      </span>
+                    )}
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+                    <p className="text-gray-500 text-sm mb-4">{plan.description}</p>
+                    <div className="flex items-baseline gap-1 mb-6">
+                      <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
+                      <span className="text-gray-500">{plan.period}</span>
+                    </div>
+                    <ul className="space-y-3 mb-8">
+                      {plan.features.map((feature, fidx) => (
+                        <li key={fidx} className="flex items-center gap-3 text-sm text-gray-600">
+                          <CheckCircle className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <button 
+                      onClick={goToCalendly}
+                      className={`w-full py-3 rounded-lg font-medium transition-all ${
+                        plan.popular
+                          ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
+                          : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                      }`}
+                    >
+                      {plan.cta}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
 
           <p className="text-center text-gray-500 text-sm mt-8">

@@ -587,6 +587,10 @@ const LandingPage = () => {
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
             Stop wasting time on manual dialing. Let our AI agents find leads, have natural, human-like conversations, and book meetings for you <span className="text-cyan-400">➤</span> on autopilot.
           </p>
+          
+          <p className="text-cyan-400 font-medium mt-4 text-lg">
+            Inbound, outbound, and appointment booking—on autopilot.
+          </p>
 
           {/* Lead Capture Form */}
           <div className="mt-10 max-w-2xl mx-auto">

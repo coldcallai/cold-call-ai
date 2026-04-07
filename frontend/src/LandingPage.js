@@ -589,7 +589,7 @@ const LandingPage = () => {
           </p>
           
           <p className="text-cyan-400 font-medium mt-4 text-lg">
-            Inbound, outbound, and appointment booking—on autopilot.
+            Inbound, outbound, and appointment booking—automatically.
           </p>
 
           {/* Lead Capture Form */}

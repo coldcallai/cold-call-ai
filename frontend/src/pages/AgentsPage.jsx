@@ -84,6 +84,7 @@ const Agents = () => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(null); // agent for voice settings
   const [previewingVoice, setPreviewingVoice] = useState(null); // agent id being previewed
   const [playingAudio, setPlayingAudio] = useState(null); // audio element reference
+  const [editingAgent, setEditingAgent] = useState(null); // agent being edited
 
   const [newAgent, setNewAgent] = useState({
     name: "",
@@ -206,6 +207,26 @@ const Agents = () => {
     }
   };
 
+  const updateAgent = async () => {
+    if (!editingAgent) return;
+    try {
+      await axios.put(`${API}/agents/${editingAgent.id}`, editingAgent);
+      toast.success("Agent updated successfully");
+      setEditingAgent(null);
+      fetchAgents();
+    } catch (error) {
+      toast.error("Failed to update agent");
+    }
+  };
+
+  const openEditDialog = (agent) => {
+    setEditingAgent({
+      ...agent,
+      transfer_enabled: agent.transfer_enabled || false,
+      transfer_phone_number: agent.transfer_phone_number || ""
+    });
+  };
+
   const deleteAgent = async (id) => {
     try {
       await axios.delete(`${API}/agents/${id}`);
@@ -283,15 +304,26 @@ const Agents = () => {
                       </Badge>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    data-testid={`delete-agent-${agent.id}`}
-                    onClick={() => deleteAgent(agent.id)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`edit-agent-${agent.id}`}
+                      onClick={() => openEditDialog(agent)}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`delete-agent-${agent.id}`}
+                      onClick={() => deleteAgent(agent.id)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="space-y-2 text-sm mb-4">
@@ -608,6 +640,114 @@ const Agents = () => {
           }}
         />
       )}
+
+      {/* Edit Agent Dialog */}
+      <Dialog open={!!editingAgent} onOpenChange={() => setEditingAgent(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              Edit Agent
+            </DialogTitle>
+            <DialogDescription>
+              Update agent settings and live transfer configuration
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingAgent && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Agent Name</Label>
+                  <Input
+                    value={editingAgent.name}
+                    onChange={(e) => setEditingAgent({...editingAgent, name: e.target.value})}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input
+                    value={editingAgent.email}
+                    onChange={(e) => setEditingAgent({...editingAgent, email: e.target.value})}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <Label>Calendly Link</Label>
+                <Input
+                  value={editingAgent.calendly_link}
+                  onChange={(e) => setEditingAgent({...editingAgent, calendly_link: e.target.value})}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Live Transfer Settings */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <Label className="text-base font-semibold">Live Transfer</Label>
+                    <p className="text-xs text-gray-500">Transfer interested prospects to your team</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingAgent.transfer_enabled}
+                      onChange={(e) => setEditingAgent({...editingAgent, transfer_enabled: e.target.checked})}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                
+                {editingAgent.transfer_enabled && (
+                  <div className="space-y-3 pl-4 border-l-2 border-blue-200">
+                    <div>
+                      <Label>Transfer Phone Number *</Label>
+                      <Input
+                        data-testid="edit-transfer-phone-input"
+                        value={editingAgent.transfer_phone_number}
+                        onChange={(e) => setEditingAgent({...editingAgent, transfer_phone_number: e.target.value})}
+                        placeholder="+1 (555) 123-4567"
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        AI will ask: "Would you like me to connect you with a team member?" If yes, calls transfer here.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center gap-2">
+                  <Label>Active</Label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingAgent.is_active}
+                      onChange={(e) => setEditingAgent({...editingAgent, is_active: e.target.checked})}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingAgent(null)}>Cancel</Button>
+            <Button 
+              onClick={updateAgent}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

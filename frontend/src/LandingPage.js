@@ -6,7 +6,7 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded
+  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -1612,6 +1612,163 @@ const LandingPage = () => {
                   <li className="flex items-start gap-2">
                     <span className="text-orange-400 font-bold">6.</span>
                     Save — <span className="text-white">that's it!</span>
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Voice Tuning Section */}
+      <section className="bg-gradient-to-b from-[#0B1628] to-[#0f1c32] py-24 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="order-2 lg:order-1">
+              <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
+                <h3 className="text-white text-xl font-semibold mb-6 text-center">Fine-Tune Your AI Voice</h3>
+                
+                {/* Mock Sliders UI */}
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-300 text-sm font-medium">Stability</span>
+                      <span className="text-purple-400 text-sm">30%</span>
+                    </div>
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full w-[30%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>More Expressive</span>
+                      <span>More Consistent</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-300 text-sm font-medium">Clarity</span>
+                      <span className="text-purple-400 text-sm">75%</span>
+                    </div>
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full w-[75%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>Softer</span>
+                      <span>Clearer</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-300 text-sm font-medium">Expressiveness</span>
+                      <span className="text-purple-400 text-sm">50%</span>
+                    </div>
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full w-[50%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>Neutral</span>
+                      <span>Animated</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Quick Presets */}
+                <div className="mt-6 pt-6 border-t border-white/10">
+                  <p className="text-gray-400 text-sm mb-3">Quick Presets</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 text-xs">🎭 Natural</span>
+                    <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-gray-300 text-xs">💼 Professional</span>
+                    <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-gray-300 text-xs">⚡ Energetic</span>
+                    <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-gray-300 text-xs">🧘 Calm</span>
+                  </div>
+                </div>
+                
+                <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
+                  <p className="text-purple-300 text-sm text-center font-medium">
+                    🎤 Tip: Lower stability for more natural, human-like conversations
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="order-1 lg:order-2">
+              <span className="text-purple-400 text-sm font-medium uppercase tracking-wide">Voice Tuning</span>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Sound Human, Not Robotic
+              </h2>
+              <p className="text-gray-400 text-lg mb-8">
+                Fine-tune every aspect of your AI voice. Adjust stability, clarity, and expressiveness to create conversations that feel genuinely human.
+              </p>
+              
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Volume2 className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Stability Control</h4>
+                    <p className="text-gray-400 text-sm">Lower stability = more emotional variation. Higher = more predictable delivery.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Expressiveness</h4>
+                    <p className="text-gray-400 text-sm">Add emotion and energy. Perfect for enthusiastic sales conversations.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Settings className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">One-Click Presets</h4>
+                    <p className="text-gray-400 text-sm">Natural, Professional, Energetic, or Calm—find your perfect tone instantly.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Mic className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Clone Your Own Voice</h4>
+                    <p className="text-gray-400 text-sm">Upload audio samples to create a custom AI voice that sounds exactly like you.</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Setup Instructions */}
+              <div className="mt-8 p-5 bg-white/5 rounded-lg border border-white/10">
+                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-purple-400" />
+                  How to Tune Your Voice
+                </h4>
+                <ol className="text-gray-400 text-sm space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 font-bold">1.</span>
+                    Go to <span className="text-white">Agents</span> page
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 font-bold">2.</span>
+                    Click the edit icon on your agent
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 font-bold">3.</span>
+                    Scroll to <span className="text-white">"Voice Tuning"</span> section
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 font-bold">4.</span>
+                    Adjust sliders or pick a preset
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 font-bold">5.</span>
+                    Save — <span className="text-white">hear the difference!</span>
                   </li>
                 </ol>
               </div>

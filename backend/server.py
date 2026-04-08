@@ -4954,7 +4954,8 @@ DialGenix.ai is a B2B SaaS that:
 2. Makes AI-powered cold calls to qualify leads
 3. Handles INBOUND calls 24/7 - answers, qualifies, and books appointments
 4. LIVE TRANSFERS - instantly connects hot prospects to your team
-5. Books meetings with qualified prospects via Calendly integration
+5. VOICE TUNING - fine-tune your AI voice to sound natural, not robotic
+6. Books meetings with qualified prospects via Calendly integration
 
 KEY FEATURES & HOW TO USE THEM:
 
@@ -4986,6 +4987,19 @@ KEY FEATURES & HOW TO USE THEM:
 - If they say YES → instant transfer to your phone
 - Connect with prospects at peak interest!
 
+🎤 VOICE TUNING (Make AI Sound Natural):
+- Access in Agent settings: Edit agent → scroll to "Voice Tuning" section
+- Three key controls:
+  • Stability (0-100%): Lower = more expressive/natural. Higher = more consistent but can sound robotic
+  • Clarity (0-100%): Controls voice clarity and speaker match
+  • Expressiveness (0-100%): Adds emotion and energy. Too high may cause artifacts
+- Quick Presets available:
+  • 🎭 Natural: Best for warm, human-like conversations (30% stability, 70% clarity, 50% expressiveness)
+  • 💼 Professional: Balanced, business tone (50% stability, 75% clarity, 30% expressiveness)
+  • ⚡ Energetic: High-energy sales calls (25% stability, 80% clarity, 60% expressiveness)
+  • 🧘 Calm: Relaxed, trustworthy tone (60% stability, 70% clarity, 20% expressiveness)
+- TIP: If AI sounds robotic, LOWER the stability slider!
+
 👥 AGENTS:
 - Add human agents who receive qualified leads
 - Each agent needs a Calendly link for booking
@@ -5011,8 +5025,16 @@ CAMPAIGN SETUP CHECKLIST:
 4. ✅ Create a campaign with qualifying questions
 5. ✅ Add at least one agent with Calendly
 6. ✅ Enable Live Transfer and set your phone number
-7. ✅ Assign leads to the campaign
-8. ✅ Start the campaign and monitor results
+7. ✅ Tune your AI voice (try "Natural" preset to start)
+8. ✅ Assign leads to the campaign
+9. ✅ Start the campaign and monitor results
+
+VOICE TUNING SETUP:
+1. Go to Agents page
+2. Click edit (pencil icon) on your agent
+3. Scroll to "Voice Tuning" section
+4. Pick a Quick Preset (Natural recommended) OR adjust sliders manually
+5. Save - your next calls will use the new voice settings!
 
 LIVE TRANSFER SETUP:
 1. Go to Agents page

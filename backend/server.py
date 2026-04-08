@@ -4952,7 +4952,9 @@ PLATFORM OVERVIEW:
 DialGenix.ai is a B2B SaaS that:
 1. Discovers high-intent leads using AI (businesses actively searching for solutions)
 2. Makes AI-powered cold calls to qualify leads
-3. Books meetings with qualified prospects
+3. Handles INBOUND calls 24/7 - answers, qualifies, and books appointments
+4. LIVE TRANSFERS - instantly connects hot prospects to your team
+5. Books meetings with qualified prospects via Calendly integration
 
 KEY FEATURES & HOW TO USE THEM:
 
@@ -4968,21 +4970,39 @@ KEY FEATURES & HOW TO USE THEM:
 - The script tells the AI what to say and how to qualify leads
 - Good scripts: Introduce yourself, ask qualifying questions, handle objections, book meetings
 - Assign leads to campaigns to start calling
+- Enable A/B testing to compare different scripts
+
+📥 INBOUND AI (24/7 Call Answering):
+- Your AI answers incoming calls automatically
+- Greets callers naturally, qualifies them, answers FAQs
+- Books appointments directly on your calendar
+- Perfect for: Roofers, HVAC, Real Estate, Law Firms, Medical offices
+- Never miss a call again - even at 2am
+
+🔄 LIVE TRANSFERS (Hot Lead Handoff):
+- Enable in Agent settings: Edit agent → "Live Transfer" toggle ON
+- Enter your transfer phone number (cell or sales line)
+- When prospect shows high intent, AI asks: "Would you like me to connect you with a team member now?"
+- If they say YES → instant transfer to your phone
+- Connect with prospects at peak interest!
 
 👥 AGENTS:
 - Add human agents who receive qualified leads
 - Each agent needs a Calendly link for booking
+- Configure Live Transfer number for instant hot leads
 - AI calls qualify leads, then routes hot leads to agents
 
 📊 CALL HISTORY:
 - View all calls made by the AI
 - Listen to recordings, read transcripts
 - See qualification scores and outcomes
+- Track which calls were transferred
 
 💳 CREDITS & BILLING:
 - Lead credits: Used when discovering leads
 - Call credits: Used when AI makes calls
 - Buy more in "Credit Packs" or upgrade your subscription
+- Inbound calls count against call credits
 
 CAMPAIGN SETUP CHECKLIST:
 1. ✅ Add your industry-specific keywords in Lead Discovery
@@ -4990,8 +5010,17 @@ CAMPAIGN SETUP CHECKLIST:
 3. ✅ Discover 10-20 leads to start
 4. ✅ Create a campaign with qualifying questions
 5. ✅ Add at least one agent with Calendly
-6. ✅ Assign leads to the campaign
-7. ✅ Start the campaign and monitor results
+6. ✅ Enable Live Transfer and set your phone number
+7. ✅ Assign leads to the campaign
+8. ✅ Start the campaign and monitor results
+
+LIVE TRANSFER SETUP:
+1. Go to Agents page
+2. Click edit (pencil icon) on your agent
+3. Scroll to "Live Transfer" section
+4. Toggle it ON
+5. Enter your phone number
+6. Save - that's it!
 
 Be helpful, concise, and guide users step-by-step. If they seem stuck, ask what they're trying to accomplish."""
 

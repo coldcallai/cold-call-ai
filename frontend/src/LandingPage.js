@@ -1500,14 +1500,14 @@ const LandingPage = () => {
               <div className="space-y-6">
                 <div>
                   <h4 className="text-white font-semibold text-lg mb-3">How It Works</h4>
-                  <p className="text-gray-400 mb-4">When a prospect shows strong interest, DialGenix takes action in real time:</p>
+                  <p className="text-gray-400 mb-4">When a prospect shows interest or curiosity, DialGenix takes action in real time:</p>
                   
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-orange-400 text-xs font-bold">1</span>
                       </div>
-                      <p className="text-gray-300">Detects buying signals and high intent automatically</p>
+                      <p className="text-gray-300">Detects interest and curiosity automatically</p>
                     </div>
                     
                     <div className="flex items-start gap-3">

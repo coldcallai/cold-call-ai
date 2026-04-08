@@ -1484,6 +1484,98 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Live Transfer Section */}
+      <section className="bg-gradient-to-b from-[#0f1c32] to-[#0B1628] py-24 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <span className="text-orange-400 text-sm font-medium uppercase tracking-wide">Live Transfers</span>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Instant Live Transfers When It Matters Most
+              </h2>
+              <p className="text-gray-400 text-lg mb-8">
+                Turn high-intent conversations into real opportunities—instantly.
+              </p>
+              
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-white font-semibold text-lg mb-3">How It Works</h4>
+                  <p className="text-gray-400 mb-4">When a prospect shows strong interest, DialGenix takes action in real time:</p>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-orange-400 text-xs font-bold">1</span>
+                      </div>
+                      <p className="text-gray-300">Detects buying signals and high intent automatically</p>
+                    </div>
+                    
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-orange-400 text-xs font-bold">2</span>
+                      </div>
+                      <div>
+                        <p className="text-gray-300">Asks:</p>
+                        <p className="text-orange-300 italic mt-1">"Would you like me to connect you with a team member now to go over this in more detail?"</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-orange-400 text-xs font-bold">3</span>
+                      </div>
+                      <p className="text-gray-300">If they say yes → <span className="text-white font-medium">instantly transfers the call to your team</span></p>
+                    </div>
+                    
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-orange-400 text-xs font-bold">4</span>
+                      </div>
+                      <div>
+                        <p className="text-gray-300">Smooth handoff:</p>
+                        <p className="text-orange-300 italic mt-1">"Great! Let me connect you with a team member right now. Please hold."</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
+              <h3 className="text-white text-xl font-semibold mb-6 text-center">Why It Matters</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                  <Zap className="w-8 h-8 text-orange-400 flex-shrink-0" />
+                  <p className="text-white">Connect with prospects at <span className="text-orange-400 font-semibold">peak interest</span></p>
+                </div>
+                
+                <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                  <Phone className="w-8 h-8 text-orange-400 flex-shrink-0" />
+                  <p className="text-white">Eliminate delays that <span className="text-orange-400 font-semibold">cost you deals</span></p>
+                </div>
+                
+                <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                  <Target className="w-8 h-8 text-orange-400 flex-shrink-0" />
+                  <p className="text-white">Increase conversions with <span className="text-orange-400 font-semibold">real-time human follow-up</span></p>
+                </div>
+                
+                <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                  <CheckCircle className="w-8 h-8 text-orange-400 flex-shrink-0" />
+                  <p className="text-white">No more <span className="text-orange-400 font-semibold">missed high-value opportunities</span></p>
+                </div>
+              </div>
+              
+              <div className="mt-6 p-4 bg-gradient-to-r from-orange-500/20 to-amber-500/20 rounded-lg border border-orange-500/30">
+                <p className="text-orange-300 text-sm text-center font-medium">
+                  🔥 The Result: Your hottest leads go from conversation → live conversation with your team in seconds.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Comparison - Light Gray */}
       <section className="bg-gray-50 py-24 px-6">
         <div className="max-w-4xl mx-auto">

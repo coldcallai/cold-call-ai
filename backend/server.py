@@ -10029,7 +10029,7 @@ async def call_yourself_demo(
         user = await db.users.find_one({"user_id": user_id})
         if user:
             demo_calls_used = user.get("demo_calls_used", 0)
-            MAX_DEMO_CALLS = 3
+            MAX_DEMO_CALLS = 5
             if demo_calls_used >= MAX_DEMO_CALLS:
                 raise HTTPException(
                     status_code=400, 
@@ -10194,7 +10194,7 @@ async def get_demo_calls_remaining(current_user: Dict = Depends(get_current_user
         demo_calls_used = 0
     else:
         demo_calls_used = user.get("demo_calls_used", 0)
-    MAX_DEMO_CALLS = 2
+    MAX_DEMO_CALLS = 5
     
     return {
         "demo_calls_used": demo_calls_used,

@@ -12,6 +12,7 @@ import axios from "axios";
 import { toast } from "sonner";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
+const CALENDLY_LINK = "https://calendly.com/dialgenix/15-30min";
 
 // Call Yourself Demo Component for Landing Page
 const CallYourselfHero = () => {
@@ -567,108 +568,40 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section - Dark */}
-      <section className="bg-[#0B1628] pt-20 pb-32 px-6 relative overflow-hidden">
+      <section className="bg-[#0B1628] pt-20 pb-24 px-6 relative overflow-hidden">
         {/* Gradient orb effect */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-cyan-500/20 via-teal-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         
         <div className="max-w-5xl mx-auto text-center relative">
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">
             <span className="text-white">The </span>
-            <span className="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">AI Cold Calling</span>
+            <span className="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">AI Calling Platform</span>
             <br />
-            <span className="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">Platform </span>
-            <span className="text-white">for modern sales</span>
+            <span className="text-white">for Modern Sales</span>
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Stop wasting time on manual dialing. Let our AI agents find leads, have natural, human-like conversations, and book meetings for you <span className="text-cyan-400">➤</span> on autopilot.
+            Handle inbound calls, outbound outreach, and appointment booking—on autopilot.
           </p>
           
+          {/* Trust Line - NEW */}
           <p className="text-cyan-400 font-medium mt-4 text-lg">
-            Inbound, outbound prospecting, live transfers, and appointment booking—automatically.
+            Natural, human-like conversations that actually convert.
           </p>
 
-          {/* Lead Capture Form */}
-          <div className="mt-10 max-w-2xl mx-auto">
-            <form onSubmit={handleDemoRequest} className="bg-gray-800/60 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6 shadow-xl shadow-cyan-500/5">
-              <p className="text-white font-semibold text-lg mb-4 text-center">Get a Free Demo</p>
-              <div className="grid md:grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  value={demoForm.name}
-                  onChange={(e) => setDemoForm({...demoForm, name: e.target.value})}
-                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
-                  required
-                />
-                <input
-                  type="email"
-                  placeholder="Business Email"
-                  value={demoForm.email}
-                  onChange={(e) => setDemoForm({...demoForm, email: e.target.value})}
-                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
-                  required
-                />
-                <input
-                  type="tel"
-                  placeholder="Phone Number"
-                  value={demoForm.phone}
-                  onChange={(e) => setDemoForm({...demoForm, phone: e.target.value})}
-                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
-                  required
-                />
-                <select
-                  value={demoForm.companySize}
-                  onChange={(e) => setDemoForm({...demoForm, companySize: e.target.value})}
-                  className="w-full px-4 py-3 bg-gray-900/80 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
-                  required
-                >
-                  <option value="" className="text-gray-500">Company Size</option>
-                  <option value="1-10">1-10 employees</option>
-                  <option value="11-50">11-50 employees</option>
-                  <option value="51-200">51-200 employees</option>
-                  <option value="201-500">201-500 employees</option>
-                  <option value="500+">500+ employees</option>
-                </select>
-              </div>
-              <button
-                type="submit"
-                disabled={demoSubmitting}
-                className="w-full mt-4 py-3 px-6 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {demoSubmitting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Calendar className="w-5 h-5" />
-                    Book Your Free Demo
-                  </>
-                )}
-              </button>
-              {demoSuccess && (
-                <p className="mt-3 text-center text-emerald-400 text-sm">
-                  ✓ Thanks! We'll contact you within 24 hours to schedule your demo.
-                </p>
-              )}
-              <p className="text-xs text-gray-500 text-center mt-3">
-                Free 15-min consultation • See results first
-              </p>
-            </form>
-          </div>
-
+          {/* Primary CTA */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
-            <a href="#demo">
-              <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-8 py-6 text-base font-medium border-0">
-                <Play className="w-4 h-4 mr-2" />
-                See the demo
-              </Button>
-            </a>
-            <a href="#how-it-works">
-              <Button variant="outline" className="rounded-full border-gray-600 text-white hover:bg-white/10 bg-transparent px-8 py-6 text-base">
-                Learn more about DialGenix.ai
+            <Button 
+              onClick={() => window.open(CALENDLY_LINK, '_blank')}
+              className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-7 text-lg font-semibold border-0 shadow-lg shadow-cyan-500/25"
+            >
+              <Calendar className="w-5 h-5 mr-2" />
+              Book a Demo
+            </Button>
+            <a href="#voice-samples">
+              <Button variant="outline" className="rounded-full border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 bg-transparent px-8 py-6 text-base">
+                <Headphones className="w-4 h-4 mr-2" />
+                Hear Real Call Examples
               </Button>
             </a>
           </div>
@@ -677,27 +610,20 @@ const LandingPage = () => {
           <div className="flex items-center justify-center gap-6 mt-8 flex-wrap">
             <span className="flex items-center gap-2 text-gray-300 text-sm">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
-              Lead Discovery
+              Inbound Calls
             </span>
             <span className="flex items-center gap-2 text-gray-300 text-sm">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
-              AI Conversations
+              Outbound Calls
+            </span>
+            <span className="flex items-center gap-2 text-gray-300 text-sm">
+              <CheckCircle className="w-4 h-4 text-cyan-400" />
+              Live Transfers
             </span>
             <span className="flex items-center gap-2 text-gray-300 text-sm">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
               Auto-Booking
             </span>
-            <span className="flex items-center gap-2 text-gray-300 text-sm">
-              <CheckCircle className="w-4 h-4 text-cyan-400" />
-              VM Drops
-            </span>
-          </div>
-
-          {/* Human-like AI callout */}
-          <div className="mt-10 max-w-2xl mx-auto">
-            <p className="text-gray-200 text-center text-base leading-relaxed bg-gradient-to-r from-cyan-600/20 via-teal-600/30 to-cyan-600/20 border border-cyan-400/40 rounded-xl px-6 py-4 backdrop-blur-sm shadow-lg shadow-cyan-500/10">
-              Our AI voice agents don't just talk—they <span className="text-cyan-300 font-semibold">connect</span>. Powered by voice cloning and trained with human-like energy, warmth, and natural conversation flow, they build rapport and qualify leads just like your best sales rep would.
-            </p>
           </div>
 
           {/* Trust logos */}
@@ -813,6 +739,61 @@ const LandingPage = () => {
                 DNC List Verified
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PROBLEM SECTION - Why This Matters */}
+      <section className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-20 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <span className="text-red-400 text-sm font-medium uppercase tracking-wide">The Problem</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-4">
+              Most Leads Are Lost Before You Ever Speak to Them
+            </h2>
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+              Every minute you wait to respond, you're losing potential customers to faster competitors.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+              <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Phone className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-white font-semibold mb-2">Missed Calls = Lost Revenue</h3>
+              <p className="text-gray-400 text-sm">78% of customers buy from whoever responds first</p>
+            </div>
+            
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+              <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-white font-semibold mb-2">Slow Follow-Up Kills Conversions</h3>
+              <p className="text-gray-400 text-sm">Lead interest drops 80% after just 5 minutes</p>
+            </div>
+            
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+              <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-white font-semibold mb-2">Manual Dialing Wastes Time</h3>
+              <p className="text-gray-400 text-sm">Reps spend 65% of time on non-selling activities</p>
+            </div>
+            
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+              <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BarChart3 className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-white font-semibold mb-2">Hiring Reps Is Expensive</h3>
+              <p className="text-gray-400 text-sm">$50K+/year per SDR with 3-month ramp time</p>
+            </div>
+          </div>
+          
+          <div className="text-center mt-10">
+            <p className="text-cyan-400 text-lg font-medium">
+              What if you could respond to every lead instantly—24/7—without hiring?
+            </p>
           </div>
         </div>
       </section>
@@ -1347,13 +1328,14 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* How It Works - Light Gray */}
+      {/* How It Works - Simple System */}
       <section id="how-it-works" className="bg-gray-50 py-24 px-6">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Your plays, your way</h2>
+            <span className="text-cyan-600 text-sm font-medium uppercase tracking-wide">Simple Process</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">How It Works</h2>
             <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-              With DialGenix.ai, the orchestration of tasks for both AI Agents and human reps happens in a single workflow.
+              Four steps to automate your sales outreach
             </p>
           </div>
 
@@ -1361,18 +1343,179 @@ const LandingPage = () => {
             {steps.map((step, idx) => {
               const Icon = step.icon;
               return (
-                <div key={idx} className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-4 mb-6">
-                    <span className="text-4xl font-bold text-gray-200">{step.number}</span>
-                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center">
-                      <Icon className="w-6 h-6 text-white" />
-                    </div>
+                <div key={idx} className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow text-center">
+                  <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <Icon className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">{step.title}</h3>
-                  <p className="text-gray-600 leading-relaxed">{step.description}</p>
+                  <span className="text-sm font-bold text-cyan-600">{step.number}</span>
+                  <h3 className="text-xl font-semibold text-gray-900 mt-1 mb-3">{step.title}</h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">{step.description}</p>
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* BENEFITS / OUTCOMES Section */}
+      <section className="bg-white py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="text-emerald-600 text-sm font-medium uppercase tracking-wide">Results</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Why It's Better</h2>
+            <p className="text-gray-600 text-lg">Sell results, not features</p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="flex items-start gap-4 p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
+              <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Calendar className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Book More Meetings Automatically</h3>
+                <p className="text-gray-600">AI qualifies leads and books directly to your calendar—you just show up and close.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-4 p-6 bg-cyan-50 rounded-2xl border border-cyan-100">
+              <div className="w-12 h-12 bg-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Respond to Every Lead Instantly</h3>
+                <p className="text-gray-600">No more 5-minute delays. AI responds in seconds—when interest is at its peak.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-4 p-6 bg-purple-50 rounded-2xl border border-purple-100">
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Reduce Workload on Your Team</h3>
+                <p className="text-gray-600">Let AI handle the grunt work. Your reps focus on high-value conversations only.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-4 p-6 bg-orange-50 rounded-2xl border border-orange-100">
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Target className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Never Miss High-Intent Prospects</h3>
+                <p className="text-gray-600">24/7 coverage means every lead gets immediate attention—even at 2am.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* VOICE SAMPLES Section - Moved Up */}
+      <section id="voice-samples" className="bg-gradient-to-b from-[#0B1628] to-[#0f1c32] py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <span className="text-purple-400 text-sm font-medium uppercase tracking-wide">Remove The Objection</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-4">
+              AI That Sounds Human—Not Robotic
+            </h2>
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+              Hear the difference. Our AI agents have natural energy, warmth, and conversation flow.
+            </p>
+          </div>
+          
+          {/* Call Yourself Demo - Prominent */}
+          <div className="mb-12">
+            <CallYourselfHero />
+          </div>
+          
+          {/* Voice Tuning Highlight */}
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h3 className="text-2xl font-bold text-white mb-6">Fine-Tune Every Aspect</h3>
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Volume2 className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Stability Control</h4>
+                    <p className="text-gray-400 text-sm">Lower = more expressive. Higher = more consistent.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Expressiveness</h4>
+                    <p className="text-gray-400 text-sm">Add emotion and energy for enthusiastic calls.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Mic className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Clone Your Voice</h4>
+                    <p className="text-gray-400 text-sm">Upload samples to create AI that sounds like you.</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Quick Presets */}
+              <div className="mt-8">
+                <p className="text-gray-400 text-sm mb-3">One-Click Presets:</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 text-sm">🎭 Natural</span>
+                  <span className="px-4 py-2 bg-white/10 border border-white/20 rounded-full text-gray-300 text-sm">💼 Professional</span>
+                  <span className="px-4 py-2 bg-white/10 border border-white/20 rounded-full text-gray-300 text-sm">⚡ Energetic</span>
+                  <span className="px-4 py-2 bg-white/10 border border-white/20 rounded-full text-gray-300 text-sm">🧘 Calm</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Mock Voice Tuning UI */}
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
+              <h4 className="text-white text-lg font-semibold mb-6 text-center">Voice Tuning Controls</h4>
+              <div className="space-y-6">
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-300 text-sm">Stability</span>
+                    <span className="text-purple-400 text-sm">30%</span>
+                  </div>
+                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full w-[30%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Expressive</span>
+                    <span>Consistent</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-300 text-sm">Clarity</span>
+                    <span className="text-purple-400 text-sm">75%</span>
+                  </div>
+                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full w-[75%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-300 text-sm">Expressiveness</span>
+                    <span className="text-purple-400 text-sm">50%</span>
+                  </div>
+                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full w-[50%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
+                <p className="text-purple-300 text-sm text-center">
+                  💡 Tip: Lower stability for more human-like conversations
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1612,163 +1755,6 @@ const LandingPage = () => {
                   <li className="flex items-start gap-2">
                     <span className="text-orange-400 font-bold">6.</span>
                     Save — <span className="text-white">that's it!</span>
-                  </li>
-                </ol>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Voice Tuning Section */}
-      <section className="bg-gradient-to-b from-[#0B1628] to-[#0f1c32] py-24 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1">
-              <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
-                <h3 className="text-white text-xl font-semibold mb-6 text-center">Fine-Tune Your AI Voice</h3>
-                
-                {/* Mock Sliders UI */}
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300 text-sm font-medium">Stability</span>
-                      <span className="text-purple-400 text-sm">30%</span>
-                    </div>
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full w-[30%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>More Expressive</span>
-                      <span>More Consistent</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300 text-sm font-medium">Clarity</span>
-                      <span className="text-purple-400 text-sm">75%</span>
-                    </div>
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full w-[75%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Softer</span>
-                      <span>Clearer</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300 text-sm font-medium">Expressiveness</span>
-                      <span className="text-purple-400 text-sm">50%</span>
-                    </div>
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full w-[50%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Neutral</span>
-                      <span>Animated</span>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Quick Presets */}
-                <div className="mt-6 pt-6 border-t border-white/10">
-                  <p className="text-gray-400 text-sm mb-3">Quick Presets</p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 text-xs">🎭 Natural</span>
-                    <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-gray-300 text-xs">💼 Professional</span>
-                    <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-gray-300 text-xs">⚡ Energetic</span>
-                    <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-gray-300 text-xs">🧘 Calm</span>
-                  </div>
-                </div>
-                
-                <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
-                  <p className="text-purple-300 text-sm text-center font-medium">
-                    🎤 Tip: Lower stability for more natural, human-like conversations
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="order-1 lg:order-2">
-              <span className="text-purple-400 text-sm font-medium uppercase tracking-wide">Voice Tuning</span>
-              <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                Sound Human, Not Robotic
-              </h2>
-              <p className="text-gray-400 text-lg mb-8">
-                Fine-tune every aspect of your AI voice. Adjust stability, clarity, and expressiveness to create conversations that feel genuinely human.
-              </p>
-              
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Volume2 className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold">Stability Control</h4>
-                    <p className="text-gray-400 text-sm">Lower stability = more emotional variation. Higher = more predictable delivery.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold">Expressiveness</h4>
-                    <p className="text-gray-400 text-sm">Add emotion and energy. Perfect for enthusiastic sales conversations.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Settings className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold">One-Click Presets</h4>
-                    <p className="text-gray-400 text-sm">Natural, Professional, Energetic, or Calm—find your perfect tone instantly.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Mic className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold">Clone Your Own Voice</h4>
-                    <p className="text-gray-400 text-sm">Upload audio samples to create a custom AI voice that sounds exactly like you.</p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Setup Instructions */}
-              <div className="mt-8 p-5 bg-white/5 rounded-lg border border-white/10">
-                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-purple-400" />
-                  How to Tune Your Voice
-                </h4>
-                <ol className="text-gray-400 text-sm space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold">1.</span>
-                    Go to <span className="text-white">Agents</span> page
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold">2.</span>
-                    Click the edit icon on your agent
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold">3.</span>
-                    Scroll to <span className="text-white">"Voice Tuning"</span> section
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold">4.</span>
-                    Adjust sliders or pick a preset
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold">5.</span>
-                    Save — <span className="text-white">hear the difference!</span>
                   </li>
                 </ol>
               </div>
@@ -2119,6 +2105,45 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* SETUP + EASE Section */}
+      <section className="bg-gradient-to-b from-gray-50 to-white py-20 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <span className="text-emerald-600 text-sm font-medium uppercase tracking-wide">Easy Onboarding</span>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">
+            Get Started in Minutes
+          </h2>
+          <p className="text-gray-600 text-lg mb-12 max-w-2xl mx-auto">
+            No technical setup required. We guide you every step of the way.
+          </p>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+              <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-7 h-7 text-emerald-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Technical Setup</h3>
+              <p className="text-gray-600 text-sm">Connect in a few clicks. No coding, no developers needed.</p>
+            </div>
+            
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+              <div className="w-14 h-14 bg-cyan-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Users className="w-7 h-7 text-cyan-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Fully Guided Onboarding</h3>
+              <p className="text-gray-600 text-sm">Our team walks you through setup and optimization.</p>
+            </div>
+            
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+              <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-7 h-7 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Chat Support Anytime</h3>
+              <p className="text-gray-600 text-sm">Questions? Our team responds in minutes, not days.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FAQ - Light Gray */}
       <section id="faq" className="bg-gray-50 py-24 px-6">
         <div className="max-w-3xl mx-auto">
@@ -2151,35 +2176,37 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* CTA - Dark */}
+      {/* FINAL CTA - Dark */}
       <section className="bg-[#0B1628] py-24 px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Ready to automate your outbound?</h2>
+          <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
+            Start Booking More Calls—Automatically
+          </h2>
           <p className="text-gray-400 text-lg mb-8 max-w-xl mx-auto">
-            Experience the AI voice yourself or book a personalized walkthrough with our team.
+            Join businesses that are closing more deals with AI-powered calling.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button 
-              onClick={() => document.getElementById('demo').scrollIntoView({ behavior: 'smooth' })}
-              className="bg-white hover:bg-gray-100 text-gray-900 rounded-full px-8 py-6 font-medium border-0 flex items-center gap-2"
-            >
-              <Phone className="w-5 h-5" />
-              Try the AI Voice
-            </Button>
-            <a 
-              href="https://calendly.com/dialgenix" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-full px-8 py-4 font-medium"
+              onClick={() => window.open(CALENDLY_LINK, '_blank')}
+              className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-full px-10 py-7 text-lg font-semibold border-0 flex items-center gap-2 shadow-lg shadow-cyan-500/25"
             >
               <Calendar className="w-5 h-5" />
-              Book a Live Demo
-            </a>
+              Book Your Demo
+            </Button>
+            <Button 
+              onClick={() => document.getElementById('voice-samples').scrollIntoView({ behavior: 'smooth' })}
+              variant="outline"
+              className="border-white/30 text-white hover:bg-white/10 rounded-full px-8 py-6 font-medium flex items-center gap-2 bg-transparent"
+            >
+              <Headphones className="w-5 h-5" />
+              Hear the AI First
+            </Button>
           </div>
 
-          <p className="text-gray-500 text-sm mt-6">
-            Book a free demo today
+          <p className="text-cyan-400 text-sm mt-8 flex items-center justify-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            We'll help you get set up in minutes
           </p>
         </div>
       </section>

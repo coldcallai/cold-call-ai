@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VoiceCloneModal, VoiceSettingsModal } from "@/components/VoiceCloning";
+import TrustLine from "@/components/TrustLine";
 import {
   Users, Plus, Trash2, Edit3, Mic, Volume2, RefreshCw, Phone, Play, Pause, Mail, Zap, Settings, Calendar
 } from "lucide-react";
@@ -245,9 +246,7 @@ const Agents = () => {
             Agents
           </h1>
           <p className="text-gray-500 mt-1">Manage sales agents and their Calendly links</p>
-          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
-            💡 Create an agent for each product/service. Qualified leads are auto-routed to book via their Calendly link.
-          </p>
+          <TrustLine className="mt-2" />
         </div>
         <div className="flex gap-2">
           <Button 

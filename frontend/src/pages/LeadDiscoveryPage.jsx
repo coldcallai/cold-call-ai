@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import StatusBadge from "@/components/StatusBadge";
+import TrustLine from "@/components/TrustLine";
 import BookingDialog from "@/components/BookingDialog";
 import {
   Phone, Calendar, Search, Plus, Trash2, CheckCircle, Clock,
@@ -409,9 +410,7 @@ const LeadDiscovery = () => {
             Lead Discovery
           </h1>
           <p className="text-gray-500 mt-1">Find businesses actively searching for payment solutions</p>
-          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
-            💡 Powered by Apollo.io's 275M+ B2B database. Search by industry, job title, or buying intent signals.
-          </p>
+          <TrustLine className="mt-2" />
         </div>
         <div className="flex items-center gap-2">
           {unverifiedCount > 0 && (

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import StatusBadge from "@/components/StatusBadge";
+import TrustLine from "@/components/TrustLine";
 import {
   Target, Plus, Play, Pause, Trash2, Clock, Settings, RefreshCw, PhoneOff, Mail
 } from "lucide-react";
@@ -151,9 +152,7 @@ const Campaigns = () => {
             Campaigns
           </h1>
           <p className="text-gray-500 mt-1">Manage your AI calling campaigns</p>
-          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
-            💡 Each campaign has its own script and settings. Create separate campaigns for different products or audiences.
-          </p>
+          <TrustLine className="mt-2" />
         </div>
         <Button 
           data-testid="create-campaign-btn"

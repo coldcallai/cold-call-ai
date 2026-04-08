@@ -1159,6 +1159,10 @@ const LandingPage = () => {
               <ArrowRight className="w-5 h-5 ml-2" />
             </button>
             <p className="text-gray-500 mt-4">Book a demo and see DialGenix in action.</p>
+            <p className="text-cyan-400 text-sm mt-2 flex items-center justify-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Questions about setup? Chat with us anytime—we'll help you get live in minutes.
+            </p>
           </div>
         </div>
       </section>
@@ -1944,6 +1948,10 @@ const LandingPage = () => {
           )}
           <p className="text-center text-gray-400 text-sm mt-3">
             Need more capacity? <span className="text-cyan-600 font-medium">Upgrade anytime</span> from your dashboard.
+          </p>
+          <p className="text-center text-cyan-600 text-sm mt-4 flex items-center justify-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            Questions about setup? Chat with us anytime—we'll help you get live in minutes.
           </p>
         </div>
       </section>

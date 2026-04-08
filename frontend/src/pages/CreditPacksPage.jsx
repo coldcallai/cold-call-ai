@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Package, CreditCard, Zap, Phone, ShoppingCart, CheckCircle, RefreshCw, Clock, Search
 } from "lucide-react";
+import TrustLine from "@/components/TrustLine";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 

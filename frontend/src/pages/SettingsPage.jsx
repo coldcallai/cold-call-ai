@@ -17,6 +17,7 @@ import {
   Settings, Phone, Mail, CreditCard, Shield, Users, Plus, Trash2, 
   RefreshCw, ExternalLink, AlertCircle, CheckCircle, Building2, Calendar, ChevronRight, Database, Search, Zap
 } from "lucide-react";
+import TrustLine from "@/components/TrustLine";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 

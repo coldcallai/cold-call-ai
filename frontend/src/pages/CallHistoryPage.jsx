@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import StatusBadge from "@/components/StatusBadge";
+import TrustLine from "@/components/TrustLine";
 import {
   History, Phone, PhoneOff, Clock, Play, Download, RefreshCw, ChevronRight, CheckCircle, XCircle, User
 } from "lucide-react";
@@ -157,9 +158,7 @@ const CallHistory = () => {
             Call History
           </h1>
           <p className="text-gray-500 mt-1">View recordings, transcripts, and qualification results</p>
-          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
-            💡 Click any call to see the full transcript, qualification score, and play the recording.
-          </p>
+          <TrustLine className="mt-2" />
         </div>
         
         {/* Feature badges */}

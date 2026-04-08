@@ -48,6 +48,7 @@ import { VoiceCloneModal, VoiceSettingsModal } from "@/components/VoiceCloning";
 import { HelpButton } from "@/components/ProductTour";
 import Sidebar from "@/components/Sidebar";
 import StatusBadge from "@/components/StatusBadge";
+import TrustLine from "@/components/TrustLine";
 import FunnelPage from "@/pages/FunnelPage";
 import LeadDiscovery from "@/pages/LeadDiscoveryPage";
 import BookingDialog from "@/components/BookingDialog";

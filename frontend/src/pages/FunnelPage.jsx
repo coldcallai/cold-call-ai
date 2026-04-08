@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import BookingDialog from "@/components/BookingDialog";
+import TrustLine from "@/components/TrustLine";
 import {
   Plus, Phone, Calendar, CheckCircle, Zap, PhoneCall,
   UserCheck, CalendarCheck, ArrowRight
@@ -125,9 +126,7 @@ const FunnelPage = () => {
             Sales Funnel
           </h1>
           <p className="text-gray-500 mt-1">Track leads through your qualification pipeline</p>
-          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
-            💡 Drag leads between stages or click to call. Select a campaign first to start calling.
-          </p>
+          <TrustLine className="mt-2" />
         </div>
         <div className="flex items-center gap-3">
           <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>

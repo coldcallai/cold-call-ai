@@ -6,7 +6,7 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare, PhoneCall, Mail
+  Search, MessageSquare, PhoneCall, Mail, Settings
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -1570,6 +1570,40 @@ const LandingPage = () => {
                 <p className="text-orange-300 text-sm text-center font-medium">
                   🔥 The Result: Your hottest leads go from conversation → live conversation with your team in seconds.
                 </p>
+              </div>
+              
+              {/* Setup Instructions */}
+              <div className="mt-6 p-5 bg-white/5 rounded-lg border border-white/10">
+                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-orange-400" />
+                  Quick Setup
+                </h4>
+                <ol className="text-gray-400 text-sm space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-400 font-bold">1.</span>
+                    Go to <span className="text-white">Agents</span> page
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-400 font-bold">2.</span>
+                    Edit your agent (or create new)
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-400 font-bold">3.</span>
+                    Scroll to <span className="text-white">"Live Transfer"</span> section
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-400 font-bold">4.</span>
+                    Toggle it <span className="text-green-400">ON</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-400 font-bold">5.</span>
+                    Enter your transfer phone number
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-400 font-bold">6.</span>
+                    Save — <span className="text-white">that's it!</span>
+                  </li>
+                </ol>
               </div>
             </div>
           </div>

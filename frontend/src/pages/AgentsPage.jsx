@@ -94,7 +94,9 @@ const Agents = () => {
     max_daily_calls: 50,
     use_case: "sales_cold_calling",
     system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt,
-    language: "en"
+    language: "en",
+    transfer_enabled: false,
+    transfer_phone_number: ""
   });
 
   const fetchAgents = async () => {
@@ -531,6 +533,43 @@ const Agents = () => {
                 <code className="bg-gray-100 px-1 rounded ml-1">{'{company}'}</code> = company name, 
                 <code className="bg-gray-100 px-1 rounded ml-1">{'{contact_name}'}</code> = lead's name (if available)
               </p>
+            </div>
+
+            {/* Live Transfer Settings */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <Label className="text-base font-semibold">Live Transfer</Label>
+                  <p className="text-xs text-gray-500">Transfer interested prospects to a human team member</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newAgent.transfer_enabled}
+                    onChange={(e) => setNewAgent({...newAgent, transfer_enabled: e.target.checked})}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+              
+              {newAgent.transfer_enabled && (
+                <div className="space-y-3 pl-4 border-l-2 border-blue-200">
+                  <div>
+                    <Label>Transfer Phone Number *</Label>
+                    <Input
+                      data-testid="transfer-phone-input"
+                      value={newAgent.transfer_phone_number}
+                      onChange={(e) => setNewAgent({...newAgent, transfer_phone_number: e.target.value})}
+                      placeholder="+1 (555) 123-4567"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      When a prospect wants to speak with a human, the AI will ask: "Would you like me to connect you with a team member now?" and transfer to this number.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

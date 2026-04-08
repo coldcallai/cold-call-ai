@@ -275,6 +275,9 @@ class Agent(BaseModel):
     max_daily_calls: int = 50
     assigned_leads: int = 0
     booked_meetings: int = 0  # Track meetings booked for this agent
+    # Live Transfer Settings
+    transfer_enabled: bool = False  # Enable live transfer to human
+    transfer_phone_number: Optional[str] = None  # Phone number to transfer calls to
     # Use Case & System Prompt
     use_case: str = "sales_cold_calling"  # sales_cold_calling, appointment_setter, receptionist, customer_service, answering_service
     system_prompt: Optional[str] = None  # Custom AI instructions for this agent
@@ -298,6 +301,8 @@ class AgentCreate(BaseModel):
     voice_type: str = "preset"
     preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     voice_settings: Optional[Dict[str, Any]] = None
+    transfer_enabled: bool = False
+    transfer_phone_number: Optional[str] = None
 
 class Campaign(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -11126,6 +11131,73 @@ async def get_call_transcript(
         "status": "completed"
     }
 
+@api_router.post("/calls/{call_id}/transfer")
+async def live_transfer_call(
+    call_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Transfer an active call to a human team member.
+    Uses Twilio's warm transfer to connect the prospect with a live agent.
+    """
+    # Get the call details
+    call = await db.calls.find_one({"id": call_id})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    # Get the agent to find transfer number
+    agent = await db.agents.find_one({"id": call.get("agent_id")})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    transfer_number = agent.get("transfer_phone_number")
+    if not transfer_number:
+        raise HTTPException(status_code=400, detail="No transfer number configured for this agent")
+    
+    try:
+        # Get Twilio credentials
+        twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+        twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+        
+        if not twilio_sid or not twilio_token:
+            raise HTTPException(status_code=500, detail="Twilio not configured")
+        
+        client = Client(twilio_sid, twilio_token)
+        
+        # Generate TwiML for warm transfer
+        twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">Please hold while I connect you with a team member.</Say>
+    <Dial callerId="{call.get('from_number', '')}">
+        <Number>{transfer_number}</Number>
+    </Dial>
+</Response>'''
+        
+        # Update the call with the transfer TwiML
+        client.calls(call.get("twilio_sid")).update(twiml=twiml)
+        
+        # Log the transfer
+        await db.calls.update_one(
+            {"id": call_id},
+            {"$set": {
+                "transferred": True,
+                "transferred_to": transfer_number,
+                "transferred_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        logger.info(f"Call {call_id} transferred to {transfer_number}")
+        
+        return {
+            "success": True,
+            "message": "Call transferred successfully",
+            "transferred_to": transfer_number
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to transfer call {call_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Transfer failed: {str(e)}")
+
 @api_router.post("/calls/{call_id}/transcribe")
 async def request_transcription(
     call_id: str,
@@ -11506,6 +11578,57 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         ai_response = await generate_sales_response(transcript, messages, lead, campaign)
                         logger.info(f"AI: {ai_response}")
                         
+                        # Check if AI requested a live transfer
+                        if "[TRANSFER_NOW]" in ai_response:
+                            logger.info(f"Transfer requested for call {call_id}")
+                            # Get agent's transfer number
+                            agent = await db.agents.find_one({"id": campaign.get("agent_id")})
+                            transfer_number = agent.get("transfer_phone_number") if agent else None
+                            
+                            if transfer_number:
+                                await send_tts_to_stream(
+                                    websocket, stream_sid,
+                                    "Great! Let me connect you with a team member right now. Please hold for just a moment."
+                                )
+                                await asyncio.sleep(2)
+                                
+                                # Trigger the transfer via Twilio
+                                try:
+                                    twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+                                    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+                                    twilio_client = Client(twilio_sid, twilio_token)
+                                    
+                                    call_record = await db.calls.find_one({"id": call_id})
+                                    if call_record and call_record.get("twilio_sid"):
+                                        twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">Connecting you now.</Say>
+    <Dial callerId="{call_record.get('from_number', '')}">
+        <Number>{transfer_number}</Number>
+    </Dial>
+</Response>'''
+                                        twilio_client.calls(call_record.get("twilio_sid")).update(twiml=twiml)
+                                        
+                                        await db.calls.update_one(
+                                            {"id": call_id},
+                                            {"$set": {
+                                                "transferred": True,
+                                                "transferred_to": transfer_number,
+                                                "transferred_at": datetime.now(timezone.utc).isoformat()
+                                            }}
+                                        )
+                                        logger.info(f"Call {call_id} transferred to {transfer_number}")
+                                except Exception as e:
+                                    logger.error(f"Transfer failed: {e}")
+                                    await send_tts_to_stream(
+                                        websocket, stream_sid,
+                                        "I apologize, I'm having trouble connecting you. Can I take your number and have someone call you back?"
+                                    )
+                                break
+                            else:
+                                # No transfer number configured - fall back to booking
+                                ai_response = "I'd love to connect you with someone. Let me get you scheduled for a call - what day works best for you?"
+                        
                         messages.append({"role": "user", "content": transcript})
                         messages.append({"role": "assistant", "content": ai_response})
                         
@@ -11639,6 +11762,16 @@ async def generate_sales_response(user_input: str, history: list, lead: Dict, ca
         company = campaign.get('company_name', 'our company')
         business = lead.get('business_name', 'your company')
         
+        # Check if agent has transfer enabled
+        agent = await db.agents.find_one({"id": campaign.get("agent_id")})
+        transfer_enabled = agent.get("transfer_enabled", False) if agent else False
+        transfer_instruction = ""
+        if transfer_enabled:
+            transfer_instruction = """
+- If they want more details or seem very interested, ask: "Would you like me to connect you with a team member now to go over this in more detail?"
+- If they say YES to transfer, respond EXACTLY with: "[TRANSFER_NOW]"
+"""
+        
         system_prompt = f"""You are an AI sales agent for {company}. Keep responses SHORT (1-2 sentences max) - this is a phone call.
 
 Your goal: Qualify the lead and book a meeting.
@@ -11648,7 +11781,7 @@ Lead: {business}
 Guidelines:
 - Be conversational and natural
 - Ask ONE question at a time
-- If they're interested, offer to book a 15-min call
+- If they're interested, offer to book a 15-min call{transfer_instruction}
 - If not interested, thank them and end politely
 
 Common responses:

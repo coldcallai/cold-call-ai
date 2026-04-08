@@ -579,7 +579,7 @@ const LandingPage = () => {
           </p>
           
           <p className="text-cyan-400 font-medium mt-4 text-lg">
-            Inbound, outbound prospecting, and appointment booking—automatically.
+            Inbound, outbound prospecting, live transfers, and appointment booking—automatically.
           </p>
 
           {/* Lead Capture Form */}

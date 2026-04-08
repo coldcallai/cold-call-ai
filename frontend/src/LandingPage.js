@@ -6,7 +6,7 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare, PhoneCall, Mail, Settings
+  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -220,6 +220,12 @@ const LandingPage = () => {
       title: "Book Meetings",
       description: "Qualified leads are automatically routed to your sales team's calendar. You close.",
       icon: Calendar,
+    },
+    {
+      number: "04",
+      title: "Live Transfers",
+      description: "Hot leads get instantly connected to your team. AI detects buying signals and transfers the call in real-time.",
+      icon: PhoneForwarded,
     },
   ];
 
@@ -1351,7 +1357,7 @@ const LandingPage = () => {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {steps.map((step, idx) => {
               const Icon = step.icon;
               return (

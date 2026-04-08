@@ -10142,9 +10142,11 @@ Imagine having AI agents like me— making hundreds of calls for your business, 
 
 We can qualify your leads, handle objections, and even book meetings straight onto your calendar— all while sounding completely human.
 
+And here's the game-changer— Live Transfers. When I detect a hot lead who's ready to buy, I can instantly connect them to you or your sales team in real-time. No callbacks. No lost momentum. The second someone shows serious interest... boom— you're on the line closing the deal.
+
 You can even clone your own voice... or choose the exact tone you want. Plug in your scripts, use your proven rebuttals— so every call feels like your best salesperson is on the line.
 
-And the best part? You can try it yourself, right now. Just head back to your dashboard and launch your first AI agent. It takes about five minutes.
+Ready to try it yourself? Just head back to your dashboard and launch your first AI agent. It takes about five minutes.
 
 Pretty cool, right?
 
@@ -12108,9 +12110,11 @@ Imagine having AI agents like me— making hundreds of calls for your business, 
 
 We can qualify your leads, handle objections, and even book meetings straight onto your calendar— all while sounding completely human.
 
+And here's the game-changer— Live Transfers. When I detect a hot lead who's ready to buy, I can instantly connect them to you or your sales team in real-time. No callbacks. No lost momentum. The second someone shows serious interest... boom— you're on the line closing the deal.
+
 You can even clone your own voice... or choose the exact tone you want. Plug in your scripts, use your proven rebuttals— so every call feels like your best salesperson is on the line.
 
-And the best part? You can try it yourself, right now. Just head back to your dashboard and launch your first AI agent. It takes about five minutes.
+Ready to try it yourself? Just head back to your dashboard and launch your first AI agent. It takes about five minutes.
 
 Pretty cool, right?
 

@@ -575,13 +575,15 @@ const LandingPage = () => {
         <div className="max-w-5xl mx-auto text-center relative">
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">
             <span className="text-white">The </span>
-            <span className="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">AI Calling Platform</span>
+            <span className="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">AI Cold Calling Platform</span>
             <br />
-            <span className="text-white">for Modern Sales</span>
+            <span className="text-white">That Books More Meetings</span>
+            <br />
+            <span className="text-white">and Closes More Deals</span>
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Handle inbound calls, outbound outreach, live transfers, and appointment booking <span className="text-cyan-400">➤</span> on autopilot.
+            Automate inbound, outbound, and booking with human-like AI conversations.
           </p>
           
           {/* Trust Line - NEW */}

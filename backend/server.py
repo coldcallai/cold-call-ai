@@ -11797,7 +11797,7 @@ async def generate_sales_response(user_input: str, history: list, lead: Dict, ca
         transfer_instruction = ""
         if transfer_enabled:
             transfer_instruction = """
-- If they want more details or seem very interested, ask: "Would you like me to connect you with a team member now to go over this in more detail?"
+- If they show ANY interest, curiosity, or want to learn more, ask: "Would you like me to connect you with a team member now to go over this in more detail?"
 - If they say YES to transfer, respond EXACTLY with: "[TRANSFER_NOW]"
 """
         

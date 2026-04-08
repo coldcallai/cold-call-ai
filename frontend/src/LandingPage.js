@@ -581,7 +581,7 @@ const LandingPage = () => {
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Handle inbound calls, outbound outreach, and appointment booking—on autopilot.
+            Handle inbound calls, outbound outreach, live transfers, and appointment booking <span className="text-cyan-400">➤</span> on autopilot.
           </p>
           
           {/* Trust Line - NEW */}
@@ -812,13 +812,6 @@ const LandingPage = () => {
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               Watch how DialGenix.ai automates your entire cold calling workflow
             </p>
-          </div>
-        </div>
-
-        {/* White strip behind Call Yourself Demo */}
-        <div className="bg-white py-8 -mx-6 px-6 mb-8">
-          <div className="max-w-6xl mx-auto">
-            <CallYourselfHero />
           </div>
         </div>
 
@@ -1361,9 +1354,7 @@ const LandingPage = () => {
       <section className="bg-white py-24 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-emerald-600 text-sm font-medium uppercase tracking-wide">Results</span>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Why It's Better</h2>
-            <p className="text-gray-600 text-lg">Sell results, not features</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why It's Better</h2>
           </div>
           
           <div className="grid md:grid-cols-2 gap-8">

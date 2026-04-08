@@ -11514,6 +11514,22 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
     user_id = context.get("user_id")
     stream_sid = None
     
+    # Load agent for voice settings
+    agent = None
+    agent_voice_id = None
+    agent_voice_settings = None
+    if campaign.get("agent_id"):
+        agent = await db.agents.find_one({"id": campaign.get("agent_id")})
+        if agent:
+            # Get voice ID
+            if agent.get("voice_type") == "cloned" and agent.get("cloned_voice_id"):
+                agent_voice_id = agent.get("cloned_voice_id")
+            elif agent.get("preset_voice_id"):
+                agent_voice_id = agent.get("preset_voice_id")
+            # Get voice settings
+            agent_voice_settings = agent.get("voice_settings")
+            logger.info(f"Using agent voice: {agent_voice_id}, settings: {agent_voice_settings}")
+    
     # Conversation state
     messages = []
     is_first_response = True
@@ -11538,7 +11554,9 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         websocket, stream_sid,
                         "I've really enjoyed our conversation! I'm at my time limit for this call. "
                         "Would you like me to book a meeting for you, or have one of our agents call you back? "
-                        "Either way, I'll make sure someone follows up with you soon. Have a great day!"
+                        "Either way, I'll make sure someone follows up with you soon. Have a great day!",
+                        voice_id=agent_voice_id,
+                        voice_settings=agent_voice_settings
                     )
                     await asyncio.sleep(5)
                     
@@ -11572,7 +11590,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                     greeting = f"Am I speaking with someone at {business}? I'm reaching out because we help businesses increase their profits with solutions most companies overlook. Do you have a moment?"
                     
                     # Generate and send TTS
-                    await send_tts_to_stream(websocket, stream_sid, greeting)
+                    await send_tts_to_stream(websocket, stream_sid, greeting, voice_id=agent_voice_id, voice_settings=agent_voice_settings)
                     last_response_time = asyncio.get_event_loop().time()
                 
             elif event == "media":
@@ -11597,7 +11615,9 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         if any(kw in transcript.lower() for kw in ["stop", "remove", "don't call"]):
                             await send_tts_to_stream(
                                 websocket, stream_sid,
-                                "No problem. I'll remove you from our list. Have a great day!"
+                                "No problem. I'll remove you from our list. Have a great day!",
+                                voice_id=agent_voice_id,
+                                voice_settings=agent_voice_settings
                             )
                             phone = lead.get("phone")
                             if phone:
@@ -11619,7 +11639,9 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             if transfer_number:
                                 await send_tts_to_stream(
                                     websocket, stream_sid,
-                                    "Great! Let me connect you with a team member right now. Please hold for just a moment."
+                                    "Great! Let me connect you with a team member right now. Please hold for just a moment.",
+                                    voice_id=agent_voice_id,
+                                    voice_settings=agent_voice_settings
                                 )
                                 await asyncio.sleep(2)
                                 
@@ -11653,7 +11675,9 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                     logger.error(f"Transfer failed: {e}")
                                     await send_tts_to_stream(
                                         websocket, stream_sid,
-                                        "I apologize, I'm having trouble connecting you. Can I take your number and have someone call you back?"
+                                        "I apologize, I'm having trouble connecting you. Can I take your number and have someone call you back?",
+                                        voice_id=agent_voice_id,
+                                        voice_settings=agent_voice_settings
                                     )
                                 break
                             else:
@@ -11663,7 +11687,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         messages.append({"role": "user", "content": transcript})
                         messages.append({"role": "assistant", "content": ai_response})
                         
-                        await send_tts_to_stream(websocket, stream_sid, ai_response)
+                        await send_tts_to_stream(websocket, stream_sid, ai_response, voice_id=agent_voice_id, voice_settings=agent_voice_settings)
                     else:
                         # No speech detected - check for silence timeout
                         time_since_response = asyncio.get_event_loop().time() - last_response_time
@@ -11677,7 +11701,9 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                 logger.info(f"Call {call_id} - max silence reached, scheduling callback")
                                 await send_tts_to_stream(
                                     websocket, stream_sid,
-                                    "Sounds like this might not be a good time. I'll give you a call back later. Have a great day!"
+                                    "Sounds like this might not be a good time. I'll give you a call back later. Have a great day!",
+                                    voice_id=agent_voice_id,
+                                    voice_settings=agent_voice_settings
                                 )
                                 await asyncio.sleep(3)
                                 
@@ -11687,10 +11713,10 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                 break
                             elif consecutive_silence_count == 1:
                                 # First silence - gentle prompt
-                                await send_tts_to_stream(websocket, stream_sid, "Are you still there?")
+                                await send_tts_to_stream(websocket, stream_sid, "Are you still there?", voice_id=agent_voice_id, voice_settings=agent_voice_settings)
                             elif consecutive_silence_count == 2:
                                 # Second silence - another prompt
-                                await send_tts_to_stream(websocket, stream_sid, "Hello? Can you hear me?")
+                                await send_tts_to_stream(websocket, stream_sid, "Hello? Can you hear me?", voice_id=agent_voice_id, voice_settings=agent_voice_settings)
                     
                     audio_buffer = b""
                 
@@ -11715,19 +11741,38 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
             }}
         )
 
-async def send_tts_to_stream(websocket: WebSocket, stream_sid: str, text: str):
+async def send_tts_to_stream(websocket: WebSocket, stream_sid: str, text: str, voice_id: str = None, voice_settings: dict = None):
     """Generate TTS with ElevenLabs and send to Twilio stream"""
     try:
         if not eleven_client:
             logger.error("ElevenLabs not configured")
             return
         
-        # Generate audio
+        # Use provided voice_id or default
+        final_voice_id = voice_id or "EXAVITQu4vr4xnSDxMaL"  # Sarah - professional
+        
+        # Build voice settings with defaults
+        stability = 0.5
+        similarity_boost = 0.75
+        style = 0.0
+        
+        if voice_settings:
+            stability = voice_settings.get("stability", 0.5)
+            similarity_boost = voice_settings.get("similarity_boost", 0.75)
+            style = voice_settings.get("style", 0.0)
+        
+        # Generate audio with voice settings
         audio_gen = eleven_client.text_to_speech.convert(
             text=text,
-            voice_id="EXAVITQu4vr4xnSDxMaL",  # Sarah - professional
+            voice_id=final_voice_id,
             model_id="eleven_turbo_v2_5",
-            output_format="ulaw_8000"  # Direct μ-law output for Twilio!
+            output_format="ulaw_8000",  # Direct μ-law output for Twilio!
+            voice_settings={
+                "stability": stability,
+                "similarity_boost": similarity_boost,
+                "style": style,
+                "use_speaker_boost": True
+            }
         )
         
         audio_data = b""

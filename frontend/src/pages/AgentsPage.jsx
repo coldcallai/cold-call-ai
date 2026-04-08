@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
 import { VoiceCloneModal, VoiceSettingsModal } from "@/components/VoiceCloning";
 import TrustLine from "@/components/TrustLine";
 import {
@@ -717,6 +718,158 @@ const Agents = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Voice Tuning Settings */}
+              <div className="border-t pt-4">
+                <div className="mb-3">
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    <Volume2 className="w-4 h-4" />
+                    Voice Tuning
+                  </Label>
+                  <p className="text-xs text-gray-500">Adjust how natural and expressive the AI voice sounds</p>
+                </div>
+                
+                <div className="space-y-5 pl-4 border-l-2 border-purple-200">
+                  {/* Stability Slider */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-sm">Stability</Label>
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        {((editingAgent.voice_settings?.stability ?? 0.5) * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[editingAgent.voice_settings?.stability ?? 0.5]}
+                      onValueChange={([val]) => setEditingAgent({
+                        ...editingAgent, 
+                        voice_settings: {...(editingAgent.voice_settings || {}), stability: val}
+                      })}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>More expressive</span>
+                      <span>More consistent</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Lower = more emotional variation (natural). Higher = more predictable (can sound robotic).
+                    </p>
+                  </div>
+
+                  {/* Similarity Boost Slider */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-sm">Clarity</Label>
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        {((editingAgent.voice_settings?.similarity_boost ?? 0.75) * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[editingAgent.voice_settings?.similarity_boost ?? 0.75]}
+                      onValueChange={([val]) => setEditingAgent({
+                        ...editingAgent, 
+                        voice_settings: {...(editingAgent.voice_settings || {}), similarity_boost: val}
+                      })}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>Softer</span>
+                      <span>Clearer</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Controls voice clarity and how closely it matches the original speaker.
+                    </p>
+                  </div>
+
+                  {/* Style Slider */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-sm">Expressiveness</Label>
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        {((editingAgent.voice_settings?.style ?? 0.4) * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[editingAgent.voice_settings?.style ?? 0.4]}
+                      onValueChange={([val]) => setEditingAgent({
+                        ...editingAgent, 
+                        voice_settings: {...(editingAgent.voice_settings || {}), style: val}
+                      })}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>Neutral</span>
+                      <span>Animated</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Adds emotion and liveliness. Too high may cause artifacts.
+                    </p>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div>
+                    <Label className="text-sm mb-2 block">Quick Presets</Label>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingAgent({
+                          ...editingAgent,
+                          voice_settings: { stability: 0.3, similarity_boost: 0.7, style: 0.5 }
+                        })}
+                        className="text-xs"
+                      >
+                        🎭 Natural
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingAgent({
+                          ...editingAgent,
+                          voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3 }
+                        })}
+                        className="text-xs"
+                      >
+                        💼 Professional
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingAgent({
+                          ...editingAgent,
+                          voice_settings: { stability: 0.25, similarity_boost: 0.8, style: 0.6 }
+                        })}
+                        className="text-xs"
+                      >
+                        ⚡ Energetic
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingAgent({
+                          ...editingAgent,
+                          voice_settings: { stability: 0.6, similarity_boost: 0.7, style: 0.2 }
+                        })}
+                        className="text-xs"
+                      >
+                        🧘 Calm
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-2">

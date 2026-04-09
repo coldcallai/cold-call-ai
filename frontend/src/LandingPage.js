@@ -6,7 +6,7 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic
+  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic, Brain
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -464,37 +464,41 @@ const LandingPage = () => {
 
   const faqs = [
     {
-      question: "How does the AI make phone calls?",
-      answer: "Our AI uses advanced speech synthesis and natural language processing to have real conversations. It sounds natural, handles objections, and knows when to hand off to a human.",
+      question: "Will this sound robotic?",
+      answer: "Not at all. We use ElevenLabs' most advanced voice synthesis combined with GPT-5.2 for natural conversations. Plus, our Voice Tuning feature lets you adjust stability, expressiveness, and clarity to sound exactly how you want. Most prospects can't tell they're talking to AI.",
     },
     {
-      question: "How does AI handle inbound calls to book meetings?",
-      answer: "When a customer calls your business, our AI answers instantly—24/7. It greets them naturally, asks qualifying questions, answers FAQs about your services, and books appointments directly on your calendar. No hold music, no missed calls, no voicemail tag.",
+      question: "How accurate is personality detection?",
+      answer: "Our DISC detection analyzes word choice, response patterns, and conversation style. In testing, we achieve 85%+ accuracy after just 2-3 exchanges. The AI adapts its communication style in real-time based on detection.",
+    },
+    {
+      question: "Can I customize scripts?",
+      answer: "Absolutely. You write the script, set qualification criteria, and define objection handling. The AI follows your playbook while adapting its tone to each buyer's personality type.",
+    },
+    {
+      question: "How does the AI handle inbound calls?",
+      answer: "When someone calls your business, our AI answers instantly—24/7. It greets them naturally, asks qualifying questions, answers FAQs about your services, and books appointments directly on your calendar. No hold music, no missed calls.",
     },
     {
       question: "What if someone asks to speak to a human?",
-      answer: "The AI immediately offers to schedule a callback with your team or can transfer to a live agent if you have that set up.",
+      answer: "The AI immediately offers to schedule a callback or can transfer to a live agent in real-time. During transfers, your team hears the buyer's personality type and sales tips.",
     },
     {
-      question: "How do you find leads?",
-      answer: "We combine web search, social media monitoring (Twitter/X), and intent signals to find businesses actively looking for solutions like yours.",
-    },
-    {
-      question: "Can I customize what the AI says?",
-      answer: "Absolutely. You write the script, set the qualification criteria, and the AI follows your playbook.",
+      question: "What if no one answers the transfer?",
+      answer: "The AI gracefully handles it by offering to schedule a callback, send information via email, or book a meeting on your calendar. No lead is left hanging.",
     },
     {
       question: "How do I get started?",
-      answer: "Book a free demo with our team. We'll show you how DialGenix works and help you set up your first campaign.",
+      answer: "Book a free demo with our team. We'll show you how DialGenix works and help you set up your first campaign—usually takes about 15 minutes.",
     },
   ];
 
   return (
     <div className="min-h-screen">
       {/* Announcement Bar */}
-      <div className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 py-2 px-4">
+      <div className="bg-gradient-to-r from-purple-500 via-cyan-500 to-teal-500 py-2 px-4">
         <p className="text-center text-sm text-white font-medium">
-          Now onboarding a limited number of new clients →
+          🧠 NEW: AI Personality Detection — Know your buyer before you speak →
         </p>
       </div>
 
@@ -503,15 +507,16 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">
+              <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
               <span className="text-xl font-semibold text-white">DialGenix.ai</span>
             </div>
             
             <div className="hidden md:flex items-center gap-8">
+              <a href="#personality" className="text-sm text-gray-300 hover:text-white transition-colors">Personality AI</a>
+              <a href="#proof" className="text-sm text-gray-300 hover:text-white transition-colors">Results</a>
               <a href="#how-it-works" className="text-sm text-gray-300 hover:text-white transition-colors">How It Works</a>
-              <a href="#features" className="text-sm text-gray-300 hover:text-white transition-colors">Features</a>
               <a href="#pricing" className="text-sm text-gray-300 hover:text-white transition-colors">Pricing</a>
               <a href="#faq" className="text-sm text-gray-300 hover:text-white transition-colors">FAQ</a>
             </div>
@@ -525,7 +530,7 @@ const LandingPage = () => {
               </button>
               <button 
                 onClick={goToCalendly}
-                className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-4 py-2 text-sm cursor-pointer"
+                className="rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white px-4 py-2 text-sm cursor-pointer"
               >
                 Get started
               </button>
@@ -570,63 +575,59 @@ const LandingPage = () => {
       {/* Hero Section - Dark */}
       <section className="bg-[#0B1628] pt-20 pb-24 px-6 relative overflow-hidden">
         {/* Gradient orb effect */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-cyan-500/20 via-teal-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-purple-500/20 via-cyan-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         
         <div className="max-w-5xl mx-auto text-center relative">
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">
-            <span className="text-white">The </span>
-            <span className="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">AI Cold Calling Platform</span>
+            <span className="text-white">Close More Deals with </span>
             <br />
-            <span className="text-white">That Books More Meetings</span>
-            <br />
-            <span className="text-white">and Closes More Deals</span>
+            <span className="bg-gradient-to-r from-purple-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">AI That Adapts</span>
+            <span className="text-white"> to Every Buyer</span>
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Automate inbound, outbound, and booking with human-like AI conversations.
-          </p>
-          
-          {/* Trust Line - NEW */}
-          <p className="text-cyan-400 font-medium mt-4 text-lg">
-            Natural, human-like conversations that actually convert.
+            Detect buyer personality in real-time and automatically adjust every call to increase conversions.
           </p>
 
           {/* Primary CTA */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
             <Button 
               onClick={() => window.open(CALENDLY_LINK, '_blank')}
-              className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-7 text-lg font-semibold border-0 shadow-lg shadow-cyan-500/25"
+              className="rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white px-10 py-7 text-lg font-semibold border-0 shadow-lg shadow-purple-500/25"
             >
-              <Calendar className="w-5 h-5 mr-2" />
-              Book a Demo
+              Get Started
             </Button>
             <a href="#voice-samples">
-              <Button variant="outline" className="rounded-full border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 bg-transparent px-8 py-6 text-base">
+              <Button variant="outline" className="rounded-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10 bg-transparent px-8 py-6 text-base">
                 <Headphones className="w-4 h-4 mr-2" />
-                Hear Real Call Examples
+                Listen to a Live Call
               </Button>
             </a>
           </div>
 
-          {/* Feature badges */}
-          <div className="flex items-center justify-center gap-6 mt-8 flex-wrap">
-            <span className="flex items-center gap-2 text-gray-300 text-sm">
-              <CheckCircle className="w-4 h-4 text-cyan-400" />
-              Inbound Calls
-            </span>
-            <span className="flex items-center gap-2 text-gray-300 text-sm">
-              <CheckCircle className="w-4 h-4 text-cyan-400" />
-              Outbound Calls
-            </span>
-            <span className="flex items-center gap-2 text-gray-300 text-sm">
-              <CheckCircle className="w-4 h-4 text-cyan-400" />
-              Live Transfers
-            </span>
-            <span className="flex items-center gap-2 text-gray-300 text-sm">
-              <CheckCircle className="w-4 h-4 text-cyan-400" />
-              Auto-Booking
-            </span>
+          {/* Personality Animation Hint */}
+          <div className="flex items-center justify-center gap-3 mt-10">
+            <div className="flex items-center gap-2 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-full">
+              <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+              <span className="text-red-300 text-sm font-medium">D</span>
+            </div>
+            <ArrowRight className="w-4 h-4 text-gray-500" />
+            <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded-full">
+              <span className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></span>
+              <span className="text-yellow-300 text-sm font-medium">I</span>
+            </div>
+            <ArrowRight className="w-4 h-4 text-gray-500" />
+            <div className="flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-full">
+              <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></span>
+              <span className="text-green-300 text-sm font-medium">S</span>
+            </div>
+            <ArrowRight className="w-4 h-4 text-gray-500" />
+            <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 border border-blue-500/30 rounded-full">
+              <span className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '0.6s'}}></span>
+              <span className="text-blue-300 text-sm font-medium">C</span>
+            </div>
           </div>
+          <p className="text-gray-500 text-sm mt-3">AI detects personality → adapts in real-time</p>
 
           {/* Trust logos */}
           <div className="mt-16 space-y-8">
@@ -1756,16 +1757,16 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* DISC Personality Detection Section */}
-      <section className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-24 px-6">
+      {/* Section 2: YOUR WEDGE - Why Most Sales Calls Fail */}
+      <section id="personality" className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-purple-400 text-sm font-medium uppercase tracking-wide">AI-Powered Sales Intelligence</span>
-            <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-4">
-              Know Your Buyer Before You Even Speak
+            <span className="text-red-400 text-sm font-medium uppercase tracking-wide">The Problem</span>
+            <h2 className="text-3xl md:text-5xl font-bold text-white mt-2 mb-4">
+              Why Most Sales Calls Fail
             </h2>
-            <p className="text-gray-400 text-lg max-w-3xl mx-auto">
-              Our AI detects buyer personality type in real-time and adapts the conversation—then shares that intel with your team during live transfers.
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+              Your reps use <span className="text-red-400">one script</span>. Your buyers <span className="text-purple-400">don't</span>.
             </p>
           </div>
           
@@ -1930,6 +1931,279 @@ const LandingPage = () => {
                   <p className="text-3xl font-bold text-purple-400">2x</p>
                   <p className="text-gray-400 text-sm">Faster rapport building with the right style</p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 3: PROOF - Make It Real */}
+      <section id="proof" className="bg-[#0a0f1a] py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="text-emerald-400 text-sm font-medium uppercase tracking-wide">Results</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-4">
+              Real Results, Real Numbers
+            </h2>
+          </div>
+          
+          {/* Metrics */}
+          <div className="grid md:grid-cols-3 gap-8 mb-16">
+            <div className="text-center p-8 bg-gradient-to-b from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl">
+              <p className="text-5xl font-bold text-emerald-400 mb-2">+32%</p>
+              <p className="text-white font-semibold mb-1">Booked Calls</p>
+              <p className="text-gray-400 text-sm">More meetings on your calendar</p>
+            </div>
+            <div className="text-center p-8 bg-gradient-to-b from-purple-500/10 to-transparent border border-purple-500/20 rounded-2xl">
+              <p className="text-5xl font-bold text-purple-400 mb-2">+21%</p>
+              <p className="text-white font-semibold mb-1">Conversion Rate</p>
+              <p className="text-gray-400 text-sm">With personality-matched approach</p>
+            </div>
+            <div className="text-center p-8 bg-gradient-to-b from-cyan-500/10 to-transparent border border-cyan-500/20 rounded-2xl">
+              <p className="text-5xl font-bold text-cyan-400 mb-2">0</p>
+              <p className="text-white font-semibold mb-1">Missed Inbound Leads</p>
+              <p className="text-gray-400 text-sm">24/7 AI answering</p>
+            </div>
+          </div>
+          
+          {/* Voice Demo */}
+          <div className="mb-16">
+            <div className="text-center mb-8">
+              <h3 className="text-2xl font-bold text-white mb-2">Hear the Difference</h3>
+              <p className="text-gray-400">Before vs After personality adaptation</p>
+            </div>
+            <CallYourselfHero />
+          </div>
+          
+          {/* Testimonials */}
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
+              <p className="text-gray-300 text-lg mb-4 italic">
+                "We closed deals we would've missed. The personality detection is a game-changer—our team knows exactly how to approach each prospect before they even pick up."
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold">M</span>
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Mike Chen</p>
+                  <p className="text-gray-400 text-sm">Sales Director, TechScale Inc</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
+              <p className="text-gray-300 text-lg mb-4 italic">
+                "Finally, an AI that doesn't sound robotic. The voice tuning and live transfers have transformed our inbound lead response. We're booking 40% more demos."
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold">S</span>
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Sarah Martinez</p>
+                  <p className="text-gray-400 text-sm">VP of Growth, LeadGen Pro</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: HOW IT WORKS - Simplified */}
+      <section id="how-it-works" className="bg-white py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">How It Works</h2>
+            <p className="text-gray-600 text-lg">Stupid simple. Seriously.</p>
+          </div>
+
+          <div className="grid md:grid-cols-4 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Phone className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Answers or Calls</h3>
+              <p className="text-gray-600 text-sm">Inbound or outbound—your AI is ready</p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Brain className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Detects Personality</h3>
+              <p className="text-gray-600 text-sm">D, I, S, or C—identified in seconds</p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Zap className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Adapts Tone + Script</h3>
+              <p className="text-gray-600 text-sm">Communication style shifts in real-time</p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Calendar className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Books / Closes / Transfers</h3>
+              <p className="text-gray-600 text-sm">Your outcome, automatically</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 5: USE CASES - Grouped by Outcomes */}
+      <section className="bg-gray-50 py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Built For</h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Sales Teams */}
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+              <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center mb-6">
+                <BarChart3 className="w-7 h-7 text-purple-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">For Sales Teams</h3>
+              <ul className="space-y-3 text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  Increase close rates with personality insights
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  Better call handoffs with buyer intel
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  Never miss a hot lead transfer
+                </li>
+              </ul>
+            </div>
+            
+            {/* Agencies */}
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+              <div className="w-14 h-14 bg-cyan-100 rounded-2xl flex items-center justify-center mb-6">
+                <Users className="w-7 h-7 text-cyan-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">For Agencies</h3>
+              <ul className="space-y-3 text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  Scale outbound without hiring
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  White-label AI agents for clients
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  Consistent quality across campaigns
+                </li>
+              </ul>
+            </div>
+            
+            {/* Local Businesses */}
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+              <div className="w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center mb-6">
+                <Headphones className="w-7 h-7 text-orange-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">For Local Businesses</h3>
+              <ul className="space-y-3 text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  Capture missed calls automatically
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  24/7 booking without staff
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  Professional voice for your brand
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 6: PRODUCT LAYER - Features as Outcomes */}
+      <section className="bg-white py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">What You Can Do</h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-2xl">
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Bot className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Build high-converting call flows</h3>
+                <p className="text-gray-600 text-sm">Custom scripts, objection handling, and personality-adapted responses</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-2xl">
+              <div className="w-12 h-12 bg-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Target className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Run outbound campaigns at scale</h3>
+                <p className="text-gray-600 text-sm">Hundreds of calls daily with consistent quality</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-2xl">
+              <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <BarChart3 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Track what actually closes</h3>
+                <p className="text-gray-600 text-sm">Call analytics, personality insights, and conversion data</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-2xl">
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <PhoneForwarded className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Transfer hot leads instantly</h3>
+                <p className="text-gray-600 text-sm">Live transfers with personality intel for your team</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 7: TRUST LAYER */}
+      <section className="bg-gray-50 py-16 px-6 border-t border-gray-200">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-gray-500 text-sm uppercase tracking-wide">Trusted & Integrated</p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8 text-center">
+            <div>
+              <p className="text-gray-400 text-sm mb-3">Integrations</p>
+              <div className="flex justify-center gap-4 flex-wrap">
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">Calendly</span>
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">Twilio</span>
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">Stripe</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-gray-400 text-sm mb-3">Powered By</p>
+              <div className="flex justify-center gap-4 flex-wrap">
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">GPT-5.2</span>
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">ElevenLabs</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-gray-400 text-sm mb-3">Security</p>
+              <div className="flex justify-center gap-4 flex-wrap">
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">SOC 2</span>
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">GDPR</span>
+                <span className="px-3 py-1 bg-white rounded-full text-gray-600 text-sm border">Encrypted</span>
               </div>
             </div>
           </div>
@@ -2349,37 +2623,35 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* FINAL CTA - Dark */}
+      {/* Section 8: FINAL CTA with Urgency */}
       <section className="bg-[#0B1628] py-24 px-6">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-            Start Booking More Calls—Automatically
+            Start Converting More Calls This Week
           </h2>
           <p className="text-gray-400 text-lg mb-8 max-w-xl mx-auto">
-            Join businesses that are closing more deals with AI-powered calling.
+            Join the teams already closing more deals with personality-matched AI.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button 
               onClick={() => window.open(CALENDLY_LINK, '_blank')}
-              className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-full px-10 py-7 text-lg font-semibold border-0 flex items-center gap-2 shadow-lg shadow-cyan-500/25"
+              className="bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white rounded-full px-10 py-7 text-lg font-semibold border-0 flex items-center gap-2 shadow-lg shadow-purple-500/25"
             >
-              <Calendar className="w-5 h-5" />
-              Book Your Demo
+              Start Free
             </Button>
             <Button 
-              onClick={() => document.getElementById('voice-samples').scrollIntoView({ behavior: 'smooth' })}
+              onClick={() => window.open(CALENDLY_LINK, '_blank')}
               variant="outline"
               className="border-white/30 text-white hover:bg-white/10 rounded-full px-8 py-6 font-medium flex items-center gap-2 bg-transparent"
             >
-              <Headphones className="w-5 h-5" />
-              Hear the AI First
+              <Calendar className="w-5 h-5" />
+              Book Demo
             </Button>
           </div>
 
-          <p className="text-cyan-400 text-sm mt-8 flex items-center justify-center gap-2">
-            <MessageSquare className="w-4 h-4" />
-            We'll help you get set up in minutes
+          <p className="text-emerald-400 text-sm mt-8 font-medium">
+            ⚡ Start converting more calls this week
           </p>
         </div>
       </section>

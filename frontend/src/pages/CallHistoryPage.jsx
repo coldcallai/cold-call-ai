@@ -10,13 +10,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
 import StatusBadge from "@/components/StatusBadge";
 import TrustLine from "@/components/TrustLine";
 import {
-  History, Phone, PhoneOff, Clock, Play, Download, RefreshCw, ChevronRight, CheckCircle, XCircle, User
+  History, Phone, PhoneOff, Clock, Play, Pause, Download, RefreshCw, ChevronRight, CheckCircle, XCircle, User, Brain
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+// DISC Personality Badge Component
+const PersonalityBadge = ({ personality, showTips = false }) => {
+  const personalities = {
+    D: { name: "Dominant", color: "bg-red-100 text-red-700 border-red-300", tip: "Be direct, focus on results" },
+    I: { name: "Influencer", color: "bg-yellow-100 text-yellow-700 border-yellow-300", tip: "Be enthusiastic, build rapport" },
+    S: { name: "Steady", color: "bg-green-100 text-green-700 border-green-300", tip: "Be patient, build trust" },
+    C: { name: "Conscientious", color: "bg-blue-100 text-blue-700 border-blue-300", tip: "Be precise, provide data" }
+  };
+  
+  if (!personality || !personalities[personality]) return null;
+  
+  const p = personalities[personality];
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge variant="outline" className={`${p.color} text-xs font-medium`}>
+        <Brain className="w-3 h-3 mr-1" />
+        {personality} - {p.name}
+      </Badge>
+      {showTips && <span className="text-xs text-gray-500">{p.tip}</span>}
+    </div>
+  );
+};
 
 const CallHistory = () => {
   const { token } = useAuth();
@@ -201,6 +225,7 @@ const CallHistory = () => {
                 <TableRow>
                   <TableHead>Call ID</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Personality</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Recording</TableHead>
                   <TableHead>Qualification</TableHead>
@@ -214,6 +239,9 @@ const CallHistory = () => {
                     <TableCell className="font-mono text-sm">{call.id.slice(0, 8)}...</TableCell>
                     <TableCell>
                       <StatusBadge status={call.status} />
+                    </TableCell>
+                    <TableCell>
+                      <PersonalityBadge personality={call.detected_personality} />
                     </TableCell>
                     <TableCell>{call.duration_seconds}s</TableCell>
                     <TableCell>
@@ -309,6 +337,47 @@ const CallHistory = () => {
                   <p className="font-semibold">{new Date(selectedCall.created_at).toLocaleString()}</p>
                 </div>
               </div>
+
+              {/* DISC Personality Detection */}
+              {selectedCall.detected_personality && (
+                <div className="p-4 border border-purple-200 rounded-lg bg-purple-50/50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-purple-100 rounded-full">
+                      <Brain className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">Buyer Personality Detected</p>
+                      <p className="text-sm text-gray-500">DISC Assessment from conversation</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 mb-3">
+                    <PersonalityBadge personality={selectedCall.detected_personality} />
+                    {selectedCall.personality_confidence && (
+                      <span className="text-sm text-gray-500">
+                        Confidence: {Math.round(selectedCall.personality_confidence * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  {selectedCall.personality_tips && (
+                    <div className="mt-3 p-3 bg-white rounded-lg border border-purple-100">
+                      <p className="text-sm font-medium text-purple-700 mb-1">💡 Sales Tips</p>
+                      <p className="text-sm text-gray-600">{selectedCall.personality_tips}</p>
+                    </div>
+                  )}
+                  {selectedCall.personality_signals && selectedCall.personality_signals.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs text-gray-500 mb-1">Detected Signals:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedCall.personality_signals.map((signal, i) => (
+                          <Badge key={i} variant="outline" className="text-xs bg-white">
+                            "{signal}"
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Recording Player */}
               {selectedCall.recording_url && subscriptionFeatures?.call_recording && (

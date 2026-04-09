@@ -116,6 +116,87 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="AI Cold Calling Machine")
 api_router = APIRouter(prefix="/api")
 
+# ============== DISC PERSONALITY SYSTEM ==============
+DISC_PERSONALITIES = {
+    "D": {
+        "name": "Dominant",
+        "traits": "Decisive, competitive, results-driven, fast-paced",
+        "signals": ["bottom line", "results", "roi", "quick", "fast", "immediately", "decision", "let's do it", "cut to the chase", "what's the cost", "time is money"],
+        "ai_style": "Be direct and concise. Focus on results and ROI. Don't waste time with small talk. Get to the point fast. Speak with confidence.",
+        "sales_tips": "Be direct, focus on ROI and results. Don't small talk. Let them feel in control. Provide options, not just one solution."
+    },
+    "I": {
+        "name": "Influencer", 
+        "traits": "Energetic, fun, creative, enthusiastic, social",
+        "signals": ["exciting", "love it", "amazing", "awesome", "fun", "creative", "people", "team", "everyone", "party", "celebrate", "great idea", "sounds cool"],
+        "ai_style": "Be energetic and enthusiastic! Use expressive language and build rapport. Make the conversation fun and engaging. Share stories and be personable.",
+        "sales_tips": "Be enthusiastic and build rapport first. Share success stories. Let them talk about their vision. Don't overwhelm with details."
+    },
+    "S": {
+        "name": "Steady",
+        "traits": "Calm, supportive, patient, values stability and trust",
+        "signals": ["comfortable", "stable", "secure", "team", "support", "help", "trust", "reliable", "consistent", "take our time", "no rush", "think about it", "need to discuss"],
+        "ai_style": "Be calm, patient, and reassuring. Don't rush the conversation. Focus on trust-building and stability. Be a good listener and show genuine care.",
+        "sales_tips": "Be patient and build trust. Don't pressure or rush. Emphasize support and reliability. Give them time to consult with others."
+    },
+    "C": {
+        "name": "Conscientious",
+        "traits": "Precise, analytical, structured, detail-oriented, cautious",
+        "signals": ["specifically", "exactly", "data", "numbers", "research", "details", "how does it work", "documentation", "proof", "case study", "statistics", "accuracy", "precise"],
+        "ai_style": "Be precise and thorough. Provide data, specifics, and logical reasoning. Answer questions with detail and accuracy. Be prepared for follow-up questions.",
+        "sales_tips": "Come prepared with data and specifics. Provide documentation and case studies. Don't exaggerate. Give them time to analyze."
+    }
+}
+
+def detect_disc_personality(transcript_text: str) -> dict:
+    """Analyze transcript to detect DISC personality type"""
+    text_lower = transcript_text.lower()
+    scores = {"D": 0, "I": 0, "S": 0, "C": 0}
+    detected_signals = {"D": [], "I": [], "S": [], "C": []}
+    
+    for ptype, pdata in DISC_PERSONALITIES.items():
+        for signal in pdata["signals"]:
+            if signal in text_lower:
+                scores[ptype] += 1
+                detected_signals[ptype].append(signal)
+    
+    # Additional heuristics
+    words = text_lower.split()
+    word_count = len(words)
+    
+    # Short, direct responses suggest D
+    if word_count < 20:
+        scores["D"] += 1
+    # Long, detailed responses suggest C
+    elif word_count > 100:
+        scores["C"] += 1
+    # Medium with enthusiasm words suggest I
+    elif any(w in text_lower for w in ["!", "great", "love", "awesome"]):
+        scores["I"] += 1
+    
+    # Find the dominant type
+    max_score = max(scores.values())
+    if max_score == 0:
+        return {"type": None, "confidence": 0, "signals": []}
+    
+    dominant_type = max(scores, key=scores.get)
+    total_signals = sum(scores.values())
+    confidence = round(scores[dominant_type] / max(total_signals, 1), 2)
+    
+    return {
+        "type": dominant_type,
+        "name": DISC_PERSONALITIES[dominant_type]["name"],
+        "confidence": confidence,
+        "signals": detected_signals[dominant_type],
+        "sales_tips": DISC_PERSONALITIES[dominant_type]["sales_tips"]
+    }
+
+def get_disc_adapted_style(personality_type: str) -> str:
+    """Get the AI communication style for a detected personality"""
+    if personality_type and personality_type in DISC_PERSONALITIES:
+        return DISC_PERSONALITIES[personality_type]["ai_style"]
+    return ""
+
 # ============== ENUMS ==============
 class LeadStatus(str, Enum):
     NEW = "new"
@@ -352,6 +433,10 @@ class Call(BaseModel):
     duration_seconds: int = 0
     transcript: List[Dict[str, str]] = []  # Conversation transcript (AI-generated)
     qualification_result: Optional[Dict[str, Any]] = None
+    # DISC Personality Detection
+    detected_personality: Optional[str] = None  # "D", "I", "S", "C" or None
+    personality_confidence: Optional[float] = None  # 0.0-1.0 confidence score
+    personality_signals: Optional[List[str]] = None  # Detected signals that led to classification
     # AMD tracking
     answered_by: Optional[str] = None  # "human", "machine_start", "machine_end_beep", "machine_end_silence", "fax", "unknown"
     voicemail_dropped: bool = False
@@ -391,6 +476,9 @@ class Booking(BaseModel):
     lead_email: Optional[str] = None
     agent_name: str
     notes: Optional[str] = None
+    # DISC Personality from call
+    lead_personality: Optional[str] = None  # "D", "I", "S", "C" detected during call
+    personality_tips: Optional[str] = None  # Sales tips based on personality
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -5011,6 +5099,25 @@ KEY FEATURES & HOW TO USE THEM:
 - Listen to recordings, read transcripts
 - See qualification scores and outcomes
 - Track which calls were transferred
+- **NEW: See detected buyer personality (DISC type)**
+
+🧠 DISC PERSONALITY DETECTION (Automatic):
+- Our AI automatically detects buyer personality type during calls
+- Uses the DISC framework (Dominant, Influencer, Steady, Conscientious)
+- Adapts conversation style in real-time based on detection
+- Shows personality badge in Call History
+- Includes personality info in Live Transfer whisper
+- Provides sales tips for each personality type
+
+DISC Personality Types:
+• **D (Dominant)**: Direct, results-focused, fast decision maker
+  → Tip: Be concise, focus on ROI, don't small talk
+• **I (Influencer)**: Enthusiastic, social, creative
+  → Tip: Be energetic, build rapport, share stories
+• **S (Steady)**: Patient, supportive, values trust
+  → Tip: Don't rush, emphasize reliability, be reassuring
+• **C (Conscientious)**: Analytical, detail-oriented, precise
+  → Tip: Provide data, be thorough, don't exaggerate
 
 💳 CREDITS & BILLING:
 - Lead credits: Used when discovering leads
@@ -11651,6 +11758,47 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         ai_response = await generate_sales_response(transcript, messages, lead, campaign)
                         logger.info(f"AI: {ai_response}")
                         
+                        # Extract DISC personality if detected by AI
+                        detected_personality = None
+                        if "[PERSONALITY:" in ai_response:
+                            import re
+                            personality_match = re.search(r'\[PERSONALITY:([DISC])\]', ai_response)
+                            if personality_match:
+                                detected_personality = personality_match.group(1)
+                                # Remove the tag from spoken response
+                                ai_response = re.sub(r'\s*\[PERSONALITY:[DISC]\]', '', ai_response)
+                                # Update call record with personality
+                                personality_info = DISC_PERSONALITIES.get(detected_personality, {})
+                                await db.calls.update_one(
+                                    {"id": call_id},
+                                    {"$set": {
+                                        "detected_personality": detected_personality,
+                                        "personality_name": personality_info.get("name", ""),
+                                        "personality_traits": personality_info.get("traits", ""),
+                                        "personality_tips": personality_info.get("sales_tips", "")
+                                    }}
+                                )
+                                logger.info(f"Call {call_id} - Detected personality: {detected_personality} ({personality_info.get('name', '')})")
+                        
+                        # Also run our own detection based on transcript
+                        if not detected_personality and len(messages) >= 4:
+                            # Combine all user messages for analysis
+                            user_messages = " ".join([m["content"] for m in messages if m["role"] == "user"])
+                            disc_result = detect_disc_personality(user_messages)
+                            if disc_result["type"] and disc_result["confidence"] >= 0.3:
+                                detected_personality = disc_result["type"]
+                                await db.calls.update_one(
+                                    {"id": call_id},
+                                    {"$set": {
+                                        "detected_personality": detected_personality,
+                                        "personality_name": disc_result.get("name", ""),
+                                        "personality_confidence": disc_result["confidence"],
+                                        "personality_signals": disc_result["signals"],
+                                        "personality_tips": disc_result.get("sales_tips", "")
+                                    }}
+                                )
+                                logger.info(f"Call {call_id} - Auto-detected personality: {detected_personality} (confidence: {disc_result['confidence']})")
+                        
                         # Check if AI requested a live transfer
                         if "[TRANSFER_NOW]" in ai_response:
                             logger.info(f"Transfer requested for call {call_id}")
@@ -11675,9 +11823,24 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                     
                                     call_record = await db.calls.find_one({"id": call_id})
                                     if call_record and call_record.get("twilio_sid"):
+                                        # Build whisper message with personality info
+                                        lead_name = lead.get("contact_name", lead.get("name", "Unknown"))
+                                        lead_company = lead.get("company", lead.get("business_name", ""))
+                                        personality_type = call_record.get("detected_personality") or detected_personality
+                                        
+                                        whisper_parts = [f"Incoming transfer: {lead_name}"]
+                                        if lead_company:
+                                            whisper_parts.append(f"from {lead_company}")
+                                        if personality_type:
+                                            pinfo = DISC_PERSONALITIES.get(personality_type, {})
+                                            whisper_parts.append(f". Personality type: {pinfo.get('name', personality_type)}.")
+                                            whisper_parts.append(f"Tip: {pinfo.get('sales_tips', '')[:100]}")
+                                        
+                                        whisper_message = " ".join(whisper_parts)
+                                        
                                         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Joanna">Connecting you now.</Say>
+    <Say voice="Polly.Joanna">{whisper_message}</Say>
     <Dial callerId="{call_record.get('from_number', '')}">
         <Number>{transfer_number}</Number>
     </Dial>
@@ -11689,10 +11852,11 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                             {"$set": {
                                                 "transferred": True,
                                                 "transferred_to": transfer_number,
-                                                "transferred_at": datetime.now(timezone.utc).isoformat()
+                                                "transferred_at": datetime.now(timezone.utc).isoformat(),
+                                                "transfer_personality_shared": personality_type
                                             }}
                                         )
-                                        logger.info(f"Call {call_id} transferred to {transfer_number}")
+                                        logger.info(f"Call {call_id} transferred to {transfer_number} with personality: {personality_type}")
                                 except Exception as e:
                                     logger.error(f"Transfer failed: {e}")
                                     await send_tts_to_stream(
@@ -11870,12 +12034,33 @@ async def generate_sales_response(user_input: str, history: list, lead: Dict, ca
 - If they say YES to transfer, respond EXACTLY with: "[TRANSFER_NOW]"
 """
         
+        # DISC personality adaptation instruction
+        disc_instruction = """
+IMPORTANT - Personality Detection & Adaptation:
+As you converse, detect the prospect's DISC personality type and adapt your style:
+
+D (Dominant) - If they're direct, results-focused, ask about ROI, want to move fast:
+  → Be concise, focus on results, don't small talk, speak with confidence
+  
+I (Influencer) - If they're enthusiastic, use words like "exciting", "love it", talk about people:
+  → Be energetic, build rapport, make it fun, share stories
+  
+S (Steady) - If they're calm, mention team/trust, say "no rush", want to think about it:
+  → Be patient, reassuring, don't pressure, emphasize support
+  
+C (Conscientious) - If they ask for specifics, data, "how exactly does it work":
+  → Be precise, provide details, cite facts, be thorough
+
+After 2-3 exchanges, if you detect a clear personality type, include it as: [PERSONALITY:X] where X is D, I, S, or C
+Example: "That's a great question! [PERSONALITY:C]"
+"""
+        
         system_prompt = f"""You are an AI sales agent for {company}. Keep responses SHORT (1-2 sentences max) - this is a phone call.
 
 Your goal: Qualify the lead and book a meeting.
 
 Lead: {business}
-
+{disc_instruction}
 Guidelines:
 - Be conversational and natural
 - Ask ONE question at a time

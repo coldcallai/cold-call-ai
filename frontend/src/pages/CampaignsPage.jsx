@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import StatusBadge from "@/components/StatusBadge";
 import TrustLine from "@/components/TrustLine";
 import {
-  Target, Plus, Play, Pause, Trash2, Clock, Settings, RefreshCw, PhoneOff, Mail
+  Target, Plus, Play, Pause, Trash2, Clock, Settings, RefreshCw, PhoneOff, Mail, Brain
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -305,6 +305,90 @@ const Campaigns = () => {
               />
               <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">
                 💡 Use {'{company}'} for your company name, {'{contact_name}'} for the lead's name. Keep responses SHORT (1-2 sentences) for natural conversation flow.
+              </p>
+            </div>
+
+            {/* DISC Personality Detection Questions */}
+            <div className="border border-purple-200 rounded-lg p-4 bg-gradient-to-r from-purple-50 to-pink-50">
+              <h4 className="font-medium text-purple-900 flex items-center gap-2 mb-2">
+                <Brain className="w-5 h-5" />
+                🧠 DISC Personality Detection Questions
+              </h4>
+              <p className="text-sm text-purple-700 mb-3">Click to add to your script. AI will detect personality and adapt automatically.</p>
+              
+              <div className="space-y-3">
+                {/* High Signal Question */}
+                <div className="bg-white rounded-lg p-3 border border-purple-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-purple-800">🎯 Highest Signal Question</span>
+                    <Button 
+                      type="button"
+                      size="sm" 
+                      variant="outline"
+                      className="text-xs h-7 border-purple-300 text-purple-700 hover:bg-purple-100"
+                      onClick={() => setNewCampaign({
+                        ...newCampaign, 
+                        ai_script: newCampaign.ai_script + "\n\nJust so I can tailor this for you—what's most important here: getting straight to results, or understanding all the details first?"
+                      })}
+                    >
+                      + Add to Script
+                    </Button>
+                  </div>
+                  <p className="text-sm text-gray-700 italic">
+                    "Just so I can tailor this for you—what's most important here: getting straight to results, or understanding all the details first?"
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-red-500 text-white rounded text-[10px] flex items-center justify-center font-bold">D</span> "results"</span>
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-blue-500 text-white rounded text-[10px] flex items-center justify-center font-bold">C</span> "details"</span>
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-yellow-500 text-white rounded text-[10px] flex items-center justify-center font-bold">I</span> vague</span>
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-green-500 text-white rounded text-[10px] flex items-center justify-center font-bold">S</span> "both"</span>
+                  </div>
+                </div>
+                
+                {/* Evaluation Question */}
+                <div className="bg-white rounded-lg p-3 border border-purple-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-purple-800">🔍 Evaluation Question</span>
+                    <Button 
+                      type="button"
+                      size="sm" 
+                      variant="outline"
+                      className="text-xs h-7 border-purple-300 text-purple-700 hover:bg-purple-100"
+                      onClick={() => setNewCampaign({
+                        ...newCampaign, 
+                        ai_script: newCampaign.ai_script + "\n\nWhen you're evaluating something like this, what matters more—ROI, ease of use, or team fit?"
+                      })}
+                    >
+                      + Add to Script
+                    </Button>
+                  </div>
+                  <p className="text-sm text-gray-700 italic">
+                    "When you're evaluating something like this, what matters more—ROI, ease of use, or team fit?"
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-red-500 text-white rounded text-[10px] flex items-center justify-center font-bold">D</span> ROI</span>
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-blue-500 text-white rounded text-[10px] flex items-center justify-center font-bold">C</span> specifics</span>
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-yellow-500 text-white rounded text-[10px] flex items-center justify-center font-bold">I</span> team</span>
+                    <span className="flex items-center gap-1"><span className="w-4 h-4 bg-green-500 text-white rounded text-[10px] flex items-center justify-center font-bold">S</span> ease</span>
+                  </div>
+                </div>
+                
+                {/* Both Questions */}
+                <Button 
+                  type="button"
+                  variant="outline"
+                  className="w-full border-purple-300 text-purple-700 hover:bg-purple-100"
+                  onClick={() => setNewCampaign({
+                    ...newCampaign, 
+                    ai_script: newCampaign.ai_script + "\n\nJust so I can tailor this for you—what's most important here: getting straight to results, or understanding all the details first?\n\n[After their response, use the follow-up:]\n\nWhen you're evaluating something like this, what matters more—ROI, ease of use, or team fit?"
+                  })}
+                >
+                  + Add Both Questions to Script
+                </Button>
+              </div>
+              
+              <p className="text-xs text-purple-600 mt-3 italic">
+                💡 AI automatically detects personality from responses and adapts its communication style in real-time.
               </p>
             </div>
 

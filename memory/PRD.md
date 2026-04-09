@@ -11,10 +11,31 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [x] Added JSON-LD structured data (SoftwareApplication, Organization)
 - [x] Created canonical URL
 - [x] Created `/ai-cold-calling` SEO landing page
-- [x] Created `/voice-ai-sales` SEO landing page  
-- [x] Created sitemap.xml
+- [x] Created `/voice-ai-sales` SEO landing page
+- [x] Created `/ai-sales-dialer` SEO landing page
+- [x] Created `/automated-cold-calling` SEO landing page
+- [x] Created `/ai-appointment-setter` SEO landing page
+- [x] Created sitemap.xml (10 pages)
 - [x] Created robots.txt
 - [x] Added internal linking in footer
+- [x] Google Search Console verified & sitemap submitted
+
+## Future Backlog
+
+### SEO & Marketing (P2)
+- [ ] More SEO pages: `/ai-receptionist`, `/inbound-ai-calls`, `/ai-lead-qualification`
+- [ ] Blog section for content marketing
+- [ ] Customer testimonials/case studies page
+- [ ] FAQ schema markup for rich snippets
+
+### Features (P2-P3)
+- [ ] Multi-language support (50+ languages)
+- [ ] Team seat management (multi-user agency accounts)
+- [ ] Deepgram STT integration (optimize costs at scale)
+- [ ] Calendly webhook sync (requires Calendly Pro)
+
+### Technical Debt (P3)
+- [ ] Refactor monolithic files if needed
 
 ## Product Vision
 A vertical-agnostic B2B SaaS platform that:

@@ -1756,6 +1756,186 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* DISC Personality Detection Section */}
+      <section className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-24 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="text-purple-400 text-sm font-medium uppercase tracking-wide">AI-Powered Sales Intelligence</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-4">
+              Know Your Buyer Before You Even Speak
+            </h2>
+            <p className="text-gray-400 text-lg max-w-3xl mx-auto">
+              Our AI detects buyer personality type in real-time and adapts the conversation—then shares that intel with your team during live transfers.
+            </p>
+          </div>
+          
+          <div className="grid lg:grid-cols-2 gap-12 items-start">
+            {/* Left - DISC Types */}
+            <div>
+              <h3 className="text-white text-xl font-semibold mb-6">The 4 Buyer Personalities (DISC)</h3>
+              
+              <div className="space-y-4">
+                {/* Dominant */}
+                <div className="p-5 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">D</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">Dominant</h4>
+                      <p className="text-red-300 text-sm">Decisive • Results-driven • Fast</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-400 text-sm mt-2">
+                    <span className="text-red-400 font-medium">AI detects:</span> "What's the bottom line?" "ROI?" "Let's move fast"
+                  </p>
+                  <p className="text-gray-300 text-sm mt-1">
+                    <span className="text-white">→ Your team's tip:</span> Be direct, focus on results, don't small talk
+                  </p>
+                </div>
+                
+                {/* Influencer */}
+                <div className="p-5 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">I</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">Influencer</h4>
+                      <p className="text-yellow-300 text-sm">Enthusiastic • Creative • Social</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-400 text-sm mt-2">
+                    <span className="text-yellow-400 font-medium">AI detects:</span> "That sounds exciting!" "Love it!" "Tell me more"
+                  </p>
+                  <p className="text-gray-300 text-sm mt-1">
+                    <span className="text-white">→ Your team's tip:</span> Be energetic, build rapport, share success stories
+                  </p>
+                </div>
+                
+                {/* Steady */}
+                <div className="p-5 bg-green-500/10 border border-green-500/30 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">S</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">Steady</h4>
+                      <p className="text-green-300 text-sm">Patient • Supportive • Trust-focused</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-400 text-sm mt-2">
+                    <span className="text-green-400 font-medium">AI detects:</span> "Let me think about it" "Need to discuss with team" "Is it reliable?"
+                  </p>
+                  <p className="text-gray-300 text-sm mt-1">
+                    <span className="text-white">→ Your team's tip:</span> Be patient, don't pressure, emphasize support
+                  </p>
+                </div>
+                
+                {/* Conscientious */}
+                <div className="p-5 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">C</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">Conscientious</h4>
+                      <p className="text-blue-300 text-sm">Analytical • Detail-oriented • Precise</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-400 text-sm mt-2">
+                    <span className="text-blue-400 font-medium">AI detects:</span> "How exactly does it work?" "Show me the data" "What are the specifics?"
+                  </p>
+                  <p className="text-gray-300 text-sm mt-1">
+                    <span className="text-white">→ Your team's tip:</span> Provide data, be thorough, don't exaggerate
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Right - How It Works */}
+            <div>
+              <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
+                <h3 className="text-white text-xl font-semibold mb-6 text-center">How It Works</h3>
+                
+                <div className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold">1</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">AI Listens & Analyzes</h4>
+                      <p className="text-gray-400 text-sm">During the first 2-3 exchanges, AI analyzes word choice, pace, and conversation style</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold">2</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">Detects Personality Type</h4>
+                      <p className="text-gray-400 text-sm">AI identifies signals and classifies the buyer as D, I, S, or C</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold">3</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">Adapts in Real-Time</h4>
+                      <p className="text-gray-400 text-sm">AI adjusts its communication style to match—building better rapport</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold">4</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">Shares Intel on Transfer</h4>
+                      <p className="text-gray-400 text-sm">When transferring, your team hears the personality type + sales tips</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Transfer Whisper Example */}
+                <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
+                  <p className="text-purple-300 text-sm font-medium mb-2">📞 What your team hears on transfer:</p>
+                  <p className="text-white text-sm italic">
+                    "Incoming transfer: John Smith from Acme Corp. <span className="text-purple-300">Personality type: Dominant.</span> Tip: Be direct, focus on ROI, don't small talk."
+                  </p>
+                </div>
+                
+                {/* Call History Preview */}
+                <div className="mt-6 p-4 bg-white/5 rounded-lg border border-white/10">
+                  <p className="text-gray-400 text-sm font-medium mb-3">📊 See it in Call History:</p>
+                  <div className="flex items-center gap-3 bg-[#0B1628] rounded-lg p-3">
+                    <div className="px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full">
+                      <span className="text-red-300 text-xs font-medium">D - Dominant</span>
+                    </div>
+                    <span className="text-gray-400 text-sm">Confidence: 85%</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Benefits */}
+              <div className="mt-6 grid grid-cols-2 gap-4">
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
+                  <p className="text-3xl font-bold text-purple-400">40%</p>
+                  <p className="text-gray-400 text-sm">Higher close rate with personality-matched approach</p>
+                </div>
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
+                  <p className="text-3xl font-bold text-purple-400">2x</p>
+                  <p className="text-gray-400 text-sm">Faster rapport building with the right style</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Comparison - Light Gray */}
       <section className="bg-gray-50 py-24 px-6">
         <div className="max-w-4xl mx-auto">

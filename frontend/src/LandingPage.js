@@ -1773,6 +1773,11 @@ const LandingPage = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             {/* Left - DISC Types */}
             <div>
+              <div className="mb-8 p-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-xl border border-emerald-500/30">
+                <p className="text-emerald-300 text-lg font-semibold text-center">
+                  💰 DialGenix detects this in real-time and adapts automatically to close more deals.
+                </p>
+              </div>
               <h3 className="text-white text-xl font-semibold mb-6">The 4 Buyer Personalities (DISC)</h3>
               
               <div className="space-y-4">

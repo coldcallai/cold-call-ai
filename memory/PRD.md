@@ -28,11 +28,13 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [ ] Customer testimonials/case studies page
 - [ ] FAQ schema markup for rich snippets
 
-### Features (P2-P3)
-- [ ] Multi-language support (50+ languages)
-- [ ] Team seat management (multi-user agency accounts)
-- [ ] Deepgram STT integration (optimize costs at scale)
+### Features (P3)
+- [ ] Deepgram STT integration (currently using OpenAI Whisper - optimize costs at scale)
 - [ ] Calendly webhook sync (requires Calendly Pro)
+
+### Completed Features
+- [x] Multi-language support (50+ languages)
+- [x] Team seat management (invite members, per-plan seat limits)
 
 ### Technical Debt (P3)
 - [ ] Refactor monolithic files if needed

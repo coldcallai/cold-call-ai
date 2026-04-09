@@ -14,7 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { VoiceCloneModal, VoiceSettingsModal } from "@/components/VoiceCloning";
 import TrustLine from "@/components/TrustLine";
 import {
-  Users, Plus, Trash2, Edit3, Mic, Volume2, RefreshCw, Phone, Play, Pause, Mail, Zap, Settings, Calendar
+  Users, Plus, Trash2, Edit3, Mic, Volume2, RefreshCw, Phone, Play, Pause, Mail, Zap, Settings, Calendar, Brain
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -551,6 +551,90 @@ const Agents = () => {
                 </ul>
               </div>
 
+              {/* DISC Personality Detection Tips */}
+              <div className="mt-2 mb-3 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-purple-900 mb-3 flex items-center gap-2">
+                  <Brain className="w-4 h-4" /> 🧠 DISC Personality Detection Questions
+                </p>
+                <p className="text-xs text-purple-700 mb-3">Add these questions early in your script to quickly identify buyer personality:</p>
+                
+                {/* High Signal Question */}
+                <div className="bg-white/60 rounded-lg p-3 mb-3 border border-purple-100">
+                  <p className="text-xs font-semibold text-purple-800 mb-1">🎯 Highest Signal Question:</p>
+                  <p className="text-sm text-gray-700 italic mb-2">
+                    "Just so I can tailor this for you—what's most important here: getting straight to results, or understanding all the details first?"
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-red-500 text-white rounded text-xs flex items-center justify-center font-bold">D</span>
+                      <span className="text-gray-600">"results", "bottom line"</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-blue-500 text-white rounded text-xs flex items-center justify-center font-bold">C</span>
+                      <span className="text-gray-600">"details", "how it works"</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-yellow-500 text-white rounded text-xs flex items-center justify-center font-bold">I</span>
+                      <span className="text-gray-600">vague / conversational</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-green-500 text-white rounded text-xs flex items-center justify-center font-bold">S</span>
+                      <span className="text-gray-600">"both is fine"</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Evaluation Question */}
+                <div className="bg-white/60 rounded-lg p-3 mb-3 border border-purple-100">
+                  <p className="text-xs font-semibold text-purple-800 mb-1">🔍 Evaluation Question:</p>
+                  <p className="text-sm text-gray-700 italic mb-2">
+                    "When you're evaluating something like this, what matters more—ROI, ease of use, or team fit?"
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-red-500 text-white rounded text-xs flex items-center justify-center font-bold">D</span>
+                      <span className="text-gray-600">ROI / performance</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-blue-500 text-white rounded text-xs flex items-center justify-center font-bold">C</span>
+                      <span className="text-gray-600">specifics / accuracy</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-yellow-500 text-white rounded text-xs flex items-center justify-center font-bold">I</span>
+                      <span className="text-gray-600">team / excitement</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-green-500 text-white rounded text-xs flex items-center justify-center font-bold">S</span>
+                      <span className="text-gray-600">ease / stability</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Mirror Responses */}
+                <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg p-3 border border-purple-200">
+                  <p className="text-xs font-semibold text-purple-800 mb-2">🔥 Pro Move: Mirror Immediately After Detection</p>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-start gap-2">
+                      <span className="w-5 h-5 bg-red-500 text-white rounded text-xs flex items-center justify-center font-bold flex-shrink-0">D</span>
+                      <span className="text-gray-700">"Got it—I'll keep this focused on results."</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="w-5 h-5 bg-yellow-500 text-white rounded text-xs flex items-center justify-center font-bold flex-shrink-0">I</span>
+                      <span className="text-gray-700">"Love it—this is actually where things get exciting…"</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="w-5 h-5 bg-green-500 text-white rounded text-xs flex items-center justify-center font-bold flex-shrink-0">S</span>
+                      <span className="text-gray-700">"No rush—I'll go step by step so it's clear."</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="w-5 h-5 bg-blue-500 text-white rounded text-xs flex items-center justify-center font-bold flex-shrink-0">C</span>
+                      <span className="text-gray-700">"Great question—let me walk you through exactly how it works."</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-purple-600 mt-2 italic">👉 This is where prospects go: "Wait… this feels different"</p>
+                </div>
+              </div>
+
               <textarea
                 id="system-prompt"
                 data-testid="agent-prompt-input"
@@ -869,6 +953,45 @@ const Agents = () => {
                       </Button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* DISC Personality Tips - Condensed */}
+              <div className="border-t pt-4">
+                <div className="mb-3">
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    <Brain className="w-4 h-4" />
+                    Personality Detection Tips
+                  </Label>
+                  <p className="text-xs text-gray-500">Add these to your script to quickly identify buyer type</p>
+                </div>
+                
+                <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
+                  <p className="text-xs font-medium text-purple-800 mb-2">🎯 Ask early in the call:</p>
+                  <p className="text-sm text-gray-700 italic mb-3 bg-white/60 p-2 rounded">
+                    "What's most important here: getting straight to results, or understanding all the details first?"
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-red-500 text-white rounded flex items-center justify-center font-bold">D</span>
+                      <span>"results" → Be direct</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-yellow-500 text-white rounded flex items-center justify-center font-bold">I</span>
+                      <span>vague → Be energetic</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-green-500 text-white rounded flex items-center justify-center font-bold">S</span>
+                      <span>"both" → Be patient</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-blue-500 text-white rounded flex items-center justify-center font-bold">C</span>
+                      <span>"details" → Be precise</span>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-purple-600 italic">AI auto-detects and adapts in real-time. Personality shows in Call History.</p>
                 </div>
               </div>
 

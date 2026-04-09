@@ -2667,7 +2667,9 @@ const LandingPage = () => {
               <span className="font-semibold text-white">DialGenix.ai</span>
             </div>
 
-            <div className="flex items-center gap-8 text-sm text-gray-400">
+            <div className="flex items-center gap-6 text-sm text-gray-400 flex-wrap justify-center">
+              <Link to="/ai-cold-calling" className="hover:text-white transition-colors">AI Cold Calling</Link>
+              <Link to="/voice-ai-sales" className="hover:text-white transition-colors">Voice AI Sales</Link>
               <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
               <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
               <a href="tel:+18885131913" className="hover:text-white transition-colors flex items-center gap-1">

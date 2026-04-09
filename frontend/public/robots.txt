@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /ai-cold-calling
+Allow: /voice-ai-sales
+Allow: /login
+Allow: /terms
+Allow: /privacy
+Allow: /help
+
+Disallow: /app/
+Disallow: /api/
+
+Sitemap: https://dialgenix.ai/sitemap.xml

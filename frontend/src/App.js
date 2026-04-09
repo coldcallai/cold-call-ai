@@ -38,6 +38,8 @@ import GettingStartedPage from "@/pages/GettingStartedPage";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import HelpCenterPage from "@/pages/HelpCenterPage";
+import AIColdCallingPage from "@/pages/AIColdCallingPage";
+import VoiceAISalesPage from "@/pages/VoiceAISalesPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import HelpChat from "@/components/HelpChat";
 import OnboardingGuide from "@/components/OnboardingGuide";
@@ -291,6 +293,8 @@ const AppRouter = () => {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/help" element={<HelpCenterPage />} />
+        <Route path="/ai-cold-calling" element={<AIColdCallingPage />} />
+        <Route path="/voice-ai-sales" element={<VoiceAISalesPage />} />
         
         {/* Protected Dashboard Routes */}
         <Route path="/app/*" element={

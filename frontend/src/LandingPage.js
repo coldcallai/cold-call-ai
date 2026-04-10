@@ -2395,7 +2395,8 @@ const LandingPage = () => {
             </div>
           )}
 
-          {/* Entry Plans (always shown) */}
+          {/* Entry Plans (shown on outbound tabs only) */}
+          {(pricingTab === 'byol' || pricingTab === 'full') && (
           <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
             {pricingPlans.map((plan, idx) => (
               <div 

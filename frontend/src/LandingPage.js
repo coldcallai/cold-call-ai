@@ -1538,7 +1538,7 @@ const LandingPage = () => {
       <section id="voice-samples" className="bg-gradient-to-b from-[#0B1628] to-[#0f1c32] py-24 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
-            <span className="text-purple-400 text-sm font-medium uppercase tracking-wide">Remove The Objection</span>
+            <span className="text-purple-400 text-sm font-medium uppercase tracking-wide">Voice Technology</span>
             <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-4">
               AI That Sounds Human—Not Robotic
             </h2>

@@ -618,7 +618,8 @@ SUBSCRIPTION_PLANS = {
         "features": ["300 inbound minutes", "$0.25/min overage", "24/7 AI answering", "Calendar booking", "Call transcripts", "Custom greetings", "Appointment reminders", "2 phone numbers"],
         "users": 1,
         "plan_type": "inbound",
-        "phone_numbers": 2
+        "phone_numbers": 2,
+        "addons_available": ["review_requests"]
     },
     "receptionist_plus": {
         "name": "Receptionist Plus",
@@ -630,7 +631,16 @@ SUBSCRIPTION_PLANS = {
         "features": ["750 inbound minutes", "$0.18/min overage", "24/7 AI answering", "Calendar booking", "Call transcripts", "Custom FAQ handling", "Priority support", "5 phone numbers"],
         "users": 1,
         "plan_type": "inbound",
-        "phone_numbers": 5
+        "phone_numbers": 5,
+        "addons_available": ["review_requests"]
+    },
+    # Review Requests Add-on
+    "addon_review_requests": {
+        "name": "Automated Review Requests",
+        "price": 49,
+        "plan_type": "addon",
+        "features": ["Unlimited SMS review requests", "Auto-send after appointments", "Google Review link integration", "Review request history", "Custom message templates"],
+        "description": "Automatically send review requests to patients after their visit"
     },
     # ============== BYOL PLANS (Bring Your Own List) ==============
     "byol_starter": {

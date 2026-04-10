@@ -3,7 +3,12 @@
 ## Original Problem Statement
 Build an AI cold calling machine that calls businesses, qualifies them, and routes qualified leads to different sales agents for payment processing.
 
-## Latest Updates (January 2025)
+## Latest Updates (April 2026)
+
+### Pricing Tab UI Bug Fix (COMPLETED - April 10, 2026)
+- [x] Fixed syntax error in LandingPage.js causing build failure
+- [x] Entry plans (Pay-as-you-go, Test Drive) now hidden on AI Receptionist tab
+- [x] Entry plans correctly showing on Outbound (BYOL) and Outbound (Full Service) tabs
 
 ### SEO Optimization (COMPLETED - January 2025)
 - [x] Enhanced homepage meta tags (title, description, keywords)

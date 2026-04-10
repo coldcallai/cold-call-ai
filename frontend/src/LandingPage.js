@@ -2453,6 +2453,7 @@ const LandingPage = () => {
               </div>
             ))}
           </div>
+          )}
 
           {/* BYOL Plans */}
           {pricingTab === 'byol' && (

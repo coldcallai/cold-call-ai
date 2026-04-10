@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DialGenix.ai - 7-Minute Killer Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.5;
+            color: #1a1a2e;
+            background: #fff;
+            padding: 40px;
+            max-width: 850px;
+            margin: 0 auto;
+        }
+        
+        @media print {
+            body { padding: 20px; font-size: 14px; }
+            .page-break { page-break-before: always; }
+            .no-print { display: none; }
+        }
+        
+        h1 {
+            font-size: 28px;
+            background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        
+        .time-block {
+            background: #0B1628;
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .time-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .time-badge {
+            background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        
+        .time-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .script-say {
+            background: rgba(139, 92, 246, 0.2);
+            border-left: 4px solid #8b5cf6;
+            padding: 15px;
+            margin: 12px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 15px;
+        }
+        
+        .script-say::before {
+            content: "SAY: ";
+            font-weight: bold;
+            color: #a78bfa;
+        }
+        
+        .action {
+            background: rgba(6, 182, 212, 0.2);
+            border-left: 4px solid #06b6d4;
+            padding: 12px 15px;
+            margin: 10px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 14px;
+        }
+        
+        .action::before {
+            content: "DO: ";
+            font-weight: bold;
+            color: #22d3ee;
+        }
+        
+        .pause {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px dashed #ef4444;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            color: #fca5a5;
+        }
+        
+        .pause::before {
+            content: "⏸️ PAUSE — ";
+        }
+        
+        .tip {
+            background: rgba(16, 185, 129, 0.2);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 13px;
+            color: #6ee7b7;
+        }
+        
+        .tip::before {
+            content: "💡 ";
+        }
+        
+        .call-example {
+            background: #111827;
+            border: 2px solid #8b5cf6;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .call-example h3 {
+            color: #a78bfa;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .call-line {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .call-line:last-child {
+            border-bottom: none;
+        }
+        
+        .speaker-ai {
+            color: #22d3ee;
+            font-weight: bold;
+        }
+        
+        .speaker-prospect {
+            color: #fbbf24;
+            font-weight: bold;
+        }
+        
+        .tone-shift {
+            background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        
+        .section-light {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .section-light h3 {
+            color: #0B1628;
+            margin-bottom: 12px;
+        }
+        
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .pre-demo {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .pre-demo h4 {
+            color: #92400e;
+            margin-bottom: 8px;
+        }
+        
+        .pre-demo ul {
+            margin-left: 20px;
+            color: #78350f;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .print-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .rule {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(90deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.1));
+            border-radius: 8px;
+            margin: 20px 0;
+            font-style: italic;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">📄 Save as PDF</button>
+
+    <h1>DialGenix.ai</h1>
+    <p class="subtitle">7-Minute Killer Demo Script</p>
+    
+    <div class="rule">
+        <strong>THE RULE:</strong> No feature explanations. Only outcomes, pain, and forward motion.<br>
+        This script doesn't win on information. It wins on <strong>momentum</strong>.
+    </div>
+
+    <div class="pre-demo">
+        <h4>🎯 ASK BEFORE YOU START (Pick 2)</h4>
+        <ul>
+            <li>"Are you mostly inbound or outbound?"</li>
+            <li>"What's your biggest bottleneck—volume or conversion?"</li>
+            <li>"How are your reps handling tone mismatches on calls?"</li>
+        </ul>
+        <p style="margin-top:10px; font-size:13px;"><em>Then tailor one line: "You said inbound is your bottleneck. Watch how this turns more of those into closed deals."</em></p>
+    </div>
+
+    <!-- 0:00 - 0:30 -->
+    <div class="time-block">
+        <div class="time-header">
+            <span class="time-badge">0:00 – 0:30</span>
+            <span class="time-title">THE HOOK (Pain + Question)</span>
+        </div>
+        
+        <div class="script-say">
+            "Quick question—how many inbound or outbound leads are you missing or not converting right now?"
+        </div>
+        
+        <div class="pause">Let them answer. 5 seconds of silence if needed.</div>
+        
+        <div class="script-say">
+            "Got it. Most reps treat every buyer the same. That's why deals die. Let me show you how we fix that in under 10 seconds."
+        </div>
+    </div>
+
+    <!-- 0:30 - 1:30 -->
+    <div class="time-block">
+        <div class="time-header">
+            <span class="time-badge">0:30 – 1:30</span>
+            <span class="time-title">🔥 LIVE CALL CLIP (Immediate Proof)</span>
+        </div>
+        
+        <div class="script-say">
+            "First—let me play you a real example. This is from a live call last week."
+        </div>
+        
+        <div class="action">Play 20-25 second clip where AI tone shifts mid-call</div>
+        
+        <div class="call-example">
+            <h3>📞 EXAMPLE CALL TO PLAY (or read aloud)</h3>
+            
+            <div class="call-line">
+                <span class="speaker-ai">AI:</span> "Hi, this is Sarah calling from Acme Solutions. Do you have a quick moment?"
+            </div>
+            
+            <div class="call-line">
+                <span class="speaker-prospect">Prospect:</span> "Yeah, but make it fast. I've got a meeting in 5."
+                <span class="tone-shift">🎯 D-TYPE DETECTED</span>
+            </div>
+            
+            <div class="call-line">
+                <span class="speaker-ai">AI:</span> "Got it—I'll be direct. We help sales teams close 40% more deals by adapting to each buyer's style in real-time. Are you hitting your numbers this quarter or leaving money on the table?"
+            </div>
+            
+            <div class="call-line">
+                <span class="speaker-prospect">Prospect:</span> "We're at about 85% of target."
+            </div>
+            
+            <div class="call-line">
+                <span class="speaker-ai">AI:</span> "That gap is exactly what we fix. I can get you a 15-minute walkthrough with a closer on our team. What's better—tomorrow at 2 or Thursday morning?"
+            </div>
+            
+            <div class="call-line">
+                <span class="speaker-prospect">Prospect:</span> "Thursday works."
+            </div>
+        </div>
+        
+        <div class="script-say">
+            "What you just heard—that adjustment—is happening automatically in real-time. No training. No scripts. Just adaptation."
+        </div>
+    </div>
+
+    <!-- 1:30 - 2:00 -->
+    <div class="time-block">
+        <div class="time-header">
+            <span class="time-badge">1:30 – 2:00</span>
+            <span class="time-title">DISC (20 Seconds Max)</span>
+        </div>
+        
+        <div class="script-say">
+            "There are four types of buyers. Some want speed. Some want trust. Some want data. Most reps talk to all of them the same way. That's why you're losing leads you already paid for."
+        </div>
+        
+        <div class="script-say" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981;">
+            "We fix that."
+        </div>
+        
+        <div class="tip">Do NOT explain D-I-S-C individually. Move on.</div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- 2:00 - 3:00 -->
+    <div class="time-block">
+        <div class="time-header">
+            <span class="time-badge">2:00 – 3:00</span>
+            <span class="time-title">DASHBOARD (Outcomes Only)</span>
+        </div>
+        
+        <div class="action">Share screen → Dashboard</div>
+        
+        <div class="script-say">
+            "This is where you control how your AI closes deals."
+        </div>
+        
+        <div class="action">Point to Agents page</div>
+        
+        <div class="script-say">
+            "Here—you set the tone for each buyer type. Aggressive for the fast ones. Patient for the trust-driven ones."
+        </div>
+        
+        <div class="action">Point to Call History</div>
+        
+        <div class="script-say">
+            "Every call gets analyzed here so you know exactly what's working and what's not. No guesswork."
+        </div>
+        
+        <div class="tip">Do NOT explain UI elements. Move quickly.</div>
+    </div>
+
+    <!-- 3:00 - 4:30 -->
+    <div class="time-block">
+        <div class="time-header">
+            <span class="time-badge">3:00 – 4:30</span>
+            <span class="time-title">⭐ LIVE TRANSFER (Your Gold)</span>
+        </div>
+        
+        <div class="script-say">
+            "Here's where it gets unfair."
+        </div>
+        
+        <div class="script-say">
+            "Your rep gets on a live call. Before they speak, the AI already knows the buyer's style. It feeds them the right tone, the right pace, the right framing—in real time."
+        </div>
+        
+        <div class="script-say" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981;">
+            "Your reps walk into every call already knowing how to close that specific person."
+        </div>
+        
+        <div class="pause">Let that land for 2 seconds.</div>
+        
+        <div class="script-say">
+            "That's not training. That's a superpower."
+        </div>
+    </div>
+
+    <!-- 4:30 - 5:30 -->
+    <div class="time-block">
+        <div class="time-header">
+            <span class="time-badge">4:30 – 5:30</span>
+            <span class="time-title">💰 ROI ANCHORING (No Fluff)</span>
+        </div>
+        
+        <div class="script-say">
+            "Most teams using this go from losing 6 out of 10 warm leads to losing 4."
+        </div>
+        
+        <div class="script-say">
+            "That's two extra deals a week per rep."
+        </div>
+        
+        <div class="pause">What's two deals worth to you?</div>
+        
+        <div class="tip">Let them answer. Do not fill the silence. They're doing the math.</div>
+    </div>
+
+    <!-- 5:30 - 6:15 -->
+    <div class="time-block">
+        <div class="time-header">
+            <span class="time-badge">5:30 – 6:15</span>
+            <span class="time-title">PRICING (Only If They're Still In)</span>
+        </div>
+        
+        <div class="script-say">
+            "Most of our customers see ROI within the first week."
+        </div>
+        
+        <div class="script-say">
+            "Plans start at $49/month for inbound, $149/month for outbound—depending on usage."
+        </div>
+        
+        <div class="tip">Do NOT list all tiers unless they ask.</div>
+    </div>
+
+    <!-- 6:15 - 7:00 -->
+    <div class="time-block" style="background: linear-gradient(135deg, #8b5cf6, #06b6d4);">
+        <div class="time-header">
+            <span class="time-badge" style="background: white; color: #8b5cf6;">6:15 – 7:00</span>
+            <span class="time-title">🎯 HARD CLOSE</span>
+        </div>
+        
+        <div class="script-say" style="background: rgba(255,255,255,0.2); border-color: white; font-size: 17px;">
+            "Let's get this running for you right now. I can set up your first campaign in 15 minutes."
+        </div>
+        
+        <div class="pause" style="background: rgba(255,255,255,0.2); border-color: white; color: white;">
+            STOP TALKING. Let them speak first.
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Pause Points Summary -->
+    <div class="section-light">
+        <h3>⏸️ THREE PAUSE POINTS (Built In)</h3>
+        <ol style="margin-left: 20px;">
+            <li><strong>After the hook</strong> — "How many leads are you missing?"</li>
+            <li><strong>After ROI anchoring</strong> — "What's two deals worth to you?"</li>
+            <li><strong>After the hard close</strong> — Silence. Let them speak first.</li>
+        </ol>
+    </div>
+
+    <!-- Second Call Example -->
+    <div class="call-example" style="background: #0B1628;">
+        <h3>📞 ALTERNATE CALL EXAMPLE (S-Type / Relationship Buyer)</h3>
+        
+        <div class="call-line">
+            <span class="speaker-ai">AI:</span> "Hi, this is Sarah with Acme. Hope I'm not catching you at a bad time?"
+        </div>
+        
+        <div class="call-line">
+            <span class="speaker-prospect">Prospect:</span> "No, it's okay. What's this about?"
+            <span class="tone-shift">🎯 S-TYPE DETECTED</span>
+        </div>
+        
+        <div class="call-line">
+            <span class="speaker-ai">AI:</span> "I appreciate you taking a moment. I know you're busy. We work with sales teams to help them connect better with different types of buyers. I'm not here to pitch you—just wanted to see if it's something worth exploring together."
+        </div>
+        
+        <div class="call-line">
+            <span class="speaker-prospect">Prospect:</span> "Okay, what do you mean by different types?"
+        </div>
+        
+        <div class="call-line">
+            <span class="speaker-ai">AI:</span> "Great question. Some buyers want the facts fast. Others—like yourself—prefer to build a bit of trust first. Most sales reps miss that. We help them adapt. Would you be open to a quick call with someone on our team who can walk you through it? No pressure at all."
+        </div>
+        
+        <div class="call-line">
+            <span class="speaker-prospect">Prospect:</span> "Sure, that sounds reasonable."
+        </div>
+    </div>
+
+    <!-- Quick Objections -->
+    <div class="section-light">
+        <h3>🛡️ RAPID OBJECTION RESPONSES</h3>
+        
+        <div class="two-col">
+            <div>
+                <p><strong>"Is this legal?"</strong></p>
+                <p style="color: #059669; font-size: 14px;">"Fully TCPA compliant. AI disclosure on every call, DNC management built in."</p>
+            </div>
+            <div>
+                <p><strong>"Sounds robotic"</strong></p>
+                <p style="color: #059669; font-size: 14px;">"We use ElevenLabs—same tech as viral AI videos. You can even clone your own voice."</p>
+            </div>
+            <div>
+                <p><strong>"How long to set up?"</strong></p>
+                <p style="color: #059669; font-size: 14px;">"15 minutes. I can do it with you right now."</p>
+            </div>
+            <div>
+                <p><strong>"Need to think about it"</strong></p>
+                <p style="color: #059669; font-size: 14px;">"Totally get it. What specifically do you want to think through? I might be able to answer it now."</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Final Reminder -->
+    <div class="rule" style="background: #0B1628; color: white;">
+        <strong>REMEMBER:</strong><br>
+        Your old demo said: "Here's what we built"<br>
+        This demo says: <strong>"Here's how you make more money starting today"</strong>
+    </div>
+
+    <div class="section-light">
+        <h3>📋 QUICK REFERENCE</h3>
+        <div class="two-col">
+            <div>
+                <p><strong>Landing Page:</strong> dialgenix.ai</p>
+                <p><strong>Book Demo:</strong> calendly.com/dialgenix</p>
+            </div>
+            <div>
+                <p><strong>Phone:</strong> (888) 513-1913</p>
+                <p><strong>Email:</strong> support@dialgenix.ai</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>© 2025 DialGenix.ai — This script wins on momentum, not information.</p>
+    </div>
+</body>
+</html>

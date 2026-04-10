@@ -763,7 +763,6 @@ const LandingPage = () => {
       <section id="personality" className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-red-400 text-sm font-medium uppercase tracking-wide">The Problem</span>
             <h2 className="text-3xl md:text-5xl font-bold text-white mt-2 mb-4">
               Why Most Sales Calls Fail
             </h2>

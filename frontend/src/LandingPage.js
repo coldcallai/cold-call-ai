@@ -6,7 +6,7 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic, Brain
+  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic, Brain, TrendingUp
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -1887,6 +1887,114 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Voicemail Drop Section */}
+      <section className="bg-gradient-to-b from-[#0B1628] to-[#0a0f1a] py-24 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="order-2 lg:order-1 bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
+              <h3 className="text-white text-xl font-semibold mb-6 text-center">Why VM Drop Matters</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
+                  <div className="w-12 h-12 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-violet-400 font-bold text-lg">80%</span>
+                  </div>
+                  <p className="text-white">of sales calls go to <span className="text-violet-400 font-semibold">voicemail</span></p>
+                </div>
+                
+                <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
+                  <Clock className="w-8 h-8 text-violet-400 flex-shrink-0" />
+                  <p className="text-white">Save <span className="text-violet-400 font-semibold">hours daily</span> vs manual messages</p>
+                </div>
+                
+                <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
+                  <Mic className="w-8 h-8 text-violet-400 flex-shrink-0" />
+                  <p className="text-white">Perfect, <span className="text-violet-400 font-semibold">consistent delivery</span> every time</p>
+                </div>
+                
+                <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
+                  <TrendingUp className="w-8 h-8 text-violet-400 flex-shrink-0" />
+                  <p className="text-white">Increase <span className="text-violet-400 font-semibold">callback rates by 22%</span></p>
+                </div>
+              </div>
+              
+              <div className="mt-6 p-4 bg-gradient-to-r from-violet-500/20 to-purple-500/20 rounded-lg border border-violet-500/30">
+                <p className="text-violet-300 text-sm text-center font-medium">
+                  📬 The Result: Every voicemail gets a professional, compelling message—automatically.
+                </p>
+              </div>
+            </div>
+            
+            <div className="order-1 lg:order-2">
+              <span className="text-violet-400 text-sm font-medium uppercase tracking-wide">Voicemail Drop</span>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Never Waste Another Voicemail
+              </h2>
+              <p className="text-gray-400 text-lg mb-8">
+                80% of calls go to voicemail. Make every single one count with AI-powered voicemail drops.
+              </p>
+              
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-white font-semibold text-lg mb-3">How It Works</h4>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-violet-400 text-xs font-bold">1</span>
+                      </div>
+                      <p className="text-gray-300">AI detects voicemail pickup (beep detection)</p>
+                    </div>
+                    
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-violet-400 text-xs font-bold">2</span>
+                      </div>
+                      <p className="text-gray-300">Instantly drops your pre-recorded or AI-generated message</p>
+                    </div>
+                    
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-violet-400 text-xs font-bold">3</span>
+                      </div>
+                      <p className="text-gray-300">Moves to next call immediately—<span className="text-white font-medium">zero wait time</span></p>
+                    </div>
+                    
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-violet-400 text-xs font-bold">4</span>
+                      </div>
+                      <p className="text-gray-300">Prospect calls back → AI handles inbound instantly</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-5 bg-white/5 rounded-lg border border-white/10">
+                  <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-violet-400" />
+                    VM Drop Options
+                  </h4>
+                  <ul className="text-gray-400 text-sm space-y-2">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+                      <span><span className="text-white">Pre-recorded:</span> Upload your own voice message</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+                      <span><span className="text-white">AI-generated:</span> Dynamic messages with prospect's name</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+                      <span><span className="text-white">Cloned voice:</span> Use your voice clone for personalization</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Section 3: PROOF - Make It Real */}
       <section id="proof" className="bg-[#0a0f1a] py-24 px-6">
         <div className="max-w-6xl mx-auto">
@@ -1933,11 +2041,11 @@ const LandingPage = () => {
               </p>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold">M</span>
+                  <span className="text-white font-bold">S</span>
                 </div>
                 <div>
-                  <p className="text-white font-semibold">Mike Chen</p>
-                  <p className="text-gray-400 text-sm">Sales Director, TechScale Inc</p>
+                  <p className="text-white font-semibold">Sales Director</p>
+                  <p className="text-gray-400 text-sm">B2B SaaS Company</p>
                 </div>
               </div>
             </div>
@@ -1947,11 +2055,11 @@ const LandingPage = () => {
               </p>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold">S</span>
+                  <span className="text-white font-bold">V</span>
                 </div>
                 <div>
-                  <p className="text-white font-semibold">Sarah Martinez</p>
-                  <p className="text-gray-400 text-sm">VP of Growth, LeadGen Pro</p>
+                  <p className="text-white font-semibold">VP of Growth</p>
+                  <p className="text-gray-400 text-sm">Lead Generation Agency</p>
                 </div>
               </div>
             </div>

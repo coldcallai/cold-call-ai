@@ -464,8 +464,8 @@ const LandingPage = () => {
 
   const faqs = [
     {
-      question: "Is DialGenix.ai legal to use for cold calling?",
-      answer: "Yes. DialGenix.ai is designed to comply with TCPA regulations and industry standards. Every call automatically starts with an AI disclosure ('This is an AI assistant calling on behalf of...'). We provide DNC list management, calling hours restrictions (8am-9pm local time), and a compliance acknowledgment flow before you can make calls. We recommend consulting with your compliance team for any specific requirements.",
+      question: "Is DialGenix.ai compliant for cold calling?",
+      answer: "Yes. DialGenix.ai is built to align with TCPA regulations and industry standards. Each call begins with an AI disclosure (e.g., 'This is an AI assistant calling on behalf of…'). The platform includes features like DNC list management, calling hour restrictions (8am–9pm local time), and a compliance acknowledgment step before placing calls. We recommend consulting your compliance team for any specific requirements.",
     },
     {
       question: "Will this sound robotic?",

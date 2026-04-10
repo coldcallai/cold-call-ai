@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Phone, Users, Target, Calendar, Settings, LayoutDashboard,
   History, Search, Package, LogOut, BarChart3, X, TrendingUp,
-  Database, Shield, Rocket, User, Filter
+  Database, Shield, Rocket, User, Filter, Star
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -22,6 +22,7 @@ const Sidebar = () => {
     { path: "/app/agents", icon: Users, label: "Agents" },
     { path: "/app/bookings", icon: Calendar, label: "Bookings" },
     { path: "/app/calls", icon: History, label: "Call History" },
+    { path: "/app/reviews", icon: Star, label: "Review Requests" },
     { path: "/app/analytics", icon: TrendingUp, label: "Analytics" },
     { path: "/app/integrations", icon: Database, label: "CRM Integrations" },
     { path: "/app/compliance", icon: Shield, label: "Compliance" },

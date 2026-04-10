@@ -61,6 +61,7 @@ import Campaigns from "@/pages/CampaignsPage";
 import Agents from "@/pages/AgentsPage";
 import CallHistory from "@/pages/CallHistoryPage";
 import SettingsPage from "@/pages/SettingsPage";
+import ReviewRequestsPage from "@/pages/ReviewRequestsPage";
 import CreditPacks from "@/pages/CreditPacksPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -327,6 +328,7 @@ const AppRouter = () => {
                     <Route path="/compliance" element={<ComplianceSetupPage />} />
                     <Route path="/packs" element={<CreditPacks />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/reviews" element={<ReviewRequestsPage />} />
                   </Routes>
                 </main>
                 

@@ -12253,6 +12253,124 @@ async def get_all_demo_narrations():
         ]
     }
 
+# ============== SMS REVIEW REQUESTS ==============
+
+class ReviewRequestCreate(BaseModel):
+    patient_name: str
+    patient_phone: str
+    google_review_url: str
+    custom_message: Optional[str] = None
+
+class ReviewRequestBulk(BaseModel):
+    patients: List[Dict[str, str]]  # [{name, phone}, ...]
+    google_review_url: str
+    custom_message: Optional[str] = None
+
+@api_router.post("/reviews/send-request")
+async def send_review_request(request: ReviewRequestCreate, user_id: str = Depends(get_current_user)):
+    """Send SMS review request to a single patient"""
+    
+    if not twilio_service.is_configured:
+        raise HTTPException(status_code=400, detail="Twilio not configured for SMS")
+    
+    # Default message template
+    message = request.custom_message or f"Hi {request.patient_name}! Thank you for visiting us today. We'd love to hear about your experience. Please leave us a quick review: {request.google_review_url}"
+    
+    # Ensure message isn't too long for SMS
+    if len(message) > 1500:
+        message = message[:1500]
+    
+    try:
+        twilio_client.messages.create(
+            body=message,
+            from_=os.environ.get("TWILIO_PHONE_NUMBER"),
+            to=request.patient_phone
+        )
+        
+        # Log the review request
+        await db.review_requests.insert_one({
+            "user_id": user_id,
+            "patient_name": request.patient_name,
+            "patient_phone": request.patient_phone,
+            "google_review_url": request.google_review_url,
+            "message_sent": message,
+            "status": "sent",
+            "sent_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        logger.info(f"Sent review request SMS to {request.patient_phone}")
+        
+        return {
+            "success": True,
+            "message": "Review request sent",
+            "patient_name": request.patient_name
+        }
+    except Exception as e:
+        logger.error(f"Failed to send review SMS: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send SMS: {str(e)}")
+
+@api_router.post("/reviews/send-bulk")
+async def send_bulk_review_requests(request: ReviewRequestBulk, user_id: str = Depends(get_current_user)):
+    """Send review requests to multiple patients"""
+    
+    if not twilio_service.is_configured:
+        raise HTTPException(status_code=400, detail="Twilio not configured for SMS")
+    
+    results = []
+    for patient in request.patients:
+        name = patient.get("name", "")
+        phone = patient.get("phone", "")
+        
+        if not phone:
+            results.append({"name": name, "status": "skipped", "reason": "No phone"})
+            continue
+        
+        message = request.custom_message or f"Hi {name}! Thank you for visiting us today. We'd love to hear about your experience. Please leave us a quick review: {request.google_review_url}"
+        
+        try:
+            twilio_client.messages.create(
+                body=message,
+                from_=os.environ.get("TWILIO_PHONE_NUMBER"),
+                to=phone
+            )
+            
+            await db.review_requests.insert_one({
+                "user_id": user_id,
+                "patient_name": name,
+                "patient_phone": phone,
+                "google_review_url": request.google_review_url,
+                "message_sent": message,
+                "status": "sent",
+                "sent_at": datetime.now(timezone.utc).isoformat()
+            })
+            
+            results.append({"name": name, "status": "sent"})
+        except Exception as e:
+            results.append({"name": name, "status": "failed", "reason": str(e)})
+    
+    sent_count = len([r for r in results if r["status"] == "sent"])
+    
+    return {
+        "success": True,
+        "total": len(request.patients),
+        "sent": sent_count,
+        "results": results
+    }
+
+@api_router.get("/reviews/history")
+async def get_review_request_history(user_id: str = Depends(get_current_user), limit: int = 50):
+    """Get history of sent review requests"""
+    
+    requests = await db.review_requests.find(
+        {"user_id": user_id}
+    ).sort("sent_at", -1).limit(limit).to_list(length=limit)
+    
+    # Remove MongoDB _id
+    for req in requests:
+        req.pop("_id", None)
+    
+    return {"requests": requests}
+
 # Include router
 # Conditionally mount new modular auth routes FIRST (Strangler Fig pattern)
 # This ensures new routes take precedence over legacy inline routes
@@ -12430,6 +12548,12 @@ Anyway— I'll let you get back to it. Talk soon!"""
                     logger.info("Demo audio pre-cached successfully")
         except Exception as e:
             logger.error(f"Failed to pre-cache demo audio: {e}")
+
+
+
+
+
+
 
 
 @app.on_event("shutdown")

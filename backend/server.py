@@ -243,6 +243,10 @@ class User(BaseModel):
     call_credits_remaining: int = 0
     monthly_lead_allowance: int = 0
     monthly_call_allowance: int = 0
+    # Inbound AI Receptionist tracking
+    inbound_minutes_remaining: float = 0.0  # Minutes remaining for inbound calls
+    inbound_minutes_used: float = 0.0  # Total minutes used this billing period
+    inbound_overage_rate: float = 0.0  # Per-minute overage rate
     team_seat_count: int = 1
     saved_keywords: List[str] = []  # User's saved intent keywords (up to 100)
     onboarding_completed: bool = False  # Track if user completed onboarding
@@ -591,6 +595,43 @@ class PackType(str, Enum):
 
 # Subscription Plans
 SUBSCRIPTION_PLANS = {
+    # ============== INBOUND AI RECEPTIONIST PLANS ==============
+    "receptionist_lite": {
+        "name": "Receptionist Lite",
+        "price": 49,
+        "leads_per_month": 0,
+        "calls_per_month": 0,
+        "inbound_minutes": 100,
+        "inbound_overage_rate": 0.35,
+        "features": ["100 inbound minutes", "$0.35/min overage", "24/7 AI answering", "Calendar booking", "Call recordings", "SMS confirmations", "1 phone number"],
+        "users": 1,
+        "plan_type": "inbound",
+        "phone_numbers": 1
+    },
+    "receptionist_pro": {
+        "name": "Receptionist Pro",
+        "price": 99,
+        "leads_per_month": 0,
+        "calls_per_month": 0,
+        "inbound_minutes": 300,
+        "inbound_overage_rate": 0.25,
+        "features": ["300 inbound minutes", "$0.25/min overage", "24/7 AI answering", "Calendar booking", "Call transcripts", "Custom greetings", "Appointment reminders", "2 phone numbers"],
+        "users": 1,
+        "plan_type": "inbound",
+        "phone_numbers": 2
+    },
+    "receptionist_plus": {
+        "name": "Receptionist Plus",
+        "price": 199,
+        "leads_per_month": 0,
+        "calls_per_month": 0,
+        "inbound_minutes": 750,
+        "inbound_overage_rate": 0.18,
+        "features": ["750 inbound minutes", "$0.18/min overage", "24/7 AI answering", "Calendar booking", "Call transcripts", "Custom FAQ handling", "Priority support", "5 phone numbers"],
+        "users": 1,
+        "plan_type": "inbound",
+        "phone_numbers": 5
+    },
     # ============== BYOL PLANS (Bring Your Own List) ==============
     "byol_starter": {
         "name": "BYOL Starter",

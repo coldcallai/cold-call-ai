@@ -408,57 +408,66 @@ const LandingPage = () => {
     },
   ];
 
-  // Inbound AI Plans - Answer incoming calls
+  // Inbound AI Receptionist Plans - Minutes-based with overage
   const inboundPlans = [
     {
-      name: "Inbound Lite",
-      price: "99",
+      name: "Receptionist Lite",
+      price: "49",
       period: "/month",
-      description: "For small businesses",
+      description: "Solo practices",
       features: [
-        "50 inbound calls/month",
+        "100 minutes included",
+        "$0.35/min overage",
         "24/7 AI answering",
-        "Basic call routing",
-        "SMS notifications",
+        "Calendar booking",
         "Call recordings",
+        "SMS confirmations",
         "1 phone number",
       ],
       cta: "Get Started",
       popular: false,
+      minutes: 100,
+      overage: 0.35,
     },
     {
-      name: "Inbound Starter",
-      price: "199",
+      name: "Receptionist Pro",
+      price: "99",
       period: "/month",
-      description: "Never miss a call",
+      description: "Small offices",
       features: [
-        "150 inbound calls/month",
+        "300 minutes included",
+        "$0.25/min overage",
         "24/7 AI answering",
-        "Call qualification",
-        "Instant booking",
+        "Calendar booking",
         "Call transcripts",
-        "SMS notifications",
+        "Custom greetings",
+        "Appointment reminders",
         "2 phone numbers",
       ],
       cta: "Get Started",
-      popular: false,
+      popular: true,
+      minutes: 300,
+      overage: 0.25,
     },
     {
-      name: "Inbound Pro",
-      price: "399",
+      name: "Receptionist Plus",
+      price: "199",
       period: "/month",
-      description: "High-volume inbound",
+      description: "Busy practices",
       features: [
-        "500 inbound calls/month",
+        "750 minutes included",
+        "$0.18/min overage",
         "24/7 AI answering",
-        "Custom scripts",
-        "Calendar integration",
+        "Calendar booking",
         "Call transcripts",
-        "CRM sync",
+        "Custom FAQ handling",
+        "Priority support",
         "5 phone numbers",
       ],
       cta: "Get Started",
-      popular: true,
+      popular: false,
+      minutes: 750,
+      overage: 0.18,
     },
   ];
 
@@ -2366,7 +2375,7 @@ const LandingPage = () => {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                📞 Inbound AI
+                📞 AI Receptionist
               </button>
             </div>
           </div>
@@ -2547,7 +2556,8 @@ const LandingPage = () => {
           {pricingTab === 'inbound' && (
             <>
               <div className="text-center mb-8">
-                <p className="text-gray-600">Turn every incoming call into a booked appointment—24/7, even when you're busy.</p>
+                <p className="text-gray-600">Perfect for dentists, clinics, salons & service businesses. Never miss a call—AI answers 24/7.</p>
+                <p className="text-purple-600 text-sm mt-2 font-medium">Pay only for what you use. Unused minutes roll over.</p>
               </div>
               <div className="grid md:grid-cols-3 gap-6">
                 {inboundPlans.map((plan, idx) => (
@@ -2601,7 +2611,7 @@ const LandingPage = () => {
           )}
           {pricingTab === 'inbound' && (
             <p className="text-center text-gray-500 text-sm mt-8">
-              Start with Inbound Lite for $99/mo. Never miss a customer call again.
+              Start with Receptionist Lite for $49/mo. Never miss a patient or customer call again.
             </p>
           )}
           <p className="text-center text-gray-400 text-sm mt-3">

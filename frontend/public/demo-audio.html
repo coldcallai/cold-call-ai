@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DialGenix Demo Audio - Sample Calls</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0B1628;
+            color: white;
+            min-height: 100vh;
+            padding: 40px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 32px;
+            background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #9ca3af;
+            margin-bottom: 40px;
+        }
+        .audio-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .audio-card h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        .audio-card .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .badge-d { background: #ef4444; }
+        .badge-s { background: #22c55e; }
+        .badge-vm { background: #8b5cf6; }
+        .audio-card p {
+            color: #9ca3af;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        audio {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .script {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 13px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .script-line {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .script-line:last-child { border-bottom: none; }
+        .speaker-ai { color: #22d3ee; font-weight: bold; }
+        .speaker-prospect { color: #fbbf24; font-weight: bold; }
+        .download-btn {
+            display: inline-block;
+            background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .download-btn:hover {
+            transform: scale(1.02);
+        }
+        .tip {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 30px;
+            font-size: 14px;
+        }
+        .tip strong { color: #6ee7b7; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DialGenix Demo Audio</h1>
+        <p class="subtitle">Sample call recordings for your sales demos</p>
+
+        <!-- D-Type Call -->
+        <div class="audio-card">
+            <h2>D-Type Call (Dominant Buyer)</h2>
+            <span class="badge badge-d">FAST & DIRECT</span>
+            <p>AI adapts to a time-pressed, results-focused buyer. Gets to the point immediately.</p>
+            
+            <audio controls preload="metadata">
+                <source src="/demo-audio/d_type_call.mp3" type="audio/mpeg">
+            </audio>
+            
+            <div class="script">
+                <div class="script-line"><span class="speaker-ai">AI:</span> Hi, this is Sarah calling from Acme Solutions. Do you have a quick moment?</div>
+                <div class="script-line"><span class="speaker-prospect">Prospect:</span> Yeah, but make it fast. I've got a meeting in 5.</div>
+                <div class="script-line"><span class="speaker-ai">AI:</span> Got it. I'll be direct. We help sales teams close 40% more deals by adapting to each buyer's style in real-time. Are you hitting your numbers this quarter or leaving money on the table?</div>
+                <div class="script-line"><span class="speaker-prospect">Prospect:</span> We're at about 85% of target.</div>
+                <div class="script-line"><span class="speaker-ai">AI:</span> That gap is exactly what we fix. I can get you a 15-minute walkthrough with a closer on our team. What's better, tomorrow at 2 or Thursday morning?</div>
+                <div class="script-line"><span class="speaker-prospect">Prospect:</span> Thursday works.</div>
+                <div class="script-line"><span class="speaker-ai">AI:</span> Perfect. You'll get a calendar invite in the next 2 minutes. Talk Thursday.</div>
+            </div>
+            
+            <a href="/demo-audio/d_type_call.mp3" download class="download-btn">⬇️ Download MP3</a>
+        </div>
+
+        <!-- S-Type Call -->
+        <div class="audio-card">
+            <h2>S-Type Call (Steady Buyer)</h2>
+            <span class="badge badge-s">RELATIONSHIP-FOCUSED</span>
+            <p>AI adapts to a trust-driven buyer. Builds rapport, no pressure approach.</p>
+            
+            <audio controls preload="metadata">
+                <source src="/demo-audio/s_type_call.mp3" type="audio/mpeg">
+            </audio>
+            
+            <div class="script">
+                <div class="script-line"><span class="speaker-ai">AI:</span> Hi, this is Sarah with Acme. Hope I'm not catching you at a bad time?</div>
+                <div class="script-line"><span class="speaker-prospect">Prospect:</span> No, it's okay. What's this about?</div>
+                <div class="script-line"><span class="speaker-ai">AI:</span> I appreciate you taking a moment. I know you're busy. We work with sales teams to help them connect better with different types of buyers. I'm not here to pitch you, just wanted to see if it's something worth exploring together.</div>
+                <div class="script-line"><span class="speaker-prospect">Prospect:</span> Okay, what do you mean by different types?</div>
+                <div class="script-line"><span class="speaker-ai">AI:</span> Great question. Some buyers want the facts fast. Others, like yourself, prefer to build a bit of trust first. Most sales reps miss that. We help them adapt. Would you be open to a quick call with someone on our team who can walk you through it? No pressure at all.</div>
+                <div class="script-line"><span class="speaker-prospect">Prospect:</span> Sure, that sounds reasonable.</div>
+                <div class="script-line"><span class="speaker-ai">AI:</span> Wonderful. I'll send over a few time options. Looking forward to connecting you with our team.</div>
+            </div>
+            
+            <a href="/demo-audio/s_type_call.mp3" download class="download-btn">⬇️ Download MP3</a>
+        </div>
+
+        <!-- VM Drop -->
+        <div class="audio-card">
+            <h2>Voicemail Drop</h2>
+            <span class="badge badge-vm">CONVERSATIONAL VM</span>
+            <p>Non-salesy voicemail that increases callbacks. Friendly, low-pressure.</p>
+            
+            <audio controls preload="metadata">
+                <source src="/demo-audio/vm_drop.mp3" type="audio/mpeg">
+            </audio>
+            
+            <div class="script">
+                <div class="script-line"><span class="speaker-ai">AI:</span> Hi, this is Sarah with DialGenix. I just wanted to raise my hand and let you know I'm out here. I focus on helping sales teams get more qualified leads and booked appointments. If you need help with live transfers or just want to bounce an idea, I'm happy to chat, whether you're a client or not. My number is 888-513-1913. Talk soon.</div>
+            </div>
+            
+            <a href="/demo-audio/vm_drop.mp3" download class="download-btn">⬇️ Download MP3</a>
+        </div>
+
+        <div class="tip">
+            <strong>💡 Demo Tip:</strong> During your demo, play the D-Type call first (0:30 mark). Then say: "What you just heard—that adjustment—is happening automatically in real-time." Then reference the S-Type call: "For an S-type buyer, same AI, completely different approach."
+        </div>
+    </div>
+</body>
+</html>

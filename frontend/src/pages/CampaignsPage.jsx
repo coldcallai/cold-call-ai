@@ -545,12 +545,33 @@ const Campaigns = () => {
                     id="voicemail-message"
                     value={newCampaign.voicemail_message}
                     onChange={(e) => setNewCampaign({...newCampaign, voicemail_message: e.target.value})}
-                    placeholder="Hi {contact_name}, this is {agent_name} calling for {business_name}. I tried reaching you about an opportunity that could help your business. Visit dialgenix.ai to learn more, or I'll try you again soon. Thanks!"
+                    placeholder="Hi, this is {agent_name} with {company_name}. I just wanted to raise my hand and let you know I'm out here. I focus on helping businesses get more qualified leads. If you need help with more booked appointments or live transfers, I'm happy to have a discussion—even if it's just to bounce an idea. My number is 555-555-5555. Talk soon!"
                     className="mt-1 min-h-[100px]"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    Variables: {'{contact_name}'}, {'{business_name}'}, {'{company_name}'}, {'{agent_name}'} • Include your website URL!
+                    Variables: {'{contact_name}'}, {'{business_name}'}, {'{company_name}'}, {'{agent_name}'}
                   </p>
+                  
+                  {/* VM Drop Tips */}
+                  <div className="mt-4 p-4 bg-violet-500/10 border border-violet-500/20 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-violet-400 text-lg">💡</span>
+                      </div>
+                      <div>
+                        <p className="text-violet-300 font-medium text-sm mb-2">Pro Tip: Conversational beats salesy</p>
+                        <p className="text-gray-400 text-xs mb-3">
+                          Don't be pushy. Leave a friendly, low-pressure message that makes them <span className="text-white">want</span> to call back.
+                        </p>
+                        <div className="bg-black/20 rounded-lg p-3 text-xs text-gray-300 italic">
+                          <p className="mb-2">"Hi, this is <span className="text-violet-300">[Your Name]</span> with <span className="text-violet-300">[Company]</span>. I just wanted to raise my hand and let you know I'm out here.</p>
+                          <p className="mb-2">I focus on helping salespeople get more qualified leads. Anything you need in terms of more booked appointments or live transfers—I'm happy to have a discussion with you, even if it's just to bounce an idea.</p>
+                          <p>I'm happy to help whether you're a client or not. My mobile is <span className="text-violet-300">[Your Number]</span>."</p>
+                        </div>
+                        <p className="text-gray-500 text-xs mt-2">✓ Friendly ✓ No pressure ✓ Offers value ✓ Easy callback</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

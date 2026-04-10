@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DialGenix.ai - Live Demo Script</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #1a1a2e;
+            background: #fff;
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        @media print {
+            body { padding: 20px; }
+            .page-break { page-break-before: always; }
+            .no-print { display: none; }
+        }
+        
+        h1 {
+            font-size: 32px;
+            color: #0B1628;
+            border-bottom: 4px solid #8b5cf6;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            color: #8b5cf6;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: linear-gradient(90deg, #8b5cf6 0%, #06b6d4 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        
+        h3 {
+            font-size: 18px;
+            color: #0B1628;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        h4 {
+            font-size: 16px;
+            color: #6b7280;
+            margin-top: 15px;
+            margin-bottom: 8px;
+        }
+        
+        p {
+            margin-bottom: 12px;
+        }
+        
+        .subtitle {
+            font-size: 18px;
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        
+        .script-box {
+            background: #f0f9ff;
+            border-left: 4px solid #06b6d4;
+            padding: 15px 20px;
+            margin: 15px 0;
+            font-style: italic;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .step-box {
+            background: #faf5ff;
+            border: 2px solid #8b5cf6;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .step-number {
+            display: inline-block;
+            background: #8b5cf6;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .checklist li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        
+        .checklist li::before {
+            content: "☐";
+            position: absolute;
+            left: 0;
+            font-size: 18px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        th, td {
+            border: 1px solid #e5e7eb;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background: #8b5cf6;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background: #f9fafb;
+        }
+        
+        .disc-d { color: #ef4444; font-weight: bold; }
+        .disc-i { color: #eab308; font-weight: bold; }
+        .disc-s { color: #22c55e; font-weight: bold; }
+        .disc-c { color: #3b82f6; font-weight: bold; }
+        
+        .tip-box {
+            background: #ecfdf5;
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .tip-box::before {
+            content: "💡 TIP: ";
+            font-weight: bold;
+            color: #10b981;
+        }
+        
+        .warning-box {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .objection {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .objection strong {
+            color: #ef4444;
+        }
+        
+        .objection p {
+            margin-top: 8px;
+            color: #059669;
+        }
+        
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .do-list, .dont-list {
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .do-list {
+            background: #ecfdf5;
+            border: 1px solid #10b981;
+        }
+        
+        .dont-list {
+            background: #fef2f2;
+            border: 1px solid #ef4444;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .print-btn:hover {
+            background: #7c3aed;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">📄 Save as PDF</button>
+
+    <h1>DialGenix.ai</h1>
+    <p class="subtitle">Live Demo Script & Sales Presentation Guide</p>
+
+    <h2>📋 Before the Call - Prep Checklist</h2>
+    <ul class="checklist">
+        <li>DialGenix dashboard logged in</li>
+        <li>Landing page open in separate tab (dialgenix.ai)</li>
+        <li>Sample campaign ready with test leads</li>
+        <li>Calendly link ready to share</li>
+        <li>Twilio phone ready for live demo call (optional)</li>
+    </ul>
+
+    <h2><span class="step-number">1</span> THE HOOK (2 min)</h2>
+    <div class="step-box">
+        <h4>What to say:</h4>
+        <div class="script-box">
+            "Let me show you something that's changing how top sales teams close deals..."
+        </div>
+        
+        <h4>Show: Landing Page Hero</h4>
+        <ul>
+            <li>Point to: "AI That Adapts to Every Buyer"</li>
+            <li>Scroll to DISC personality section</li>
+            <li>Explain: "Every buyer has a different personality. Our AI detects this in real-time and adjusts automatically."</li>
+        </ul>
+        
+        <div class="tip-box">
+            80% of sales calls fail because reps use one script for every buyer type.
+        </div>
+    </div>
+
+    <h2><span class="step-number">2</span> THE DISC DIFFERENCE (3 min)</h2>
+    <div class="step-box">
+        <h4>What to say:</h4>
+        <div class="script-box">
+            "Let me show you the 4 buyer personalities our AI detects..."
+        </div>
+        
+        <table>
+            <tr>
+                <th>Type</th>
+                <th>Color</th>
+                <th>How They Buy</th>
+            </tr>
+            <tr>
+                <td class="disc-d">D - Dominant</td>
+                <td>🔴 Red</td>
+                <td>Fast decisions, wants bottom line</td>
+            </tr>
+            <tr>
+                <td class="disc-i">I - Influencer</td>
+                <td>🟡 Yellow</td>
+                <td>Relationship-focused, enthusiastic</td>
+            </tr>
+            <tr>
+                <td class="disc-s">S - Steady</td>
+                <td>🟢 Green</td>
+                <td>Needs trust, takes time</td>
+            </tr>
+            <tr>
+                <td class="disc-c">C - Conscientious</td>
+                <td>🔵 Blue</td>
+                <td>Wants data, details, proof</td>
+            </tr>
+        </table>
+        
+        <div class="script-box">
+            "When our AI detects a 'D' type, it gets to the point fast. When it detects an 'S', it builds rapport first. This alone increases close rates by 40%."
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2><span class="step-number">3</span> LIVE DASHBOARD TOUR (5 min)</h2>
+    <div class="step-box">
+        <h3>A) Dashboard Overview</h3>
+        <ul class="checklist">
+            <li>Point to: Call stats, conversion metrics</li>
+            <li>Show: Recent activity feed</li>
+            <li>Mention: "Everything updates in real-time"</li>
+        </ul>
+
+        <h3>B) Agents Page</h3>
+        <div class="script-box">
+            "This is where you create your AI sales agent..."
+        </div>
+        <ul class="checklist">
+            <li>Agent name & voice selection</li>
+            <li>Voice Tuning sliders (stability, clarity, expressiveness)</li>
+            <li>DISC detection tips</li>
+            <li>Calendly integration</li>
+        </ul>
+        <div class="tip-box">
+            "You can clone your own voice or your top rep's voice."
+        </div>
+
+        <h3>C) Campaigns Page</h3>
+        <div class="script-box">
+            "Here's where you set up your outreach campaign..."
+        </div>
+        <ul class="checklist">
+            <li>Campaign creation modal</li>
+            <li>Script customization</li>
+            <li>DISC question injection buttons</li>
+            <li>Voicemail Drop settings + Pro tip</li>
+        </ul>
+
+        <h3>D) Call History</h3>
+        <div class="script-box">
+            "Every call is recorded, transcribed, and scored..."
+        </div>
+        <ul class="checklist">
+            <li>Call recordings (play a short clip)</li>
+            <li>Transcripts</li>
+            <li>Personality badge (D/I/S/C)</li>
+            <li>Qualification score</li>
+        </ul>
+    </div>
+
+    <h2><span class="step-number">4</span> LIVE TRANSFER DEMO (3 min)</h2>
+    <div class="step-box">
+        <div class="script-box">
+            "Here's where it gets really powerful..."
+        </div>
+        
+        <h4>Explain Live Transfers:</h4>
+        <ol>
+            <li>AI calls the prospect</li>
+            <li>Detects buying signals + personality</li>
+            <li>Transfers to your rep INSTANTLY</li>
+            <li><strong>Whispers the personality type</strong> before connecting</li>
+        </ol>
+        
+        <div class="script-box">
+            "Before you even say hello, you'll hear: 'This is a Dominant type. Get to the point, focus on results.' Imagine how much better your close rate becomes."
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2><span class="step-number">5</span> PRICING & CLOSE (3 min)</h2>
+    <div class="step-box">
+        <h3>For Outbound Sales Teams (BYOL):</h3>
+        <table>
+            <tr>
+                <th>Plan</th>
+                <th>Price</th>
+                <th>Includes</th>
+            </tr>
+            <tr>
+                <td>Starter</td>
+                <td>$149/mo</td>
+                <td>250 AI calls</td>
+            </tr>
+            <tr>
+                <td>Pro</td>
+                <td>$349/mo</td>
+                <td>750 AI calls</td>
+            </tr>
+        </table>
+
+        <h3>For Dentists/Service Businesses (AI Receptionist):</h3>
+        <table>
+            <tr>
+                <th>Plan</th>
+                <th>Price</th>
+                <th>Minutes</th>
+                <th>Overage</th>
+            </tr>
+            <tr>
+                <td>Receptionist Lite</td>
+                <td>$49/mo</td>
+                <td>100 min</td>
+                <td>$0.35/min</td>
+            </tr>
+            <tr>
+                <td>Receptionist Pro</td>
+                <td>$99/mo</td>
+                <td>300 min</td>
+                <td>$0.25/min</td>
+            </tr>
+            <tr>
+                <td>Receptionist Plus</td>
+                <td>$199/mo</td>
+                <td>750 min</td>
+                <td>$0.18/min</td>
+            </tr>
+        </table>
+        
+        <div class="script-box">
+            "You only pay for what you use. And unused minutes roll over."
+        </div>
+    </div>
+
+    <h2><span class="step-number">6</span> CALL TO ACTION</h2>
+    <div class="step-box">
+        <h3>Option A: Book Setup Call</h3>
+        <div class="script-box">
+            "Let's get you set up. I can have you live in 15 minutes."
+        </div>
+        <p><strong>Share:</strong> calendly.com/dialgenix/15-30min</p>
+
+        <h3>Option B: Free Trial</h3>
+        <div class="script-box">
+            "Want to try it yourself first? You get 15 free minutes - no credit card required."
+        </div>
+        <p><strong>Direct to:</strong> dialgenix.ai → "Start Free"</p>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>🛡️ Objection Handling</h2>
+    
+    <div class="objection">
+        <strong>"Is this legal?"</strong>
+        <p>"Yes. DialGenix is TCPA compliant. Every call starts with an AI disclosure, we manage DNC lists, and respect calling hours (8am-9pm local time)."</p>
+    </div>
+    
+    <div class="objection">
+        <strong>"Will it sound robotic?"</strong>
+        <p>"Not at all. We use ElevenLabs - the same technology behind viral AI videos. Plus you can tune the voice and even clone your own."</p>
+    </div>
+    
+    <div class="objection">
+        <strong>"What if they want to talk to a human?"</strong>
+        <p>"The AI immediately offers to transfer or schedule a callback. During live transfers, your team gets personality insights before connecting."</p>
+    </div>
+    
+    <div class="objection">
+        <strong>"How long to set up?"</strong>
+        <p>"15 minutes. We help you write your script, connect your calendar, and you're live."</p>
+    </div>
+    
+    <div class="objection">
+        <strong>"What about my existing leads?"</strong>
+        <p>"Just upload a CSV. Our AI starts calling immediately."</p>
+    </div>
+
+    <h2>✅ Demo Tips</h2>
+    <div class="two-col">
+        <div class="do-list">
+            <h4>✅ DO:</h4>
+            <ul>
+                <li>Let them hear a sample call early</li>
+                <li>Show personality detection in action</li>
+                <li>Emphasize "adapts in real-time"</li>
+                <li>Ask about their current pain points</li>
+                <li>Offer to set them up live on the call</li>
+            </ul>
+        </div>
+        <div class="dont-list">
+            <h4>❌ DON'T:</h4>
+            <ul>
+                <li>Spend too long on features they don't need</li>
+                <li>Skip the DISC explanation - it's your differentiator</li>
+                <li>Forget to mention compliance (builds trust)</li>
+                <li>End without a clear next step</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>📞 Quick Reference</h2>
+    <table>
+        <tr>
+            <th>Resource</th>
+            <th>Link/Info</th>
+        </tr>
+        <tr>
+            <td>Landing Page</td>
+            <td>https://dialgenix.ai</td>
+        </tr>
+        <tr>
+            <td>Login</td>
+            <td>https://dialgenix.ai/login</td>
+        </tr>
+        <tr>
+            <td>Book Demo</td>
+            <td>https://calendly.com/dialgenix/15-30min</td>
+        </tr>
+        <tr>
+            <td>Phone</td>
+            <td>(888) 513-1913</td>
+        </tr>
+        <tr>
+            <td>Email</td>
+            <td>support@dialgenix.ai</td>
+        </tr>
+    </table>
+
+    <h3>Key Stats to Mention:</h3>
+    <ul>
+        <li>80% of calls go to voicemail (VM Drop handles this)</li>
+        <li>40% higher close rates with personality detection</li>
+        <li>15 minutes to go live</li>
+        <li>24/7 AI availability</li>
+    </ul>
+
+    <div class="footer">
+        <p>© 2025 DialGenix.ai - Confidential Sales Material</p>
+        <p>Questions? support@dialgenix.ai | (888) 513-1913</p>
+    </div>
+</body>
+</html>

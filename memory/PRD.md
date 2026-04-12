@@ -5,6 +5,18 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 
 ## Latest Updates (April 2026)
 
+### BYOK Setup Wizard & Credit Alerts (COMPLETED - April 12, 2026)
+- [x] `POST /api/settings/verify-twilio` - Validates Twilio SID/Auth Token, returns real-time balance
+- [x] `POST /api/settings/verify-elevenlabs` - Validates ElevenLabs API key with fallback to /v1/voices
+- [x] `POST /api/settings/integrations` - Stores Twilio & ElevenLabs credentials encrypted (Fernet)
+- [x] `GET /api/settings/integrations/status` - Returns connected booleans
+- [x] `GET /api/settings/integrations/balances` - Real-time balance check for both services
+- [x] `SetupWizard.jsx` - 4-step guided onboarding (Welcome, Twilio, ElevenLabs, Complete)
+- [x] Cost comparison UI highlighting affordability vs competitors
+- [x] `CreditAlertBanner.jsx` - Global banner warning when Twilio <$10 or ElevenLabs <20%
+- [x] Banner polls every 5 minutes, dismissible per-service
+- [x] 17/17 backend tests passing (`/app/backend/tests/test_byok_integrations.py`)
+
 ### Auto-Detect AI Disclosure (COMPLETED - April 12, 2026)
 - [x] Added `auto_disclosure_mobile_only` toggle to Agent settings
 - [x] Added `opening_script` field for landline/business calls (no AI disclosure)
@@ -546,6 +558,7 @@ A vertical-agnostic B2B SaaS platform that:
 - [x] ~~Setup Instructions / Onboarding Wizard~~ ✅ DONE (December 2025)
 - [x] ~~Synthflow-style Free Trial (15 minutes of call time)~~ ✅ DONE (December 2025)
 - [x] ~~ElevenLabs Voice Cloning~~ ✅ DONE (March 2026) - Clone custom voices for AI agents
+- [x] ~~BYOK Setup Wizard & Credit Alerts~~ ✅ DONE (April 2026) - Encrypted API key storage, real-time balance checks
 
 ### P1 - High Priority
 - [x] ~~Multi-tenant data isolation - Scope leads/campaigns to user accounts~~ ✅ DONE (December 2025)

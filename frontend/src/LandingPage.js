@@ -6,7 +6,7 @@ import {
   Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
-  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic, Brain, TrendingUp
+  Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic, Brain, TrendingUp, Star
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -2002,6 +2002,111 @@ const LandingPage = () => {
                       <span><span className="text-white">Cloned voice:</span> Use your voice clone for personalization</span>
                     </li>
                   </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SMS Review Requests Section - For Any Business */}
+      <section className="bg-gradient-to-b from-[#0a0f1a] to-[#0d1321] py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: Content */}
+            <div>
+              <span className="inline-flex items-center gap-2 text-amber-400 text-sm font-medium uppercase tracking-wide mb-4">
+                <Star className="w-4 h-4" />
+                Reputation Management
+              </span>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                Turn Happy Customers Into
+                <span className="text-amber-400"> 5-Star Reviews</span>
+              </h2>
+              <p className="text-gray-400 text-lg mb-8">
+                After every successful interaction, automatically send personalized SMS or email review requests. 
+                Build your online reputation while you focus on growing your business.
+              </p>
+              
+              <div className="space-y-4 mb-8">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Automated Follow-Up Messages</h4>
+                    <p className="text-gray-400 text-sm">Send review requests via SMS or email after calls, meetings, or purchases</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Star className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Direct Review Links</h4>
+                    <p className="text-gray-400 text-sm">One-tap Google, Yelp, or custom review links make it effortless for customers</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Users className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold">Bulk Outreach to Past Customers</h4>
+                    <p className="text-gray-400 text-sm">Upload a CSV and request reviews from your entire customer base in minutes</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                <p className="text-amber-200 text-sm">
+                  <span className="font-semibold">💡 Pro Tip:</span> Businesses with 50+ Google reviews see 
+                  <span className="text-amber-400 font-semibold"> 35% more clicks</span> than competitors. 
+                  Start building your reviews today.
+                </p>
+              </div>
+            </div>
+            
+            {/* Right: Mock SMS Preview */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-emerald-500/20 blur-3xl opacity-30"></div>
+              <div className="relative bg-[#1a1f2e] rounded-2xl border border-white/10 p-6 max-w-sm mx-auto">
+                {/* Phone Frame */}
+                <div className="bg-gray-900 rounded-xl p-4 shadow-2xl">
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">AB</span>
+                      </div>
+                      <div>
+                        <p className="text-white text-sm font-medium">Acme Business</p>
+                        <p className="text-gray-500 text-xs">SMS • Just now</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="bg-blue-600 text-white text-sm p-3 rounded-2xl rounded-tl-sm max-w-[85%]">
+                      <p>Hi John! 👋</p>
+                      <p className="mt-1">Thanks for choosing Acme Business! We hope everything went great today.</p>
+                    </div>
+                    
+                    <div className="bg-blue-600 text-white text-sm p-3 rounded-2xl rounded-tl-sm max-w-[85%]">
+                      <p>Would you take 30 seconds to share your experience? Your feedback helps others find us!</p>
+                      <p className="mt-2 text-blue-200 underline">→ Leave a Review</p>
+                    </div>
+                    
+                    <div className="bg-gray-700 text-white text-sm p-3 rounded-2xl rounded-tr-sm max-w-[85%] ml-auto">
+                      <p>Absolutely! Great service as always. Done! ⭐⭐⭐⭐⭐</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Stats Badge */}
+                <div className="absolute -bottom-4 -right-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg">
+                  +47 reviews this month
                 </div>
               </div>
             </div>

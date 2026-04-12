@@ -13,6 +13,15 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [x] UI added to Create Agent and Edit Agent dialogs with TCPA compliance info
 - [x] Variables supported: {agent_name}, {contact_name}, {business_name}
 
+### Opt-Out Detection - Option B (COMPLETED - April 12, 2026)
+- [x] Enhanced opt-out phrase detection with 20+ phrases: "not interested", "remove me", "no thanks", "stop calling", etc.
+- [x] AI responds professionally: "No problem at all. I've removed you from our list..."
+- [x] Auto-adds phone to internal DNC list via ComplianceService
+- [x] Records opt-out phrase and call outcome in database
+- [x] New `/api/compliance/dnc/user-optouts` endpoint to list opt-outs
+- [x] New "User Opt-Outs" tab in DNC Compliance Management page
+- [x] Ability to remove opt-outs (with consent warning)
+
 ### Pricing Tab UI Bug Fix (COMPLETED - April 10, 2026)
 - [x] Fixed syntax error in LandingPage.js causing build failure
 - [x] Entry plans (Pay-as-you-go, Test Drive) now hidden on AI Receptionist tab

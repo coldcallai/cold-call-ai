@@ -10138,6 +10138,76 @@ async def get_dnc_refresh_reminder(
             "error": str(e)
         }
 
+@api_router.get("/compliance/dnc/user-optouts")
+async def get_user_optouts(
+    current_user: Dict = Depends(get_current_user),
+    limit: int = Query(default=50, le=200),
+    skip: int = Query(default=0)
+):
+    """
+    Get list of phone numbers that opted out during calls.
+    These are prospects who said "not interested", "remove me", etc.
+    """
+    try:
+        # Get opt-outs from internal DNC list with user_request reason
+        total = await db.dnc_list.count_documents({"reason": "user_request"})
+        
+        optouts = await db.dnc_list.find(
+            {"reason": "user_request"},
+            {"_id": 0}
+        ).sort("added_at", -1).skip(skip).limit(limit).to_list(length=limit)
+        
+        # Enrich with call data if available
+        enriched_optouts = []
+        for optout in optouts:
+            phone = optout.get("phone_number")
+            # Try to find the call that triggered the opt-out
+            call = await db.calls.find_one(
+                {"lead.phone": phone, "outcome": "opted_out"},
+                {"_id": 0, "lead.business_name": 1, "lead.contact_name": 1, "opt_out_phrase": 1, "ended_at": 1}
+            )
+            
+            enriched_optouts.append({
+                "phone_number": phone,
+                "added_at": optout.get("added_at"),
+                "business_name": call.get("lead", {}).get("business_name") if call else None,
+                "contact_name": call.get("lead", {}).get("contact_name") if call else None,
+                "opt_out_phrase": call.get("opt_out_phrase") if call else None,
+                "call_ended_at": call.get("ended_at") if call else None
+            })
+        
+        return {
+            "total": total,
+            "optouts": enriched_optouts,
+            "limit": limit,
+            "skip": skip
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user opt-outs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/compliance/dnc/user-optouts/{phone_number}")
+async def remove_from_optouts(
+    phone_number: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Remove a phone number from the DNC opt-out list.
+    Use with caution - only if the person re-consents.
+    """
+    try:
+        result = await db.dnc_list.delete_one({"phone_number": phone_number, "reason": "user_request"})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Phone number not found in opt-out list")
+        
+        logger.info(f"Removed {phone_number} from opt-out list by {current_user.get('email')}")
+        return {"message": f"Removed {phone_number} from opt-out list", "deleted": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing opt-out: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== DEMO REQUEST FORM ==============
 
 class DemoRequestForm(BaseModel):
@@ -11830,17 +11900,43 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         last_response_time = asyncio.get_event_loop().time()
                         logger.info(f"Caller: {transcript}")
                         
-                        # Check for DNC
-                        if any(kw in transcript.lower() for kw in ["stop", "remove", "don't call"]):
+                        # Check for opt-out / DNC request (Option B: detect disinterest)
+                        transcript_lower = transcript.lower()
+                        opt_out_phrases = [
+                            # Direct removal requests
+                            "stop", "remove", "don't call", "do not call", "stop calling",
+                            "take me off", "remove me", "remove my number",
+                            # Disinterest signals
+                            "not interested", "no thanks", "no thank you", "no thank-you",
+                            "i'm not interested", "we're not interested", "we are not interested",
+                            "don't want", "do not want", "don't need", "do not need",
+                            # Hang up signals
+                            "please stop", "leave me alone", "go away", "hang up",
+                            "don't contact", "do not contact", "never call"
+                        ]
+                        
+                        if any(phrase in transcript_lower for phrase in opt_out_phrases):
+                            logger.info(f"Opt-out detected: '{transcript}' - Adding to DNC list")
                             await send_tts_to_stream(
                                 websocket, stream_sid,
-                                "No problem. I'll remove you from our list. Have a great day!",
+                                "No problem at all. I've removed you from our list and you won't receive any more calls from us. Have a great day!",
                                 voice_id=agent_voice_id,
                                 voice_settings=agent_voice_settings
                             )
                             phone = lead.get("phone")
                             if phone:
-                                await compliance_service.add_to_dnc(phone, "user_request")
+                                await compliance_service.add_to_dnc(phone, "user_request", added_by=user_id)
+                                logger.info(f"Added {phone} to DNC list - reason: user_request during call")
+                            
+                            # Update call record with opt-out reason
+                            await db.calls.update_one(
+                                {"id": call_id},
+                                {"$set": {
+                                    "outcome": "opted_out",
+                                    "opt_out_phrase": transcript,
+                                    "ended_at": datetime.now(timezone.utc).isoformat()
+                                }}
+                            )
                             await asyncio.sleep(3)
                             break
                         

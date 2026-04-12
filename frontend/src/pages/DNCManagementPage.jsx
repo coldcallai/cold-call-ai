@@ -25,6 +25,8 @@ const DNCManagementPage = () => {
   const [stats, setStats] = useState(null);
   const [refreshReminder, setRefreshReminder] = useState(null);
   const [litigators, setLitigators] = useState([]);
+  const [userOptouts, setUserOptouts] = useState([]);
+  const [optoutTotal, setOptoutTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -33,14 +35,17 @@ const DNCManagementPage = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [statsRes, reminderRes, litigatorsRes] = await Promise.all([
+      const [statsRes, reminderRes, litigatorsRes, optoutsRes] = await Promise.all([
         axios.get(`${API}/compliance/dnc/stats`),
         axios.get(`${API}/compliance/dnc/refresh-reminder`),
-        axios.get(`${API}/compliance/litigators?limit=100`)
+        axios.get(`${API}/compliance/litigators?limit=100`),
+        axios.get(`${API}/compliance/dnc/user-optouts?limit=50`)
       ]);
       setStats(statsRes.data);
       setRefreshReminder(reminderRes.data);
       setLitigators(litigatorsRes.data.litigators || []);
+      setUserOptouts(optoutsRes.data.optouts || []);
+      setOptoutTotal(optoutsRes.data.total || 0);
     } catch (error) {
       console.error("Failed to fetch DNC data:", error);
       toast.error("Failed to load DNC management data");
@@ -139,6 +144,18 @@ const DNCManagementPage = () => {
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to remove litigator");
+    }
+  };
+
+  const handleRemoveOptout = async (phone) => {
+    if (!window.confirm("Remove this number from opt-outs? Only do this if the person has re-consented to receive calls.")) return;
+
+    try {
+      await axios.delete(`${API}/compliance/dnc/user-optouts/${encodeURIComponent(phone)}`);
+      toast.success("Opt-out removed - you can now call this number again");
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to remove opt-out");
     }
   };
 
@@ -361,11 +378,95 @@ const DNCManagementPage = () => {
       </div>
 
       {/* Tabs for Detailed Views */}
-      <Tabs defaultValue="litigators" className="mt-6">
+      <Tabs defaultValue="optouts" className="mt-6">
         <TabsList>
+          <TabsTrigger value="optouts" data-testid="optouts-tab">
+            User Opt-Outs ({optoutTotal})
+          </TabsTrigger>
           <TabsTrigger value="litigators">Litigator List</TabsTrigger>
           <TabsTrigger value="instructions">FTC Data Instructions</TabsTrigger>
         </TabsList>
+
+        {/* User Opt-Outs Tab */}
+        <TabsContent value="optouts">
+          <Card>
+            <CardHeader>
+              <CardTitle style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Call Opt-Outs (Do Not Call Requests)
+              </CardTitle>
+              <CardDescription>
+                Phone numbers that requested removal during AI calls. These are automatically blocked from future campaigns.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {userOptouts.length === 0 ? (
+                <div className="text-center py-8">
+                  <CheckCircle className="w-12 h-12 text-green-300 mx-auto" />
+                  <p className="text-gray-500 mt-2">No opt-outs yet</p>
+                  <p className="text-sm text-gray-400">When prospects say "not interested" or "remove me", they'll appear here</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[400px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Phone Number</TableHead>
+                        <TableHead>Business</TableHead>
+                        <TableHead>What They Said</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {userOptouts.map((optout, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-mono">{optout.phone_number}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-sm">{optout.business_name || "Unknown"}</p>
+                              {optout.contact_name && (
+                                <p className="text-xs text-gray-500">{optout.contact_name}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {optout.opt_out_phrase ? (
+                              <span className="text-xs italic text-gray-600">"{optout.opt_out_phrase}"</span>
+                            ) : (
+                              <span className="text-xs text-gray-400">Not recorded</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
+                            {optout.added_at ? new Date(optout.added_at).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveOptout(optout.phone_number)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Remove from opt-out list (only if re-consented)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+              
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs text-amber-800">
+                  <AlertTriangle className="w-3 h-3 inline mr-1" />
+                  <strong>Important:</strong> Only remove numbers from this list if the person has explicitly re-consented to receive calls. 
+                  Calling opted-out numbers can result in TCPA violations ($500-$1,500 per call).
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="litigators">
           <Card>

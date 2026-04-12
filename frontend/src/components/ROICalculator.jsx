@@ -294,7 +294,7 @@ const ROICalculator = ({ industry = "dental", onGetStarted }) => {
               onClick={onGetStarted}
               className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white px-8 py-6 text-lg font-semibold rounded-xl"
             >
-              Start Free Trial
+              Get Started
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
             <Button 
@@ -309,7 +309,7 @@ const ROICalculator = ({ industry = "dental", onGetStarted }) => {
 
           {/* Trust Badge */}
           <p className="text-center text-slate-500 text-sm">
-            No credit card required • 15 free minutes • Cancel anytime
+            Setup in minutes • No long-term contracts • Cancel anytime
           </p>
         </CardContent>
       </Card>

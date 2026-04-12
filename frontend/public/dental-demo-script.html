@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DialGenix Dental Demo Script</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Segoe UI', system-ui, sans-serif; 
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e2e8f0;
+      line-height: 1.6;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { 
+      font-size: 2.5rem; 
+      text-align: center; 
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #10b981, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { text-align: center; color: #94a3b8; margin-bottom: 40px; }
+    .section { 
+      background: rgba(30, 41, 59, 0.8); 
+      border-radius: 16px; 
+      padding: 30px; 
+      margin-bottom: 30px;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .section-title { 
+      font-size: 1.4rem; 
+      color: #10b981; 
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .phase { 
+      background: rgba(16, 185, 129, 0.1); 
+      border-left: 4px solid #10b981;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 0 12px 12px 0;
+    }
+    .phase-header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .phase-title { font-weight: 700; color: #10b981; font-size: 1.1rem; }
+    .phase-time { 
+      background: #10b981; 
+      color: #0f172a; 
+      padding: 4px 12px; 
+      border-radius: 20px; 
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .script-line { 
+      background: rgba(6, 182, 212, 0.1); 
+      padding: 15px 20px; 
+      border-radius: 10px; 
+      margin: 10px 0;
+      border-left: 3px solid #06b6d4;
+      font-style: italic;
+    }
+    .script-line::before { content: '🎤 '; }
+    .action { 
+      color: #f59e0b; 
+      font-weight: 600;
+      margin: 10px 0;
+    }
+    .action::before { content: '👉 '; }
+    .tip { 
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 12px 15px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      margin-top: 15px;
+    }
+    .tip::before { content: '💡 Pro Tip: '; color: #f59e0b; font-weight: 600; }
+    .faq-grid { display: grid; gap: 15px; }
+    .faq-item { 
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+    .faq-q { color: #818cf8; font-weight: 600; margin-bottom: 10px; }
+    .faq-q::before { content: 'Q: '; }
+    .faq-a { color: #cbd5e1; }
+    .faq-a::before { content: 'AI: '; color: #10b981; font-weight: 600; }
+    .objection { 
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .objection-text { color: #f87171; font-weight: 600; margin-bottom: 10px; }
+    .objection-text::before { content: '❌ '; }
+    .response { color: #a7f3d0; }
+    .response::before { content: '✅ Response: '; color: #10b981; font-weight: 600; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }
+    .stat { 
+      text-align: center; 
+      padding: 20px;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 12px;
+    }
+    .stat-value { font-size: 2rem; font-weight: 700; color: #10b981; }
+    .stat-label { font-size: 0.85rem; color: #94a3b8; }
+    .checklist { list-style: none; }
+    .checklist li { 
+      padding: 8px 0; 
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .checklist li::before { content: '☐ '; color: #10b981; }
+    @media print {
+      body { background: white; color: black; }
+      .section { border: 1px solid #ddd; break-inside: avoid; }
+      .phase { background: #f0fdf4; }
+      .script-line { background: #ecfeff; }
+    }
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🦷 Dental Practice Demo Script</h1>
+    <p class="subtitle">DialGenix AI Receptionist — 10-Minute Pitch</p>
+
+    <!-- PRE-DEMO CHECKLIST -->
+    <div class="section">
+      <h2 class="section-title">📋 Pre-Demo Checklist</h2>
+      <ul class="checklist">
+        <li>ROI Calculator open: dialgenix.ai/roi-calculator?industry=dental</li>
+        <li>Your phone ready to call the demo AI Receptionist</li>
+        <li>Their Google Business listing pulled up (show review count)</li>
+        <li>This script on tablet/laptop for reference</li>
+        <li>Pricing page ready: dialgenix.ai → Pricing → AI Receptionist tab</li>
+      </ul>
+    </div>
+
+    <!-- DENTAL INDUSTRY STATS -->
+    <div class="section">
+      <h2 class="section-title">📊 Dental Industry Stats to Drop</h2>
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="stat-value">34%</div>
+          <div class="stat-label">of dental calls go unanswered</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">$285</div>
+          <div class="stat-label">avg value per new patient</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">80%</div>
+          <div class="stat-label">won't leave a voicemail</div>
+        </div>
+      </div>
+      <div class="tip">Personalize: "I looked up [Practice Name] — you have [X] Google reviews. What if every happy patient left one?"</div>
+    </div>
+
+    <!-- PHASE 1: PAIN -->
+    <div class="section">
+      <h2 class="section-title">🎯 Demo Script</h2>
+      
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-title">Phase 1: Uncover the Pain</span>
+          <span class="phase-time">2 min</span>
+        </div>
+        <p class="script-line">Dr. [Name], quick question — when you're chairside with a patient, who's answering your phones?</p>
+        <p style="color: #94a3b8; margin: 10px 0;">[Let them answer — usually "front desk" or "it goes to voicemail"]</p>
+        <p class="script-line">And what happens when your front desk is checking in a patient, handling insurance, AND the phone rings?</p>
+        <p style="color: #94a3b8; margin: 10px 0;">[They'll admit calls get missed]</p>
+        <p class="script-line">Here's the thing — 80% of callers won't leave a voicemail. They just call the next dentist on Google. You never even know you lost them.</p>
+        <p class="action">Pause. Let that sink in.</p>
+      </div>
+
+      <!-- PHASE 2: QUANTIFY -->
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-title">Phase 2: Quantify the Problem</span>
+          <span class="phase-time">2 min</span>
+        </div>
+        <p class="script-line">Let me show you something. [Open ROI Calculator] How many calls would you estimate go unanswered each week? Be honest — lunch breaks, busy mornings, after 5pm...</p>
+        <p class="action">Adjust slider to their number (usually 8-15 for a busy practice)</p>
+        <p class="script-line">And what's a new patient worth to you over their lifetime? Cleanings, fillings, maybe some cosmetic work?</p>
+        <p class="action">Adjust avg value slider ($285-400 typical)</p>
+        <p class="script-line">Look at this. You're potentially losing [$X] every single month. That's [$X x 12] per year walking out your door.</p>
+        <div class="tip">Point at the red "Without AI" card. Let the numbers do the talking.</div>
+      </div>
+
+      <!-- PHASE 3: SOLUTION -->
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-title">Phase 3: Show the Solution</span>
+          <span class="phase-time">3 min</span>
+        </div>
+        <p class="script-line">What if you had a receptionist that never takes a lunch break, never calls in sick, and answers every single call in 2 rings — 24/7?</p>
+        <p class="action">Pull out your phone</p>
+        <p class="script-line">Let me show you exactly what your patients would experience. I'm going to call our AI receptionist right now.</p>
+        <p class="action">Call your demo number on speakerphone. Let them hear the AI answer, handle questions, and offer to book.</p>
+        <p class="script-line">Notice how natural that sounded? That's not a phone tree. It's having a real conversation, answering questions, and booking appointments directly into your calendar.</p>
+      </div>
+
+      <!-- PHASE 4: BONUSES -->
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-title">Phase 4: Stack the Value</span>
+          <span class="phase-time">2 min</span>
+        </div>
+        <p class="script-line">But here's what really sets us apart — after every appointment, the AI can automatically text your patients asking for a Google review.</p>
+        <p class="action">Show SMS Review Requests feature if possible</p>
+        <p class="script-line">You said you have [X] reviews right now. What if you had 200? 500? That's the difference between page 1 and page 3 on Google.</p>
+        <p class="script-line">And one more thing — the AI detects personality types. If a patient is anxious and asks lots of questions, it slows down and reassures them. If they're busy and direct, it gets to the point fast.</p>
+      </div>
+
+      <!-- PHASE 5: CLOSE -->
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-title">Phase 5: Close</span>
+          <span class="phase-time">1 min</span>
+        </div>
+        <p class="script-line">So here's the math: For $99 a month — less than one new patient — you recover potentially [$X] per month. That's a [X]x return.</p>
+        <p class="script-line">We can have you live by [day]. Your front desk keeps doing what they do best — the AI just catches everything they can't. Want to get started?</p>
+        <p class="action">Shut up. Wait for response.</p>
+        <div class="tip">If they hesitate: "What questions do you have?" — Don't offer discounts. The ROI speaks for itself.</div>
+      </div>
+    </div>
+
+    <!-- DENTAL FAQs -->
+    <div class="section">
+      <h2 class="section-title">🤖 Sample AI Responses (Dental FAQs)</h2>
+      <p style="color: #94a3b8; margin-bottom: 20px;">These are examples of how the AI handles common dental patient questions:</p>
+      
+      <div class="faq-grid">
+        <div class="faq-item">
+          <p class="faq-q">Do you accept my insurance?</p>
+          <p class="faq-a">We work with most major dental insurance providers including Delta Dental, Cigna, MetLife, Aetna, and many others. I'd be happy to verify your specific coverage — can I get your insurance information and schedule a quick benefits check before your appointment?</p>
+        </div>
+        
+        <div class="faq-item">
+          <p class="faq-q">How much does a cleaning cost?</p>
+          <p class="faq-a">A routine cleaning typically ranges from $95 to $150 depending on your specific needs. If you have insurance, most plans cover preventive cleanings at 100%. Would you like me to check your coverage and get you scheduled?</p>
+        </div>
+        
+        <div class="faq-item">
+          <p class="faq-q">I have a toothache, can I come in today?</p>
+          <p class="faq-a">I'm sorry to hear you're in pain — we take dental emergencies seriously. Let me check our schedule for the earliest available time today. Can you tell me a bit more about the pain? Is it constant or only when you eat or drink something hot or cold?</p>
+        </div>
+        
+        <div class="faq-item">
+          <p class="faq-q">Do you do teeth whitening?</p>
+          <p class="faq-a">Yes! We offer both in-office whitening that can brighten your smile up to 8 shades in about an hour, and take-home kits for more gradual results. Many patients love combining whitening with their regular cleaning. Would you like to schedule a consultation?</p>
+        </div>
+        
+        <div class="faq-item">
+          <p class="faq-q">What are your hours?</p>
+          <p class="faq-a">We're open Monday through Thursday 8am to 5pm, and Fridays 8am to 2pm. We also offer early morning appointments starting at 7am on Tuesdays for patients who need to get in before work. What time works best for you?</p>
+        </div>
+        
+        <div class="faq-item">
+          <p class="faq-q">I'm nervous about going to the dentist...</p>
+          <p class="faq-a">You're definitely not alone — dental anxiety is really common, and Dr. [Name] is wonderful with nervous patients. We offer several comfort options including nitrous oxide, noise-canceling headphones, and we always go at your pace. Would you like me to make a note so the team knows to take extra care with you?</p>
+        </div>
+        
+        <div class="faq-item">
+          <p class="faq-q">Are you accepting new patients?</p>
+          <p class="faq-a">Absolutely! We'd love to welcome you to the practice. For new patients, we typically schedule a comprehensive exam and cleaning which takes about 90 minutes. This lets Dr. [Name] get to know your dental history and create a personalized care plan. Would you like me to find a time that works for you?</p>
+        </div>
+        
+        <div class="faq-item">
+          <p class="faq-q">Can I bring my kids?</p>
+          <p class="faq-a">Of course! We love seeing families. We recommend children have their first dental visit around age 1 or when their first tooth comes in. We make it fun and comfortable for kids of all ages. Would you like to schedule appointments for the whole family on the same day?</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- OBJECTION HANDLERS -->
+    <div class="section">
+      <h2 class="section-title">🛡️ Objection Handlers</h2>
+      
+      <div class="objection">
+        <p class="objection-text">"We already have a receptionist."</p>
+        <p class="response">Absolutely — and she's probably great! This isn't about replacing her. It's about catching the calls she physically can't answer when she's checking someone in, verifying insurance, or at lunch. The AI handles overflow so she can focus on the patients in front of her. No more "please hold" or missed calls.</p>
+      </div>
+      
+      <div class="objection">
+        <p class="objection-text">"Our patients want to talk to a real person."</p>
+        <p class="response">I totally get that — and 70% of the time, they will. But here's the thing: when your real person can't answer, would patients rather talk to an AI that sounds human and books them immediately... or get voicemail and call your competitor? We're not replacing human connection. We're catching the ones you'd otherwise lose.</p>
+      </div>
+      
+      <div class="objection">
+        <p class="objection-text">"It's too expensive / I need to think about it."</p>
+        <p class="response">Totally fair. Let's look at the math one more time: $99 a month is basically one cleaning. If the AI books just ONE new patient per month — one single patient you would've lost to voicemail — it's paid for itself 3x over. The question isn't can you afford it, it's can you afford to keep losing [$X] per month?</p>
+      </div>
+      
+      <div class="objection">
+        <p class="objection-text">"What if it makes mistakes?"</p>
+        <p class="response">Great question. The AI is trained specifically for dental practices and handles thousands of calls. But if it ever encounters something unusual, it's smart enough to say "Let me have someone from the office call you back" and flags it for your team. You're always in control, and every call is recorded so you can review if needed.</p>
+      </div>
+      
+      <div class="objection">
+        <p class="objection-text">"I need to talk to my partner/office manager."</p>
+        <p class="response">Of course — this is a decision that affects the whole practice. Here's what I'd suggest: let me send you the ROI calculator link so you can show them the numbers. [Send link] And I can do a quick 10-minute call with both of you later this week if that helps. What day works?</p>
+      </div>
+      
+      <div class="objection">
+        <p class="objection-text">"We tried something like this before and it didn't work."</p>
+        <p class="response">I hear that a lot, actually. Most "solutions" out there are basic phone trees or chatbots that frustrate patients. This is completely different — it's conversational AI that actually understands context, handles follow-up questions, and sounds like a real person. That's why I had you call it yourself. Did that sound like the robotic systems you've used before?</p>
+      </div>
+      
+      <div class="objection">
+        <p class="objection-text">"How long does setup take?"</p>
+        <p class="response">We can have you live in 24-48 hours. We'll need your hours, services, and insurance info — about 15 minutes of your time. Then we configure the AI, test it, and flip the switch. Your front desk doesn't need to learn anything new. Calls just start getting answered.</p>
+      </div>
+    </div>
+
+    <!-- CLOSING AMMUNITION -->
+    <div class="section">
+      <h2 class="section-title">🎯 Closing Ammunition</h2>
+      <div style="background: rgba(16, 185, 129, 0.1); padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+        <p style="font-size: 1.2rem; color: #10b981; font-weight: 600; margin-bottom: 10px;">The "No Brainer" Close:</p>
+        <p>"If I could guarantee you'd book at least 2 extra patients this month that you would have lost to voicemail — patients worth $500+ each — would $99 feel like a good investment?"</p>
+      </div>
+      <div style="background: rgba(6, 182, 212, 0.1); padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+        <p style="font-size: 1.2rem; color: #06b6d4; font-weight: 600; margin-bottom: 10px;">The "Risk Reversal" Close:</p>
+        <p>"Tell you what — try it for 30 days. If you don't see at least 5 calls answered that would've gone to voicemail, I'll refund you completely. Fair?"</p>
+      </div>
+      <div style="background: rgba(245, 158, 11, 0.1); padding: 20px; border-radius: 12px;">
+        <p style="font-size: 1.2rem; color: #f59e0b; font-weight: 600; margin-bottom: 10px;">The "Urgency" Close:</p>
+        <p>"Every day you wait is another [X] calls going to voicemail. That's [X] patients calling your competitors instead. Want to stop the bleeding starting tomorrow?"</p>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div style="text-align: center; color: #64748b; margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(148, 163, 184, 0.1);">
+      <p>DialGenix.ai — AI That Adapts to Every Buyer</p>
+      <p style="margin-top: 10px;">🦷 Dental Demo Script v1.0</p>
+    </div>
+  </div>
+</body>
+</html>

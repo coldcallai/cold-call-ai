@@ -1,14 +1,18 @@
 """
 Settings Routes Module
-Contains settings, packs, account usage, and team management endpoints.
+Contains settings, packs, account usage, team management, and BYOK integration endpoints.
 Extracted from server.py as part of the Strangler Fig refactoring pattern (Phase 7).
 """
+import os
+import base64
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
+import httpx
+from cryptography.fernet import Fernet
 
 from services.auth_service import get_current_user, get_db
 
@@ -27,6 +31,17 @@ _CALL_PACKS = None
 _COMBO_PACKS = None
 _TOPUP_PACKS = None
 _PREPAY_DISCOUNTS = None
+
+# Encryption cipher for API keys
+_cipher = None
+
+def _get_cipher():
+    global _cipher
+    if _cipher is None:
+        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key')
+        key_bytes = jwt_secret.encode()[:32].ljust(32, b'0')
+        _cipher = Fernet(base64.urlsafe_b64encode(key_bytes))
+    return _cipher
 
 
 def set_services(
@@ -50,6 +65,21 @@ def set_services(
     _COMBO_PACKS = combo_packs
     _TOPUP_PACKS = topup_packs
     _PREPAY_DISCOUNTS = prepay_discounts
+
+
+# ============== BYOK INTEGRATION MODELS ==============
+
+class TwilioVerifyRequest(BaseModel):
+    account_sid: str
+    auth_token: str
+    phone_number: Optional[str] = None
+
+class ElevenLabsVerifyRequest(BaseModel):
+    api_key: str
+
+class SaveIntegrationsRequest(BaseModel):
+    twilio: Optional[Dict[str, str]] = None
+    elevenlabs: Optional[Dict[str, str]] = None
 
 
 # ============== SETTINGS ENDPOINTS ==============
@@ -216,3 +246,213 @@ async def remove_team_member(
         raise HTTPException(status_code=404, detail="Team member not found")
     
     return {"message": "Team member removed"}
+
+
+
+# ============== BYOK INTEGRATION ENDPOINTS ==============
+
+@router.post("/settings/verify-twilio")
+async def verify_twilio_credentials(
+    data: TwilioVerifyRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Verify Twilio Account SID and Auth Token, return balance"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                f"https://api.twilio.com/2010-04-01/Accounts/{data.account_sid}/Balance.json",
+                auth=(data.account_sid, data.auth_token)
+            )
+            if response.status_code == 200:
+                balance_data = response.json()
+                balance = float(balance_data.get("balance", 0))
+                return {
+                    "valid": True,
+                    "balance": balance,
+                    "currency": balance_data.get("currency", "USD"),
+                    "message": "Twilio credentials verified"
+                }
+            elif response.status_code == 401:
+                return {"valid": False, "message": "Invalid Account SID or Auth Token"}
+            else:
+                return {"valid": False, "message": f"Twilio returned status {response.status_code}"}
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Twilio API timed out. Please try again.")
+    except Exception as e:
+        logger.error(f"Twilio verification error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to verify Twilio credentials")
+
+
+@router.post("/settings/verify-elevenlabs")
+async def verify_elevenlabs_credentials(
+    data: ElevenLabsVerifyRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Verify ElevenLabs API key and return credit usage"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Try subscription endpoint first for credit info
+            response = await client.get(
+                "https://api.elevenlabs.io/v1/user/subscription",
+                headers={"xi-api-key": data.api_key}
+            )
+            if response.status_code == 200:
+                sub = response.json()
+                char_count = sub.get("character_count", 0)
+                char_limit = sub.get("character_limit", 1)
+                remaining_pct = max(0, round(((char_limit - char_count) / char_limit) * 100)) if char_limit > 0 else 0
+                return {
+                    "valid": True,
+                    "credits": {
+                        "character_count": char_count,
+                        "character_limit": char_limit,
+                        "remaining_percent": remaining_pct,
+                        "tier": sub.get("tier", "unknown")
+                    },
+                    "message": "ElevenLabs credentials verified"
+                }
+            elif response.status_code in (401, 403):
+                # Try voices endpoint as a lighter check
+                voice_resp = await client.get(
+                    "https://api.elevenlabs.io/v1/voices",
+                    headers={"xi-api-key": data.api_key}
+                )
+                if voice_resp.status_code == 200:
+                    return {
+                        "valid": True,
+                        "credits": None,
+                        "message": "ElevenLabs key verified (credit info requires 'user_read' permission)"
+                    }
+                return {"valid": False, "message": "Invalid ElevenLabs API key"}
+            else:
+                return {"valid": False, "message": f"ElevenLabs returned status {response.status_code}"}
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="ElevenLabs API timed out. Please try again.")
+    except Exception as e:
+        logger.error(f"ElevenLabs verification error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to verify ElevenLabs credentials")
+
+
+@router.post("/settings/integrations")
+async def save_integrations(
+    data: SaveIntegrationsRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Save user's BYOK integration credentials (encrypted)"""
+    db = get_db()
+    cipher = _get_cipher()
+    user_id = current_user["user_id"]
+    
+    update_fields = {"byok_updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if data.twilio:
+        if data.twilio.get("account_sid"):
+            update_fields["twilio_account_sid"] = cipher.encrypt(data.twilio["account_sid"].encode()).decode()
+        if data.twilio.get("auth_token"):
+            update_fields["twilio_auth_token_enc"] = cipher.encrypt(data.twilio["auth_token"].encode()).decode()
+        if data.twilio.get("phone_number"):
+            update_fields["twilio_phone_number"] = data.twilio["phone_number"]
+        update_fields["twilio_connected"] = True
+    
+    if data.elevenlabs:
+        if data.elevenlabs.get("api_key"):
+            update_fields["elevenlabs_api_key_enc"] = cipher.encrypt(data.elevenlabs["api_key"].encode()).decode()
+        update_fields["elevenlabs_connected"] = True
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": update_fields}
+    )
+    
+    return {"message": "Integration settings saved", "saved_at": update_fields["byok_updated_at"]}
+
+
+@router.get("/settings/integrations/status")
+async def get_integration_status(current_user: Dict = Depends(get_current_user)):
+    """Check if user has configured BYOK credentials"""
+    db = get_db()
+    user = await db.users.find_one(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0, "twilio_connected": 1, "elevenlabs_connected": 1, 
+         "twilio_phone_number": 1, "byok_updated_at": 1}
+    )
+    return {
+        "twilio_connected": user.get("twilio_connected", False) if user else False,
+        "elevenlabs_connected": user.get("elevenlabs_connected", False) if user else False,
+        "twilio_phone_number": user.get("twilio_phone_number") if user else None,
+        "byok_updated_at": user.get("byok_updated_at") if user else None
+    }
+
+
+@router.get("/settings/integrations/balances")
+async def get_integration_balances(current_user: Dict = Depends(get_current_user)):
+    """Fetch real-time balances for user's BYOK Twilio and ElevenLabs accounts"""
+    db = get_db()
+    cipher = _get_cipher()
+    user_id = current_user["user_id"]
+    
+    user = await db.users.find_one(
+        {"user_id": user_id},
+        {"_id": 0, "twilio_account_sid": 1, "twilio_auth_token_enc": 1,
+         "elevenlabs_api_key_enc": 1, "twilio_connected": 1, "elevenlabs_connected": 1}
+    )
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    result = {"twilio": None, "elevenlabs": None}
+    
+    # Check Twilio balance
+    if user.get("twilio_connected") and user.get("twilio_account_sid") and user.get("twilio_auth_token_enc"):
+        try:
+            sid = cipher.decrypt(user["twilio_account_sid"].encode()).decode()
+            token = cipher.decrypt(user["twilio_auth_token_enc"].encode()).decode()
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Balance.json",
+                    auth=(sid, token)
+                )
+                if resp.status_code == 200:
+                    bal = resp.json()
+                    balance = float(bal.get("balance", 0))
+                    result["twilio"] = {
+                        "balance": balance,
+                        "currency": bal.get("currency", "USD"),
+                        "low": balance < 10
+                    }
+                else:
+                    result["twilio"] = {"error": "Invalid credentials or expired token", "low": False}
+        except Exception as e:
+            logger.error(f"Twilio balance check failed for user {user_id}: {e}")
+            result["twilio"] = {"error": "Could not fetch Twilio balance", "low": False}
+    
+    # Check ElevenLabs credits
+    if user.get("elevenlabs_connected") and user.get("elevenlabs_api_key_enc"):
+        try:
+            api_key = cipher.decrypt(user["elevenlabs_api_key_enc"].encode()).decode()
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.elevenlabs.io/v1/user/subscription",
+                    headers={"xi-api-key": api_key}
+                )
+                if resp.status_code == 200:
+                    sub = resp.json()
+                    char_count = sub.get("character_count", 0)
+                    char_limit = sub.get("character_limit", 1)
+                    remaining_pct = max(0, round(((char_limit - char_count) / char_limit) * 100)) if char_limit > 0 else 0
+                    result["elevenlabs"] = {
+                        "character_count": char_count,
+                        "character_limit": char_limit,
+                        "remaining_percent": remaining_pct,
+                        "tier": sub.get("tier", "unknown"),
+                        "low": remaining_pct < 20
+                    }
+                elif resp.status_code == 401 or resp.status_code == 403:
+                    result["elevenlabs"] = {"error": "API key lacks permissions or is invalid. Ensure your key has 'user_read' permission.", "low": False}
+                else:
+                    result["elevenlabs"] = {"error": f"ElevenLabs returned status {resp.status_code}", "low": False}
+        except Exception as e:
+            logger.error(f"ElevenLabs balance check failed for user {user_id}: {e}")
+            result["elevenlabs"] = {"error": "Could not fetch ElevenLabs credits"}
+    
+    return result

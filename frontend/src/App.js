@@ -54,6 +54,7 @@ import { HelpButton } from "@/components/ProductTour";
 import Sidebar from "@/components/Sidebar";
 import StatusBadge from "@/components/StatusBadge";
 import TrustLine from "@/components/TrustLine";
+import CreditAlertBanner from "@/components/CreditAlertBanner";
 import FunnelPage from "@/pages/FunnelPage";
 import LeadDiscovery from "@/pages/LeadDiscoveryPage";
 import BookingDialog from "@/components/BookingDialog";
@@ -311,6 +312,8 @@ const AppRouter = () => {
             <div className="flex flex-col min-h-screen">
               {/* Trial Banner - Shows at top of entire dashboard */}
               <TrialBanner user={user} />
+              {/* Credit Alert Banner - Warns when Twilio/ElevenLabs credits are low */}
+              <CreditAlertBanner user={user} />
               
               <div className="flex flex-col lg:flex-row flex-1">
                 <Sidebar />

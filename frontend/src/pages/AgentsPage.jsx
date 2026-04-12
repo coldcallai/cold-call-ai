@@ -552,7 +552,7 @@ const Agents = () => {
                 <ul className="text-xs text-amber-800 space-y-1">
                   <li>✓ <strong>Always qualify first:</strong> "Am I speaking with the owner or manager?"</li>
                   <li>✓ <strong>Keep it short:</strong> 1-2 sentences per response max</li>
-                  <li>✓ <strong>Use {'{contact_name}'}</strong> if Apollo is connected for personalization</li>
+                  <li>✓ <strong>Use {'{contact_name}'}</strong> for personalization (from CSV uploads, lead discovery, or <a href="/app/crm" className="underline text-amber-700 hover:text-amber-900">Apollo if connected</a>)</li>
                   <li>✓ <strong>Add pauses:</strong> Use "..." for natural breathing room</li>
                 </ul>
               </div>
@@ -686,6 +686,17 @@ const Agents = () => {
                     Toggle ON to only disclose "AI assistant" when calling mobile numbers.
                   </p>
                 </div>
+
+                {/* Setup Instructions */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-gray-700 mb-2">📋 How to set up:</p>
+                  <ol className="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+                    <li>Write your opening script for <strong>business lines</strong> (no AI disclosure needed)</li>
+                    <li>Write a separate script for <strong>mobile phones</strong> that includes "AI agent" or "AI assistant"</li>
+                    <li>Use variables like {'{agent_name}'} and {'{contact_name}'} for personalization</li>
+                    <li>Leave blank to use the default scripts</li>
+                  </ol>
+                </div>
                 
                 <div>
                   <Label>Opening Script - Business Lines (Landline/VoIP)</Label>
@@ -706,11 +717,11 @@ const Agents = () => {
                     data-testid="opening-script-mobile-input"
                     value={newAgent.opening_script_mobile}
                     onChange={(e) => setNewAgent({...newAgent, opening_script_mobile: e.target.value})}
-                    placeholder="Hi {contact_name}, this is {agent_name}, and I'm an AI assistant with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
+                    placeholder="Hi {contact_name}, this is {agent_name}, AI agent with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
                     rows={3}
                     className="mt-1 text-sm"
                   />
-                  <p className="text-xs text-gray-400 mt-1">Include AI disclosure for mobile compliance</p>
+                  <p className="text-xs text-gray-400 mt-1">Must include "AI agent" or "AI assistant" for TCPA compliance</p>
                 </div>
                 
                 <p className="text-xs text-gray-400">

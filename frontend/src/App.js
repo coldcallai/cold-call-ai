@@ -63,6 +63,7 @@ import CallHistory from "@/pages/CallHistoryPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ReviewRequestsPage from "@/pages/ReviewRequestsPage";
 import CreditPacks from "@/pages/CreditPacksPage";
+import ROICalculatorPage from "@/pages/ROICalculatorPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -297,6 +298,7 @@ const AppRouter = () => {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/help" element={<HelpCenterPage />} />
+        <Route path="/roi-calculator" element={<ROICalculatorPage />} />
         <Route path="/ai-cold-calling" element={<AIColdCallingPage />} />
         <Route path="/voice-ai-sales" element={<VoiceAISalesPage />} />
         <Route path="/ai-sales-dialer" element={<AISalesDialerPage />} />

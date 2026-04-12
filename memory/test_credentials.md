@@ -22,6 +22,6 @@
 - Expired trial: trial_test_1774537902@test.com / Test123!
 
 ## BYOK Integration Keys (stored encrypted in admin user doc)
-- Twilio SID: ACdd66376e5aa7d90704edcafdc7d7c466
-- Twilio Auth Token: 8748cf7af444745621ce90467c2e2734
-- ElevenLabs Key: sk_b147841e94d1c41af9719e3edf89fa1ddb47bf3224f85732 (lacks user_read permission)
+- Twilio SID: (stored in backend/.env as TWILIO_ACCOUNT_SID)
+- Twilio Auth Token: (stored in backend/.env as TWILIO_AUTH_TOKEN)
+- ElevenLabs Key: (stored in backend/.env as ELEVENLABS_API_KEY, lacks user_read permission)

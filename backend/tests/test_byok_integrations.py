@@ -20,12 +20,12 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 # Test credentials from test_credentials.md
 ADMIN_USER = {"email": "test@example.com", "password": "Test123!"}
 
-# Real Twilio credentials from backend/.env
-REAL_TWILIO_SID = "ACdd66376e5aa7d90704edcafdc7d7c466"
-REAL_TWILIO_TOKEN = "8748cf7af444745621ce90467c2e2734"
+# Real Twilio credentials from backend/.env (loaded from environment)
+REAL_TWILIO_SID = os.environ.get('TWILIO_ACCOUNT_SID', 'AC_test_placeholder')
+REAL_TWILIO_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', 'test_token_placeholder')
 
-# Real ElevenLabs key from backend/.env (lacks user_read permission)
-REAL_ELEVENLABS_KEY = "sk_b147841e94d1c41af9719e3edf89fa1ddb47bf3224f85732"
+# Real ElevenLabs key from backend/.env (loaded from environment)
+REAL_ELEVENLABS_KEY = os.environ.get('ELEVENLABS_API_KEY', 'sk_test_placeholder')
 
 
 class TestAuthHelper:

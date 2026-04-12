@@ -33,9 +33,9 @@
   },
   "test_credentials": {
     "admin_user": "test@example.com / Test123! (unlimited tier, setup_wizard_completed=true)",
-    "twilio_sid": "ACdd66376e5aa7d90704edcafdc7d7c466",
-    "twilio_token": "8748cf7af444745621ce90467c2e2734",
-    "elevenlabs_key": "sk_b147841e94d1c41af9719e3edf89fa1ddb47bf3224f85732 (lacks user_read permission)"
+    "twilio_sid": "(loaded from TWILIO_ACCOUNT_SID env var)",
+    "twilio_token": "(loaded from TWILIO_AUTH_TOKEN env var)",
+    "elevenlabs_key": "(loaded from ELEVENLABS_API_KEY env var, lacks user_read permission)"
   },
   "seed_data_creation": "Created temporary test user byok_wizard_test@test.com with setup_wizard_completed=false for SetupWizard testing (deleted after test)",
   "retest_needed": false,

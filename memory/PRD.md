@@ -5,6 +5,14 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 
 ## Latest Updates (April 2026)
 
+### Auto-Detect AI Disclosure (COMPLETED - April 12, 2026)
+- [x] Added `auto_disclosure_mobile_only` toggle to Agent settings
+- [x] Added `opening_script` field for landline/business calls (no AI disclosure)
+- [x] Added `opening_script_mobile` field for mobile calls (with AI disclosure)
+- [x] Backend auto-detects line_type (mobile vs landline) and uses appropriate script
+- [x] UI added to Create Agent and Edit Agent dialogs with TCPA compliance info
+- [x] Variables supported: {agent_name}, {contact_name}, {business_name}
+
 ### Pricing Tab UI Bug Fix (COMPLETED - April 10, 2026)
 - [x] Fixed syntax error in LandingPage.js causing build failure
 - [x] Entry plans (Pay-as-you-go, Test Drive) now hidden on AI Receptionist tab

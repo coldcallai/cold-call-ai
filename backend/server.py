@@ -372,6 +372,10 @@ class Agent(BaseModel):
     cloned_voice_id: Optional[str] = None  # Custom cloned voice ID from ElevenLabs
     cloned_voice_name: Optional[str] = None  # Name of the cloned voice
     voice_settings: Optional[Dict[str, Any]] = None  # stability, similarity_boost, style
+    # Opening Script Settings
+    opening_script: Optional[str] = None  # Script for landline/business calls (no AI disclosure)
+    opening_script_mobile: Optional[str] = None  # Script for mobile calls (with AI disclosure)
+    auto_disclosure_mobile_only: bool = True  # Only disclose AI on mobile calls
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class AgentCreate(BaseModel):
@@ -388,6 +392,9 @@ class AgentCreate(BaseModel):
     voice_settings: Optional[Dict[str, Any]] = None
     transfer_enabled: bool = False
     transfer_phone_number: Optional[str] = None
+    opening_script: Optional[str] = None
+    opening_script_mobile: Optional[str] = None
+    auto_disclosure_mobile_only: bool = True
 
 class Campaign(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -11766,8 +11773,40 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                 # Send initial AI greeting
                 if is_first_response and stream_sid:
                     is_first_response = False
+                    contact_name = lead.get('contact_name', '')
                     business = lead.get('business_name', 'your company')
-                    greeting = f"Am I speaking with someone at {business}? I'm reaching out because we help businesses increase their profits with solutions most companies overlook. Do you have a moment?"
+                    line_type = lead.get('line_type', 'unknown').lower()
+                    is_mobile = line_type in ['mobile', 'cellphone', 'wireless']
+                    
+                    # Determine greeting based on agent settings and line type
+                    if agent:
+                        agent_name = agent.get('name', 'Sarah')
+                        auto_disclosure = agent.get('auto_disclosure_mobile_only', True)
+                        
+                        # Use custom scripts if provided
+                        if is_mobile and agent.get('opening_script_mobile'):
+                            # Mobile call with AI disclosure script
+                            greeting = agent.get('opening_script_mobile')
+                            greeting = greeting.replace('{contact_name}', contact_name or 'there')
+                            greeting = greeting.replace('{business_name}', business)
+                            greeting = greeting.replace('{agent_name}', agent_name)
+                        elif not is_mobile and agent.get('opening_script'):
+                            # Landline/VoIP call without AI disclosure script
+                            greeting = agent.get('opening_script')
+                            greeting = greeting.replace('{contact_name}', contact_name or 'there')
+                            greeting = greeting.replace('{business_name}', business)
+                            greeting = greeting.replace('{agent_name}', agent_name)
+                        elif auto_disclosure and is_mobile:
+                            # Default mobile greeting with AI disclosure
+                            greeting = f"Hi {contact_name or 'there'}, this is {agent_name}, an AI assistant with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"
+                        else:
+                            # Default landline greeting without AI disclosure
+                            greeting = f"Hi {contact_name or 'there'}, this is {agent_name} with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"
+                        
+                        logger.info(f"Call to {business} - Line type: {line_type}, Mobile: {is_mobile}, Auto-disclosure: {auto_disclosure}")
+                    else:
+                        # Fallback generic greeting
+                        greeting = f"Am I speaking with someone at {business}? I'm reaching out because we help businesses increase their profits with solutions most companies overlook. Do you have a moment?"
                     
                     # Generate and send TTS
                     await send_tts_to_stream(websocket, stream_sid, greeting, voice_id=agent_voice_id, voice_settings=agent_voice_settings)

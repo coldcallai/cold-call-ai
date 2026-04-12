@@ -99,7 +99,10 @@ const Agents = () => {
     system_prompt: USE_CASE_TEMPLATES.sales_cold_calling.prompt,
     language: "en",
     transfer_enabled: false,
-    transfer_phone_number: ""
+    transfer_phone_number: "",
+    auto_disclosure_mobile_only: true,
+    opening_script: "",
+    opening_script_mobile: ""
   });
 
   const fetchAgents = async () => {
@@ -225,7 +228,10 @@ const Agents = () => {
     setEditingAgent({
       ...agent,
       transfer_enabled: agent.transfer_enabled || false,
-      transfer_phone_number: agent.transfer_phone_number || ""
+      transfer_phone_number: agent.transfer_phone_number || "",
+      auto_disclosure_mobile_only: agent.auto_disclosure_mobile_only !== false,
+      opening_script: agent.opening_script || "",
+      opening_script_mobile: agent.opening_script_mobile || ""
     });
   };
 
@@ -651,6 +657,70 @@ const Agents = () => {
               </p>
             </div>
 
+            {/* Opening Script - Auto AI Disclosure */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    <Phone className="w-4 h-4" />
+                    Opening Script (AI Disclosure)
+                  </Label>
+                  <p className="text-xs text-gray-500">Customize how the AI introduces itself on calls</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newAgent.auto_disclosure_mobile_only}
+                    onChange={(e) => setNewAgent({...newAgent, auto_disclosure_mobile_only: e.target.checked})}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                  <span className="ml-2 text-xs text-gray-500">{newAgent.auto_disclosure_mobile_only ? 'Mobile only' : 'All calls'}</span>
+                </label>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3">
+                  <p className="text-xs text-cyan-800">
+                    <strong>TCPA Compliance:</strong> Business landlines don't require AI disclosure, but mobile phones do. 
+                    Toggle ON to only disclose "AI assistant" when calling mobile numbers.
+                  </p>
+                </div>
+                
+                <div>
+                  <Label>Opening Script - Business Lines (Landline/VoIP)</Label>
+                  <Textarea
+                    data-testid="opening-script-input"
+                    value={newAgent.opening_script}
+                    onChange={(e) => setNewAgent({...newAgent, opening_script: e.target.value})}
+                    placeholder="Hi {contact_name}, this is {agent_name} with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
+                    rows={3}
+                    className="mt-1 text-sm"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">No AI disclosure required for business lines</p>
+                </div>
+                
+                <div>
+                  <Label>Opening Script - Mobile Phones (with AI Disclosure)</Label>
+                  <Textarea
+                    data-testid="opening-script-mobile-input"
+                    value={newAgent.opening_script_mobile}
+                    onChange={(e) => setNewAgent({...newAgent, opening_script_mobile: e.target.value})}
+                    placeholder="Hi {contact_name}, this is {agent_name}, and I'm an AI assistant with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
+                    rows={3}
+                    className="mt-1 text-sm"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Include AI disclosure for mobile compliance</p>
+                </div>
+                
+                <p className="text-xs text-gray-400">
+                  Variables: <code className="bg-gray-100 px-1 rounded">{'{agent_name}'}</code>, 
+                  <code className="bg-gray-100 px-1 rounded ml-1">{'{contact_name}'}</code>, 
+                  <code className="bg-gray-100 px-1 rounded ml-1">{'{business_name}'}</code>
+                </p>
+              </div>
+            </div>
+
             {/* Live Transfer Settings */}
             <div className="border-t pt-4">
               <div className="flex items-center justify-between mb-3">
@@ -765,6 +835,57 @@ const Agents = () => {
                   onChange={(e) => setEditingAgent({...editingAgent, calendly_link: e.target.value})}
                   className="mt-1"
                 />
+              </div>
+
+              {/* Opening Script - Auto AI Disclosure */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <Label className="text-base font-semibold flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Opening Script (AI Disclosure)
+                    </Label>
+                    <p className="text-xs text-gray-500">Customize how the AI introduces itself</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingAgent.auto_disclosure_mobile_only}
+                      onChange={(e) => setEditingAgent({...editingAgent, auto_disclosure_mobile_only: e.target.checked})}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                    <span className="ml-2 text-xs text-gray-500">{editingAgent.auto_disclosure_mobile_only ? 'Mobile only' : 'All calls'}</span>
+                  </label>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-sm">Business Lines (Landline/VoIP)</Label>
+                    <Textarea
+                      data-testid="edit-opening-script"
+                      value={editingAgent.opening_script}
+                      onChange={(e) => setEditingAgent({...editingAgent, opening_script: e.target.value})}
+                      placeholder="Hi {contact_name}, this is {agent_name} with DialGenix..."
+                      rows={2}
+                      className="mt-1 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm">Mobile Phones (with AI disclosure)</Label>
+                    <Textarea
+                      data-testid="edit-opening-script-mobile"
+                      value={editingAgent.opening_script_mobile}
+                      onChange={(e) => setEditingAgent({...editingAgent, opening_script_mobile: e.target.value})}
+                      placeholder="Hi {contact_name}, this is {agent_name}, and I'm an AI assistant..."
+                      rows={2}
+                      className="mt-1 text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Variables: {'{agent_name}'}, {'{contact_name}'}, {'{business_name}'}
+                  </p>
+                </div>
               </div>
 
               {/* Live Transfer Settings */}

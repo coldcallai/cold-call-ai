@@ -10791,21 +10791,31 @@ async def twilio_book_webhook(request: Request):
 
 # Cache for pre-generated inbound audio
 _inbound_audio_cache = {}
+_INBOUND_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "inbound_audio_cache")
 
 async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
     """Generate natural-sounding audio using ElevenLabs for inbound calls.
-    Returns a data URI that can be played by Twilio."""
+    Returns a data URI that can be played by Twilio.
+    Uses disk cache to avoid burning ElevenLabs credits on every restart."""
     global _inbound_audio_cache
     
-    # Check cache first
+    # Check memory cache first
     if cache_key and cache_key in _inbound_audio_cache:
         return _inbound_audio_cache[cache_key]
+    
+    # Check disk cache
+    if cache_key:
+        disk_path = os.path.join(_INBOUND_AUDIO_DIR, f"{cache_key}.b64")
+        if os.path.exists(disk_path):
+            with open(disk_path, "r") as f:
+                audio_uri = f.read()
+            _inbound_audio_cache[cache_key] = audio_uri
+            return audio_uri
     
     if not elevenlabs_api_key:
         return None
     
     try:
-        # Use Rachel voice with natural settings (same as demo call)
         voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female
         
         async with httpx.AsyncClient() as client:
@@ -10828,14 +10838,16 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
             )
             
             if response.status_code == 200:
-                # Convert to base64 data URI for Twilio
-                import base64
                 audio_base64 = base64.b64encode(response.content).decode('utf-8')
                 audio_uri = f"data:audio/mpeg;base64,{audio_base64}"
                 
-                # Cache if key provided
+                # Save to memory cache
                 if cache_key:
                     _inbound_audio_cache[cache_key] = audio_uri
+                    # Save to disk cache so we never regenerate on restart
+                    os.makedirs(_INBOUND_AUDIO_DIR, exist_ok=True)
+                    with open(os.path.join(_INBOUND_AUDIO_DIR, f"{cache_key}.b64"), "w") as f:
+                        f.write(audio_uri)
                 
                 return audio_uri
     except Exception as e:
@@ -10846,7 +10858,7 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
 # Pre-generate common inbound responses on startup
 @app.on_event("startup")
 async def cache_inbound_audio():
-    """Pre-generate common inbound call responses for faster playback."""
+    """Load inbound call audio from disk cache. Only calls ElevenLabs if no cache exists."""
     global _inbound_audio_cache
     
     if not elevenlabs_api_key:
@@ -10865,15 +10877,33 @@ async def cache_inbound_audio():
         "anything_else": "Is there anything else you'd like to know?"
     }
     
-    logger.info("Pre-generating inbound call audio with ElevenLabs...")
-    for key, text in common_responses.items():
-        try:
-            await generate_inbound_audio(text, cache_key=f"inbound_{key}")
-            logger.info(f"Cached inbound audio: {key}")
-        except Exception as e:
-            logger.error(f"Failed to cache inbound audio {key}: {e}")
+    os.makedirs(_INBOUND_AUDIO_DIR, exist_ok=True)
+    loaded_from_disk = 0
+    generated_fresh = 0
     
-    logger.info("Inbound audio caching complete")
+    for key, text in common_responses.items():
+        cache_key = f"inbound_{key}"
+        disk_path = os.path.join(_INBOUND_AUDIO_DIR, f"{cache_key}.b64")
+        
+        # Load from disk if available (FREE — no ElevenLabs call)
+        if os.path.exists(disk_path):
+            with open(disk_path, "r") as f:
+                _inbound_audio_cache[cache_key] = f.read()
+            loaded_from_disk += 1
+            logger.info(f"Cached inbound audio: {key} (from disk)")
+        else:
+            # Only call ElevenLabs if no disk cache exists
+            try:
+                result = await generate_inbound_audio(text, cache_key=cache_key)
+                if result:
+                    generated_fresh += 1
+                    logger.info(f"Cached inbound audio: {key} (generated + saved to disk)")
+                else:
+                    logger.warning(f"Failed to generate inbound audio: {key} (ElevenLabs returned empty)")
+            except Exception as e:
+                logger.error(f"Failed to cache inbound audio {key}: {e}")
+    
+    logger.info(f"Inbound audio caching complete: {loaded_from_disk} from disk, {generated_fresh} freshly generated")
 
 # Endpoint to serve cached inbound audio
 @api_router.get("/inbound-audio/{audio_key}")

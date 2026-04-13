@@ -38,6 +38,10 @@ const Campaigns = () => {
     description: "",
     ai_script: "Hello, this is an AI assistant calling about credit card processing solutions for your business. Am I speaking with the owner or manager?",
     calls_per_day: 100,
+    calls_per_hour: 0,
+    calling_hours_start: "09:00",
+    calling_hours_end: "17:00",
+    calling_days: ["mon","tue","wed","thu","fri"],
     voicemail_enabled: true,
     voicemail_message: "",
     response_wait_seconds: 4,
@@ -80,7 +84,7 @@ const Campaigns = () => {
       await axios.post(`${API}/campaigns`, newCampaign);
       toast.success("Campaign created!");
       setShowCreate(false);
-      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, voicemail_enabled: true, voicemail_message: "", response_wait_seconds: 4, company_name: "", icp_config: { target_industries: [], preferred_company_sizes: ["11-50", "51-200"], min_intent_signals: 1, preferred_roles: ["Owner", "CEO", "Manager", "Director"] }, min_icp_score: 0 });
+      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, calls_per_hour: 0, calling_hours_start: "09:00", calling_hours_end: "17:00", calling_days: ["mon","tue","wed","thu","fri"], voicemail_enabled: true, voicemail_message: "", response_wait_seconds: 4, company_name: "", icp_config: { target_industries: [], preferred_company_sizes: ["11-50", "51-200"], min_intent_signals: 1, preferred_roles: ["Owner", "CEO", "Manager", "Director"] }, min_icp_score: 0 });
       fetchCampaigns();
     } catch (error) {
       toast.error("Failed to create campaign");
@@ -230,6 +234,13 @@ const Campaigns = () => {
                     <p className="text-xs text-gray-500">Qualified</p>
                     <p className="text-lg font-semibold text-emerald-600">{campaign.qualified_leads}</p>
                   </div>
+                </div>
+
+                {/* Dial Settings Summary */}
+                <div className="flex flex-wrap gap-2 mb-4 text-xs text-gray-500">
+                  <span className="bg-gray-100 px-2 py-1 rounded">{campaign.calls_per_day || 100}/day</span>
+                  {campaign.calls_per_hour > 0 && <span className="bg-gray-100 px-2 py-1 rounded">{campaign.calls_per_hour}/hr</span>}
+                  <span className="bg-gray-100 px-2 py-1 rounded">{campaign.calling_hours_start || "09:00"}-{campaign.calling_hours_end || "17:00"}</span>
                 </div>
 
                 <Button
@@ -461,17 +472,111 @@ const Campaigns = () => {
               )}
             </div>
             
-            <div>
-              <Label htmlFor="calls-per-day">Calls Per Day</Label>
-              <Input
-                id="calls-per-day"
-                data-testid="campaign-calls-input"
-                type="number"
-                value={newCampaign.calls_per_day}
-                onChange={(e) => setNewCampaign({...newCampaign, calls_per_day: parseInt(e.target.value) || 0})}
-                className="mt-1"
-              />
-              <p className="text-xs text-gray-500 mt-1">Recommended: 50-100 for B2B, 200+ for high-volume campaigns</p>
+            {/* Dial Settings */}
+            <div className="border-t pt-4 mt-4">
+              <h4 className="font-medium mb-3 flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                Dial Settings
+              </h4>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="calls-per-day">Calls Per Day</Label>
+                    <Input
+                      id="calls-per-day"
+                      data-testid="campaign-calls-input"
+                      type="number"
+                      min="1"
+                      value={newCampaign.calls_per_day}
+                      onChange={(e) => setNewCampaign({...newCampaign, calls_per_day: parseInt(e.target.value) || 0})}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">0 = unlimited</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="calls-per-hour">Calls Per Hour</Label>
+                    <Input
+                      id="calls-per-hour"
+                      data-testid="campaign-calls-per-hour"
+                      type="number"
+                      min="0"
+                      value={newCampaign.calls_per_hour}
+                      onChange={(e) => setNewCampaign({...newCampaign, calls_per_hour: parseInt(e.target.value) || 0})}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">0 = no limit (dials as fast as possible)</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="calling-start">Start Time</Label>
+                    <Input
+                      id="calling-start"
+                      data-testid="campaign-start-time"
+                      type="time"
+                      value={newCampaign.calling_hours_start}
+                      onChange={(e) => setNewCampaign({...newCampaign, calling_hours_start: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="calling-end">End Time</Label>
+                    <Input
+                      id="calling-end"
+                      data-testid="campaign-end-time"
+                      type="time"
+                      value={newCampaign.calling_hours_end}
+                      onChange={(e) => setNewCampaign({...newCampaign, calling_hours_end: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 -mt-2">TCPA enforces 8am-9pm in the lead's local time regardless of these settings</p>
+
+                <div>
+                  <Label>Calling Days</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {[
+                      { key: "mon", label: "Mon" },
+                      { key: "tue", label: "Tue" },
+                      { key: "wed", label: "Wed" },
+                      { key: "thu", label: "Thu" },
+                      { key: "fri", label: "Fri" },
+                      { key: "sat", label: "Sat" },
+                      { key: "sun", label: "Sun" }
+                    ].map(day => (
+                      <button
+                        key={day.key}
+                        type="button"
+                        data-testid={`day-${day.key}`}
+                        onClick={() => {
+                          const days = newCampaign.calling_days || [];
+                          const updated = days.includes(day.key)
+                            ? days.filter(d => d !== day.key)
+                            : [...days, day.key];
+                          setNewCampaign({...newCampaign, calling_days: updated});
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                          (newCampaign.calling_days || []).includes(day.key)
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-gray-600 border-gray-300 hover:border-blue-300"
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-800">
+                    <strong>Example:</strong> 200 calls/day, 25 calls/hour, 9am-5pm Mon-Fri = steady pacing across 8 hours.
+                    Set calls/hour to 0 for maximum speed.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div>

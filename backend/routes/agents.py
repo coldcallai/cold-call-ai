@@ -259,7 +259,7 @@ async def preview_voice(
         audio_generator = _eleven_client.text_to_speech.convert(
             text=text[:500],  # Limit preview text
             voice_id=voice_id,
-            model_id="eleven_multilingual_v2",
+            model_id="eleven_flash_v2",
             voice_settings=_VoiceSettings(
                 stability=0.5,
                 similarity_boost=0.75,

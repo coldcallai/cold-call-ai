@@ -6488,7 +6488,7 @@ async def preview_voice(
         audio_generator = eleven_client.text_to_speech.convert(
             text=text[:500],  # Limit preview text
             voice_id=voice_id,
-            model_id="eleven_multilingual_v2",
+            model_id="eleven_flash_v2",
             voice_settings=VoiceSettings(
                 stability=0.5,
                 similarity_boost=0.75,
@@ -10422,7 +10422,7 @@ Anyway— I'll let you get back to it. Talk soon!"""
                 },
                 json={
                     "text": demo_script,
-                    "model_id": "eleven_multilingual_v2",
+                    "model_id": "eleven_flash_v2",
                     "voice_settings": {
                         "stability": 0.5,
                         "similarity_boost": 0.75
@@ -10827,7 +10827,7 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
                 },
                 json={
                     "text": text,
-                    "model_id": "eleven_multilingual_v2",
+                    "model_id": "eleven_flash_v2",
                     "voice_settings": {
                         "stability": 0.5,
                         "similarity_boost": 0.75,
@@ -12335,7 +12335,7 @@ async def generate_tts(request: TTSRequest):
         audio_generator = eleven_client.text_to_speech.convert(
             text=request.text,
             voice_id=request.voice_id,
-            model_id="eleven_multilingual_v2",
+            model_id="eleven_flash_v2",
             voice_settings=voice_settings
         )
         
@@ -12713,7 +12713,7 @@ Anyway— I'll let you get back to it. Talk soon!"""
                     headers={"xi-api-key": elevenlabs_api_key, "Content-Type": "application/json"},
                     json={
                         "text": demo_script,
-                        "model_id": "eleven_multilingual_v2",
+                        "model_id": "eleven_flash_v2",
                         "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
                     },
                     timeout=60.0

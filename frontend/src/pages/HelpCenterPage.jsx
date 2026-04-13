@@ -336,6 +336,10 @@ const FAQ_CATEGORIES = [
         a: "We bill monthly based on your plan. Calls are deducted from your monthly allowance. If you exceed your limit, you can upgrade or wait for the next billing cycle."
       },
       {
+        q: "Is there a free trial or demo available?",
+        a: "While we don't offer a free trial, we do offer live customized demos so you can see DialGenix.ai's platform in action and get all your questions answered based on your specific use case."
+      },
+      {
         q: "Can I cancel anytime?",
         a: "Yes, cancel anytime from Settings → Billing. You'll keep access until the end of your current billing period. No long-term contracts."
       },

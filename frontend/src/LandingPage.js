@@ -506,6 +506,10 @@ const LandingPage = () => {
       question: "How do I get started?",
       answer: "Book a free demo with our team. We'll show you how DialGenix works and help you set up your first campaign—usually takes about 15 minutes.",
     },
+    {
+      question: "Is there a free trial or demo available?",
+      answer: "While we don't offer a free trial, we do offer live customized demos so you can see DialGenix.ai's platform in action and get all your questions answered based on your specific use case.",
+    },
   ];
 
   return (

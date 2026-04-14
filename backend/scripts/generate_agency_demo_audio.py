@@ -25,15 +25,15 @@ MODEL_ID = "eleven_flash_v2"
 
 # All audio segments for the agency pitch
 SEGMENTS = {
-    "opening": "Hey — this is Sarah from DialGenix. Quick one — am I speaking with someone who handles lead generation or outbound for your agency?",
+    "opening": "Hey — this is Sarah from DialGenix. Quick one — am I speaking with someone who handles lead generation or outbound for your sales team?",
     
     "what_is_this": "I'll keep it simple — we built an AI system that reaches out to businesses actively looking for services like yours and turns them into booked meetings or live transfers. You're actually experiencing it right now — this call is being made by it.",
     
     "experience_loop_1": "The reason I'm calling is simple — instead of explaining how it works, we let you experience it directly.",
     
-    "experience_loop_2": "You're hearing the same system agencies use to book qualified meetings automatically.",
+    "experience_loop_2": "You're hearing the same system sales teams use to book qualified meetings automatically.",
     
-    "experience_loop_3": "Most people only have one question after this — does it actually work for my agency?",
+    "experience_loop_3": "Most people only have one question after this — does it actually work for my sales team?",
     
     "qualifying_1": "How are you currently handling outbound or lead generation right now?",
     
@@ -41,7 +41,7 @@ SEGMENTS = {
     
     "value_drop_1": "That's exactly what this solves.",
     
-    "value_drop_2": "It doesn't replace your agency — it removes the manual outreach layer and only delivers qualified, high-intent conversations your team can actually close.",
+    "value_drop_2": "It doesn't replace your sales team — it removes the manual outreach layer and only delivers qualified, high-intent conversations your team can actually close.",
     
     "value_drop_3": "So instead of your team spending time chasing leads, they only speak to people already showing intent, already in conversation, and already partially qualified.",
     
@@ -53,15 +53,15 @@ SEGMENTS = {
     
     "obj_robotic": "No — it uses natural voice models and adapts tone based on how the conversation is going. Most people don't realize it's AI until later.",
     
-    "obj_cost": "Most agencies start around $199 a month for the platform, plus you pay Twilio and ElevenLabs directly for usage — usually $100-150 total. Way less than one SDR.",
+    "obj_cost": "Most sales teams start around $199 a month for the platform, plus you pay Twilio and ElevenLabs directly for usage — usually $100-150 total. Way less than one SDR.",
     
     "obj_send_info": "Absolutely. But honestly, you're getting more from this 2-minute call than any email could give you. What if I just get you set up on a test run this week so you can see real results?",
     
-    "obj_not_right_time": "Totally understand. Quick question though — is it timing, or is there something specific holding you back? Because most agencies that say later end up watching competitors adopt it first.",
+    "obj_not_right_time": "Totally understand. Quick question though — is it timing, or is there something specific holding you back? Because most sales teams that say later end up watching competitors adopt it first.",
     
     "close_transition_1": "So based on what you've seen — the question isn't really whether it works.",
     
-    "close_transition_2": "It's whether you want to start using it to generate and qualify pipeline for your agency right now, or later once others in your space adopt it first.",
+    "close_transition_2": "It's whether you want to start using it to generate and qualify pipeline for your sales team right now, or later once others in your space adopt it first.",
     
     "close_1": "Does it make sense to get you set up on a starter plan so we can start delivering qualified conversations and booked meetings this week?",
     
@@ -69,7 +69,7 @@ SEGMENTS = {
     
     "close_yes": "Great — I'll have someone reach out in the next hour to get you onboarded. What email works best for you?",
     
-    "close_maybe": "No pressure. Most agencies start with a small test — light volume, prove conversion, then scale. Want to start there?",
+    "close_maybe": "No pressure. Most sales teams start with a small test — light volume, prove conversion, then scale. Want to start there?",
     
     "close_no": "No problem at all. When the time is right, you'll know where to find us. Have a great day!",
     

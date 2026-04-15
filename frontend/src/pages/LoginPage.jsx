@@ -56,7 +56,12 @@ const LoginPage = () => {
     try {
       await login(loginForm.email, loginForm.password);
       toast.success("Welcome back!");
-      navigate("/app/getting-started", { replace: true });
+      const pendingPlan = localStorage.getItem('selected_plan');
+      if (pendingPlan) {
+        navigate("/app/packs", { replace: true });
+      } else {
+        navigate("/app/getting-started", { replace: true });
+      }
     } catch (error) {
       console.error("Login failed:", error);
       toast.error(error.response?.data?.detail || "Login failed. Please check your credentials.");
@@ -194,7 +199,12 @@ const LoginPage = () => {
       }
       
       toast.success("Account created! Welcome to DialGenix.ai");
-      navigate("/app/getting-started", { replace: true });
+      const pendingPlan = localStorage.getItem('selected_plan');
+      if (pendingPlan) {
+        navigate("/app/packs", { replace: true });
+      } else {
+        navigate("/app/getting-started", { replace: true });
+      }
       // Refresh to load user data
       window.location.reload();
     } catch (error) {

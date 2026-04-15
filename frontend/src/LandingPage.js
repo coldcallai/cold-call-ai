@@ -194,6 +194,7 @@ const LandingPage = () => {
   };
 
   const goToPlan = (planId) => {
+    localStorage.setItem('selected_plan', planId);
     navigate('/login');
   };
 

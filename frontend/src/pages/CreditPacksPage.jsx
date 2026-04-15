@@ -211,11 +211,11 @@ const CreditPacks = () => {
                   <ul className="mt-4 space-y-2">
                     <li className="flex items-center gap-2 text-sm">
                       <CheckCircle className="w-4 h-4 text-cyan-500" />
-                      <span>{plan.leads_per_month.toLocaleString()} leads/mo</span>
+                      <span>{(plan.leads_per_month || 0).toLocaleString()} leads/mo</span>
                     </li>
                     <li className="flex items-center gap-2 text-sm">
                       <CheckCircle className="w-4 h-4 text-cyan-500" />
-                      <span>{plan.calls_per_month === -1 ? 'Unlimited' : plan.calls_per_month.toLocaleString()} calls/mo</span>
+                      <span>{plan.calls_per_month === -1 ? 'Unlimited' : (plan.calls_per_month || 0).toLocaleString()} calls/mo</span>
                     </li>
                     {plan.features?.slice(0, 3).map((feature, idx) => (
                       <li key={idx} className="flex items-center gap-2 text-sm text-gray-600">

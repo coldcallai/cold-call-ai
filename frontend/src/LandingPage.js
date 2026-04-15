@@ -194,8 +194,6 @@ const LandingPage = () => {
   };
 
   const goToPlan = (planId) => {
-    // Store selected plan so we can trigger checkout after login
-    localStorage.setItem('selected_plan', planId);
     navigate('/login');
   };
 

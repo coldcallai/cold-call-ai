@@ -260,15 +260,6 @@ const AppRouter = () => {
     }
   }, [user, location.pathname]);
 
-  // Auto-redirect to packs if user selected a plan from landing page
-  useEffect(() => {
-    if (!user || !location.pathname.startsWith('/app')) return;
-    const selectedPlan = localStorage.getItem('selected_plan');
-    if (!selectedPlan) return;
-    localStorage.removeItem('selected_plan');
-    navigate('/app/packs?plan=' + selectedPlan);
-  }, [user, location.pathname, navigate]);
-
   // Check if trial user needs phone verification
   useEffect(() => {
     if (user && location.pathname.startsWith('/app')) {

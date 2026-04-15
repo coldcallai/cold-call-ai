@@ -652,7 +652,7 @@ SUBSCRIPTION_PLANS = {
     # ============== BYOL PLANS (Bring Your Own List) ==============
     "byol_starter": {
         "name": "BYOL Starter",
-        "price": 149,
+        "price": 199,
         "leads_per_month": 0,  # No leads - they bring their own
         "calls_per_month": 250,
         "features": ["250 AI calls", "CSV upload", "Call recordings", "AI qualifying", "Auto booking", "7-day recordings"],
@@ -661,7 +661,7 @@ SUBSCRIPTION_PLANS = {
     },
     "byol_pro": {
         "name": "BYOL Pro",
-        "price": 349,
+        "price": 449,
         "leads_per_month": 0,  # No leads - they bring their own
         "calls_per_month": 750,
         "features": ["750 AI calls", "CSV upload", "Call transcripts", "AI qualifying", "Auto booking", "30-day recordings", "Custom scripts"],
@@ -670,7 +670,7 @@ SUBSCRIPTION_PLANS = {
     },
     "byol_scale": {
         "name": "BYOL Scale",
-        "price": 599,
+        "price": 799,
         "leads_per_month": 0,  # No leads - they bring their own
         "calls_per_month": 1500,
         "features": ["1,500 AI calls", "Unlimited CSV uploads", "Call transcripts", "AI qualifying", "Auto booking", "60-day recordings", "Custom scripts", "Priority support"],
@@ -680,7 +680,7 @@ SUBSCRIPTION_PLANS = {
     # ============== FULL SERVICE PLANS (Lead Discovery + Calling) ==============
     "discovery_starter": {
         "name": "Discovery Starter",
-        "price": 299,
+        "price": 399,
         "leads_per_month": 500,
         "calls_per_month": 250,
         "features": ["500 intent leads/mo", "250 AI calls", "GPT lead discovery", "AI qualifying", "Auto booking", "7-day recordings"],
@@ -689,7 +689,7 @@ SUBSCRIPTION_PLANS = {
     },
     "discovery_pro": {
         "name": "Discovery Pro",
-        "price": 699,
+        "price": 899,
         "leads_per_month": 1500,
         "calls_per_month": 750,
         "features": ["1,500 intent leads/mo", "750 AI calls", "GPT lead discovery", "Call transcripts", "Auto booking", "30-day recordings", "Custom scripts"],
@@ -698,7 +698,7 @@ SUBSCRIPTION_PLANS = {
     },
     "discovery_elite": {
         "name": "Discovery Elite",
-        "price": 1299,
+        "price": 1599,
         "leads_per_month": 3000,
         "calls_per_month": 2000,
         "features": ["3,000 intent leads/mo", "2,000 AI calls", "GPT lead discovery", "Call transcripts", "Auto booking", "90-day recordings", "Custom scripts", "Priority support", "5 team seats"],
@@ -708,7 +708,7 @@ SUBSCRIPTION_PLANS = {
     # ============== LEGACY/TEST PLANS ==============
     "test_drive": {
         "name": "Test Drive",
-        "price": 29,
+        "price": 49,
         "leads_per_month": 0,
         "calls_per_month": 50,
         "features": ["50 AI calls", "Call recordings", "Basic dashboard", "CSV upload"],

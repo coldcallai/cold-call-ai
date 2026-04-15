@@ -195,13 +195,7 @@ const LandingPage = () => {
 
   const goToPlan = (planId) => {
     localStorage.setItem('selected_plan', planId);
-    const token = localStorage.getItem('session_token');
-    if (token) {
-      // Already logged in — go straight to checkout
-      navigate('/app/packs');
-    } else {
-      navigate('/login');
-    }
+    navigate('/login');
   };
 
   const goToCalendly = () => {

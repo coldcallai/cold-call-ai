@@ -36,6 +36,11 @@ const LoginPage = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      const pendingPlan = localStorage.getItem('selected_plan');
+      if (pendingPlan) {
+        navigate("/app/packs", { replace: true });
+        return;
+      }
       const needsSetup = !user?.setup_wizard_completed;
       const destination = needsSetup ? "/app/getting-started" : (location.state?.from?.pathname || "/app");
       navigate(destination, { replace: true });

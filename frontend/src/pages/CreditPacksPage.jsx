@@ -117,11 +117,11 @@ const CreditPacks = () => {
   // Auto-trigger Stripe checkout if user came from landing page with a plan
   useEffect(() => {
     const pendingPlan = localStorage.getItem('selected_plan');
-    if (pendingPlan && !loading) {
+    if (pendingPlan && !loading && user) {
       localStorage.removeItem('selected_plan');
       initiateCheckout('subscription', pendingPlan);
     }
-  }, [loading]);
+  }, [loading, user]);
 
   if (loading || checkingPayment) {
     return (

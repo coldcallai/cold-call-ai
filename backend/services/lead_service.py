@@ -116,20 +116,25 @@ def parse_csv_leads(content: bytes, user_id: str) -> tuple:
             # Map common column names
             business_name = (
                 row.get('business_name') or 
+                row.get('company_name') or
+                row.get('company name') or
                 row.get('company') or 
                 row.get('name') or 
                 row.get('Business Name') or 
+                row.get('Company Name') or
                 row.get('Company')
             )
             phone = (
                 row.get('phone') or 
                 row.get('Phone') or 
                 row.get('phone_number') or 
+                row.get('phone number') or
                 row.get('Phone Number')
             )
             email = row.get('email') or row.get('Email') or row.get('email_address')
             contact_name = (
                 row.get('contact_name') or 
+                row.get('contact name') or
                 row.get('contact') or 
                 row.get('Contact') or 
                 row.get('Contact Name')

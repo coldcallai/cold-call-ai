@@ -7816,6 +7816,10 @@ async def create_checkout_session(
         }
     
     elif item_type == "lead_pack":
+        # Block BYOL users from purchasing packs
+        user_tier = current_user.get("subscription_tier", "")
+        if user_tier in ("byl", "byl_starter", "byl_pro", "byl_scale"):
+            raise HTTPException(status_code=403, detail="Credit packs are not available on BYOL plans. Please upgrade your subscription tier for more calls.")
         pack = next((p for p in LEAD_PACKS if p["id"] == item_id), None)
         if not pack:
             raise HTTPException(status_code=400, detail="Invalid lead pack")
@@ -7824,6 +7828,10 @@ async def create_checkout_session(
         credits_to_add = {"leads": pack["quantity"], "calls": 0}
     
     elif item_type == "call_pack":
+        # Block BYOL users from purchasing packs
+        user_tier = current_user.get("subscription_tier", "")
+        if user_tier in ("byl", "byl_starter", "byl_pro", "byl_scale"):
+            raise HTTPException(status_code=403, detail="Credit packs are not available on BYOL plans. Please upgrade your subscription tier for more calls.")
         pack = next((p for p in CALL_PACKS if p["id"] == item_id), None)
         if not pack:
             raise HTTPException(status_code=400, detail="Invalid call pack")
@@ -7832,6 +7840,10 @@ async def create_checkout_session(
         credits_to_add = {"leads": 0, "calls": pack["quantity"]}
     
     elif item_type == "topup":
+        # Block BYOL users from purchasing packs
+        user_tier = current_user.get("subscription_tier", "")
+        if user_tier in ("byl", "byl_starter", "byl_pro", "byl_scale"):
+            raise HTTPException(status_code=403, detail="Credit packs are not available on BYOL plans. Please upgrade your subscription tier for more calls.")
         pack = next((p for p in TOPUP_PACKS if p["id"] == item_id), None)
         if not pack:
             raise HTTPException(status_code=400, detail="Invalid top-up pack")

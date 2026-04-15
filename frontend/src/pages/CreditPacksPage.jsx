@@ -130,6 +130,8 @@ const CreditPacks = () => {
     ...plan
   }));
 
+  const isBYOL = user?.subscription_tier === 'byl' || user?.subscription_tier === 'byl_starter' || user?.subscription_tier === 'byl_pro' || user?.subscription_tier === 'byl_scale';
+
   return (
     <div className="p-6 md:p-8 space-y-6" data-testid="credit-packs-page">
       <div>
@@ -137,9 +139,11 @@ const CreditPacks = () => {
           Pricing & Plans
         </h1>
         <p className="text-gray-500 mt-1">Choose a plan or purchase additional credits</p>
-        <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
-          💡 Subscriptions reset monthly. Buy top-ups anytime for extra leads or calls that never expire.
-        </p>
+        {!isBYOL && (
+          <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded inline-block">
+            💡 Subscriptions reset monthly. Buy top-ups anytime for extra leads or calls that never expire.
+          </p>
+        )}
       </div>
 
       {/* Current Balance */}
@@ -172,11 +176,11 @@ const CreditPacks = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+        <TabsList className={`grid w-full max-w-2xl ${isBYOL ? 'grid-cols-1' : 'grid-cols-4'}`}>
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
-          <TabsTrigger value="leads">Lead Packs</TabsTrigger>
-          <TabsTrigger value="calls">Call Packs</TabsTrigger>
-          <TabsTrigger value="topups">Top-ups</TabsTrigger>
+          {!isBYOL && <TabsTrigger value="leads">Lead Packs</TabsTrigger>}
+          {!isBYOL && <TabsTrigger value="calls">Call Packs</TabsTrigger>}
+          {!isBYOL && <TabsTrigger value="topups">Top-ups</TabsTrigger>}
         </TabsList>
 
         {/* Subscription Plans */}

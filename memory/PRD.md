@@ -1,142 +1,83 @@
-# DialGenix.ai - AI Cold Calling SaaS Platform
+# DialGenix.ai (Rebranding to IntentBrain.ai) - PRD
 
 ## Original Problem Statement
 Build an AI cold calling machine that calls businesses, qualifies them, and routes qualified leads to different sales agents for payment processing.
 
-## Product Vision
-A vertical-agnostic B2B SaaS platform that:
-1. Discovers high-intent leads via GPT-5.2
-2. Executes AI cold calls with natural voice (ElevenLabs Flash v2)
-3. Qualifies leads with DISC personality detection
-4. Books meetings via Calendly or live transfers to human agents
-5. Full TCPA compliance built-in
-
 ## Current Status: PRE-LAUNCH
 - Platform fully functional
-- Domain: dialgenix.ai (rebranding to intentcue.ai pending)
-- ElevenLabs: 8 credits remaining, resets May 5 or upgrade to Scale
-- All voice now uses eleven_flash_v2 (2x more efficient than multilingual_v2)
+- Domain: dialgenix.ai (rebranding to intentbrain.ai pending)
+- ElevenLabs: 8 credits remaining, resets May 5 or upgrade to Scale ($330/mo)
+- All voice now uses eleven_flash_v2 (2x more efficient)
+- Stripe live payments connected and working
 
 ## Architecture
 - **Frontend:** React 18, Tailwind CSS, Shadcn/UI
 - **Backend:** FastAPI, Motor (async MongoDB)
 - **Voice Pipeline:** Twilio → FastAPI WebSocket → GPT-5.2 → ElevenLabs Flash v2
+- **Payments:** Stripe (live key configured on VPS)
 - **Pricing:** BYOK model (users bring own Twilio + ElevenLabs keys)
 
-## Key Features by Section
+## Pricing (Aligned Landing Page + Backend)
+| Plan | Price |
+|---|---|
+| Pay-as-you-go | $0/mo + $0.50/call |
+| Test Drive | $49/mo |
+| BYOL Starter | $199/mo (250 calls) |
+| BYOL Pro | $449/mo (750 calls) |
+| BYOL Scale | $799/mo (1,500 calls) |
+| Discovery Starter | $399/mo |
+| Discovery Pro | $899/mo |
+| Discovery Elite | $1,599/mo |
+| Receptionist Lite | $49/mo |
+| Receptionist Pro | $99/mo |
+| Receptionist Plus | $199/mo |
 
-### Getting Started
-- Setup checklist with progress %
-- Step-by-step instructions for Twilio, ElevenLabs, compliance
+**BYOL users cannot purchase credit packs** — must upgrade tier for more calls.
 
-### BYOK Setup Wizard
-- 4-step guided onboarding (Welcome, Twilio, ElevenLabs, Complete)
-- Cost comparison vs competitors
-- Encrypted credential storage (Fernet)
-- Real-time balance verification
+## Completed Features (April 2026)
+- [x] BYOK Setup Wizard (4-step guided onboarding)
+- [x] Credit Alert Banner (Twilio <$10, ElevenLabs <20%)
+- [x] ElevenLabs Flash v2 (switched from multilingual_v2)
+- [x] Inbound audio disk caching
+- [x] Campaign Dial Settings (calls/day, calls/hour, time, days)
+- [x] BYOL credit packs blocked (frontend + backend)
+- [x] Pricing alignment (landing page = backend = Stripe)
+- [x] Landing page → Stripe checkout flow
+- [x] CSV parser improved (accepts multiple column name formats)
+- [x] Agency/sales team campaign script (7-state flow)
+- [x] FAQ: "Is there a free trial or demo available?"
+- [x] GitHub repo set to private
+- [x] Twilio auth token rotated
 
-### Credit Alert Banner
-- Global warning when Twilio <$10 or ElevenLabs <20%
-- Polls every 5 minutes, dismissible
+## Backlog
 
-### Sales Funnel
-- Kanban board: New → Contacted → Qualified → Booked
-
-### Lead Discovery
-- GPT-powered intent search
-- CSV upload
-- Phone verification (mobile/landline/VoIP)
-- ICP scoring
-
-### Campaigns
-- Full AI script editor with use case templates
-- DISC personality detection questions
-- A/B script testing
-- Dial Settings: calls/day, calls/hour, start/end time, calling days
-- Voicemail drop (AMD detection)
-- Follow-up settings
-- ICP configuration
-
-### Agents
-- Use case templates (Sales, Credit Card, Appointment, Receptionist, Customer Service)
-- Voice cloning (ElevenLabs IVC)
-- Voice tuning (stability, similarity, expressiveness)
-- Voice preview
-- Live transfer to human
-- Auto AI disclosure (mobile vs landline)
-- 50+ language support
-
-### Bookings
-- Calendly-synced meetings
-- Filter by status/agent
-
-### Call History
-- Recording playback
-- Full transcripts
-- AMD status
-- Call outcomes
-
-### Analytics
-- Answer rate, qualified leads, booking rate
-- Daily charts, top campaigns, best calling times
-
-### CRM Integrations
-- GoHighLevel, Salesforce, HubSpot
-- Auto-push qualified leads
-
-### Compliance
-- B2B/B2C mode selection
-- TCPA acknowledgment
-- Calling hours enforcement (8am-9pm local + state-specific)
-- DNC management (National, State, Internal, Litigator)
-
-### Settings
-- BYOK Twilio/ElevenLabs config
-- Low balance alerts
-- Caller ID rotation
-- White-labeling
-- Team management
-
-## Prioritized Backlog
-
-### P0 - Critical
-- [x] All core features complete
+### P0 - Before Launch
+- [ ] Test Stripe post-payment redirect (use test key)
+- [ ] IntentBrain.ai rebrand (domain purchased)
+- [ ] CSV upload errors on live site debugging
 
 ### P1 - High Priority
-- [ ] Industry script template library (roofing, dental, legal, etc.)
-- [ ] IntentCue.ai rebrand
+- [ ] Industry script template library
+- [ ] Voice Cloning UI integration verification
 
 ### P2 - Medium Priority
 - [ ] Predictive dialer (parallel calling)
 - [ ] Open Dental RPA integration
-- [ ] Payment Overlay Platform
+- [ ] Monolith refactoring (server.py 12,700+ lines)
 
 ### P3 - Future
 - [ ] Calendly Webhook Sync
-- [ ] Deepgram STT (cost optimization)
-- [ ] More SEO pages
+- [ ] Payment Overlay Platform
 
-## Testing
-- Backend: pytest suites (200+ tests across all modules)
-- Test reports: /app/test_reports/iteration_1.json through iteration_18.json
-- Admin test user: test@example.com / Test123!
+## VPS Deployment
+```
+cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && pm2 restart dialgenix-backend
+```
 
 ## 3rd Party Integrations
-| Service | Status | Model |
-|---------|--------|-------|
-| OpenAI GPT-5.2 | Active | Via Emergent LLM Key |
-| ElevenLabs | Active | eleven_flash_v2 (switched from multilingual_v2) |
-| Twilio | Active | Token rotated April 2026 |
-| Stripe | Active | Live keys |
-| Emergent Auth | Active | Google OAuth |
-
-## Recent Changes (April 13, 2026)
-- Switched all ElevenLabs TTS from eleven_multilingual_v2 to eleven_flash_v2 (2x efficiency)
-- Added disk caching for inbound audio (no ElevenLabs credit burn on restart)
-- Added Campaign Dial Settings (calls/day, calls/hour, start/end time, calling days)
-- Created agency/sales team campaign script with 7-state flow
-- Created audio generation script for cached demo audio
-- Fixed GitHub secret exposure, rotated Twilio token, repo set to private
-- BYOK Setup Wizard with encrypted credential storage
-- Credit Alert Banner for low Twilio/ElevenLabs balances
-- FAQ entry for free trial question
+| Service | Status | Key Location |
+|---|---|---|
+| OpenAI GPT-5.2 | Active | Emergent LLM Key |
+| ElevenLabs | Active (8 credits) | VPS .env |
+| Twilio | Active (token rotated) | VPS .env |
+| Stripe | Active (live key) | VPS .env as STRIPE_API_KEY |

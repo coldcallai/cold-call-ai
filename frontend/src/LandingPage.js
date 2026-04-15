@@ -1316,7 +1316,10 @@ const LandingPage = () => {
               </div>
             </div>
             <button 
-              onClick={goToLogin}
+              onClick={() => {
+                document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+                setTimeout(() => setPricingTab('byol'), 300);
+              }}
               className="rounded-full bg-white text-gray-900 hover:bg-gray-100 px-6 py-4 text-base font-medium whitespace-nowrap inline-flex items-center cursor-pointer"
             >
               Upload CSV Now

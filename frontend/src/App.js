@@ -260,6 +260,34 @@ const AppRouter = () => {
     }
   }, [user, location.pathname]);
 
+  // Auto-trigger Stripe checkout if user selected a plan from landing page
+  useEffect(() => {
+    if (!user || !location.pathname.startsWith('/app')) return;
+    const selectedPlan = localStorage.getItem('selected_plan');
+    if (!selectedPlan) return;
+    localStorage.removeItem('selected_plan');
+    
+    const triggerCheckout = async () => {
+      try {
+        const token = localStorage.getItem('session_token');
+        const { data } = await axios.post(`${API}/checkout/create-session`, {
+          item_type: 'subscription',
+          item_id: selectedPlan,
+          billing_cycle: 'monthly',
+          origin_url: window.location.origin
+        }, { headers: { Authorization: `Bearer ${token}` } });
+        if (data.checkout_url) {
+          window.location.href = data.checkout_url;
+        }
+      } catch (err) {
+        console.error('Auto-checkout failed:', err);
+        toast.error('Could not start checkout. Please select a plan from Pricing & Plans.');
+        navigate('/app/packs');
+      }
+    };
+    triggerCheckout();
+  }, [user, location.pathname, navigate]);
+
   // Check if trial user needs phone verification
   useEffect(() => {
     if (user && location.pathname.startsWith('/app')) {

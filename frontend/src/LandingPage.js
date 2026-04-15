@@ -194,9 +194,9 @@ const LandingPage = () => {
   };
 
   const goToPlan = (planId) => {
-    // If logged in, go to credit packs page to checkout
-    // If not logged in, go to login first
-    navigate('/login', { state: { redirectTo: '/app/packs', planId } });
+    // Store selected plan so we can trigger checkout after login
+    localStorage.setItem('selected_plan', planId);
+    navigate('/login');
   };
 
   const goToCalendly = () => {

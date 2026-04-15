@@ -7860,7 +7860,7 @@ async def create_checkout_session(
     
     # Build URLs from frontend origin
     origin = request.origin_url.rstrip("/")
-    success_url = f"{origin}/app/packs?session_id={{CHECKOUT_SESSION_ID}}&success=true"
+    success_url = f"{origin}/app/getting-started?session_id={{CHECKOUT_SESSION_ID}}&success=true"
     cancel_url = f"{origin}/app/packs?canceled=true"
     
     # Create Stripe checkout

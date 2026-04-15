@@ -193,6 +193,12 @@ const LandingPage = () => {
     navigate('/login');
   };
 
+  const goToPlan = (planId) => {
+    // If logged in, go to credit packs page to checkout
+    // If not logged in, go to login first
+    navigate('/login', { state: { redirectTo: '/app/packs', planId } });
+  };
+
   const goToCalendly = () => {
     window.open('https://calendly.com/dialgenix/15-30min', '_blank');
   };
@@ -303,6 +309,7 @@ const LandingPage = () => {
   // BYOL Plans - Bring Your Own List
   const byolPlans = [
     {
+      id: "byl_starter",
       name: "BYOL Starter",
       price: "199",
       period: "/month",
@@ -319,6 +326,7 @@ const LandingPage = () => {
       popular: false,
     },
     {
+      id: "byl_pro",
       name: "BYOL Pro",
       price: "449",
       period: "/month",
@@ -336,6 +344,7 @@ const LandingPage = () => {
       popular: true,
     },
     {
+      id: "byl_scale",
       name: "BYOL Scale",
       price: "799",
       period: "/month",
@@ -357,6 +366,7 @@ const LandingPage = () => {
   // Full Service Plans - Lead Discovery + Calling
   const fullServicePlans = [
     {
+      id: "discovery_starter",
       name: "Discovery Starter",
       price: "399",
       period: "/month",
@@ -373,6 +383,7 @@ const LandingPage = () => {
       popular: false,
     },
     {
+      id: "discovery_pro",
       name: "Discovery Pro",
       price: "899",
       period: "/month",
@@ -390,6 +401,7 @@ const LandingPage = () => {
       popular: true,
     },
     {
+      id: "discovery_elite",
       name: "Discovery Elite",
       price: "1,599",
       period: "/month",
@@ -411,6 +423,7 @@ const LandingPage = () => {
   // Inbound AI Receptionist Plans - Minutes-based with overage
   const inboundPlans = [
     {
+      id: "receptionist_lite",
       name: "Receptionist Lite",
       price: "49",
       period: "/month",
@@ -430,6 +443,7 @@ const LandingPage = () => {
       overage: 0.35,
     },
     {
+      id: "receptionist_pro",
       name: "Receptionist Pro",
       price: "99",
       period: "/month",
@@ -451,6 +465,7 @@ const LandingPage = () => {
       overage: 0.25,
     },
     {
+      id: "receptionist_plus",
       name: "Receptionist Plus",
       price: "199",
       period: "/month",
@@ -2553,7 +2568,7 @@ const LandingPage = () => {
                 </ul>
 
                 <button 
-                  onClick={goToLogin}
+                  onClick={() => plan.isPayg ? goToLogin() : goToPlan(plan.id || plan.name)}
                   className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
                     plan.isPayg
                       ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0'
@@ -2603,7 +2618,7 @@ const LandingPage = () => {
                   </ul>
 
                   <button 
-                    onClick={goToLogin}
+                    onClick={() => goToPlan(plan.id)}
                     className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
                       plan.popular 
                         ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white border-0' 
@@ -2653,7 +2668,7 @@ const LandingPage = () => {
                   </ul>
 
                   <button 
-                    onClick={goToLogin}
+                    onClick={() => goToPlan(plan.id)}
                     className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
                       plan.popular 
                         ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0' 
@@ -2704,7 +2719,7 @@ const LandingPage = () => {
                       ))}
                     </ul>
                     <button 
-                      onClick={goToCalendly}
+                      onClick={() => goToPlan(plan.id)}
                       className={`w-full py-3 rounded-lg font-medium transition-all ${
                         plan.popular
                           ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'

@@ -1873,7 +1873,7 @@ const LandingPage = () => {
                 
                 <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
                   <Target className="w-8 h-8 text-orange-400 flex-shrink-0" />
-                  <p className="text-white">Increase conversions with <span className="text-orange-400 font-semibold">real-time human follow-up</span></p>
+                  <p className="text-white">Increase conversions with <span className="text-orange-400 font-semibold">instant human connection — no follow-up needed</span></p>
                 </div>
                 
                 <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">

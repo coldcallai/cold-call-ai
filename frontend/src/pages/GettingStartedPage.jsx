@@ -234,7 +234,9 @@ const GettingStartedPage = () => {
         "Choose between B2B (business-only) or B2C (consumer) calling mode",
         "B2B is recommended - $0 compliance cost, no FTC registration needed",
         "Read and acknowledge all compliance requirements",
-        "If B2C: Register with FTC and upload DNC data"
+        "If B2C: Go to telemarketing.donotcall.gov and register your organization ($75/area code/year)",
+        "If B2C: Download the National DNC list from the FTC portal after registration",
+        "If B2C: Upload your DNC data file in the Compliance > DNC Management page"
       ],
       externalLink: null,
       externalLinkText: null

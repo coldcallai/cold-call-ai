@@ -105,7 +105,7 @@ def parse_csv_leads(content: bytes, user_id: str) -> tuple:
     """
     import uuid
     
-    decoded = content.decode('utf-8')
+    decoded = content.decode('utf-8-sig').strip()  # utf-8-sig handles Excel BOM
     reader = csv.DictReader(io.StringIO(decoded))
     
     created_leads = []
@@ -113,6 +113,9 @@ def parse_csv_leads(content: bytes, user_id: str) -> tuple:
     
     for idx, row in enumerate(reader):
         try:
+            # Strip whitespace from all keys and values
+            row = {k.strip().lower(): (v.strip() if v else v) for k, v in row.items() if k}
+            
             # Map common column names
             business_name = (
                 row.get('business_name') or 
@@ -120,27 +123,26 @@ def parse_csv_leads(content: bytes, user_id: str) -> tuple:
                 row.get('company name') or
                 row.get('company') or 
                 row.get('name') or 
-                row.get('Business Name') or 
-                row.get('Company Name') or
-                row.get('Company')
+                row.get('business name')
             )
             phone = (
                 row.get('phone') or 
-                row.get('Phone') or 
                 row.get('phone_number') or 
                 row.get('phone number') or
-                row.get('Phone Number')
+                row.get('telephone') or
+                row.get('tel') or
+                row.get('mobile')
             )
-            email = row.get('email') or row.get('Email') or row.get('email_address')
+            email = row.get('email') or row.get('email_address') or row.get('e-mail')
             contact_name = (
                 row.get('contact_name') or 
                 row.get('contact name') or
-                row.get('contact') or 
-                row.get('Contact') or 
-                row.get('Contact Name')
+                row.get('contact') or
+                row.get('first name') or
+                row.get('full name')
             )
-            industry = row.get('industry') or row.get('Industry')
-            company_size = row.get('company_size') or row.get('size') or row.get('Company Size')
+            industry = row.get('industry')
+            company_size = row.get('company_size') or row.get('size')
             
             if not business_name or not phone:
                 errors.append(f"Row {idx + 1}: Missing business_name or phone")

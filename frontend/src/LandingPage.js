@@ -198,6 +198,10 @@ const LandingPage = () => {
     navigate('/login');
   };
 
+  const scrollToPricing = () => {
+    document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const goToCalendly = () => {
     window.open('https://calendly.com/dialgenix/15-30min', '_blank');
   };
@@ -562,7 +566,7 @@ const LandingPage = () => {
                 Log in
               </button>
               <button 
-                onClick={goToCalendly}
+                onClick={scrollToPricing}
                 className="rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white px-4 py-2 text-sm cursor-pointer"
               >
                 Get started
@@ -593,7 +597,7 @@ const LandingPage = () => {
                     Log in
                   </button>
                   <button 
-                    onClick={() => { setMobileMenuOpen(false); goToCalendly(); }}
+                    onClick={() => { setMobileMenuOpen(false); scrollToPricing(); }}
                     className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-4 py-3 text-sm text-center cursor-pointer"
                   >
                     Get started
@@ -1297,13 +1301,13 @@ const LandingPage = () => {
           {/* CTA after demo */}
           <div className="text-center mt-20">
             <button 
-              onClick={goToCalendly}
+              onClick={scrollToPricing}
               className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-6 text-lg font-medium border-0 inline-flex items-center cursor-pointer transition-all"
             >
               Get Started
               <ArrowRight className="w-5 h-5 ml-2" />
             </button>
-            <p className="text-gray-500 mt-4">Book a demo and see DialGenix in action.</p>
+            <p className="text-gray-500 mt-4">See our plans and start converting leads today.</p>
             <p className="text-cyan-400 text-sm mt-2 flex items-center justify-center gap-2">
               <MessageSquare className="w-4 h-4" />
               Questions about setup? Chat with us anytime—we'll help you get live in minutes.
@@ -2836,7 +2840,7 @@ const LandingPage = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button 
-              onClick={() => window.open(CALENDLY_LINK, '_blank')}
+              onClick={scrollToPricing}
               className="bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white rounded-full px-10 py-7 text-lg font-semibold border-0 flex items-center gap-2 shadow-lg shadow-purple-500/25"
             >
               Start Free

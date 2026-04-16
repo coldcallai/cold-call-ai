@@ -5849,7 +5849,7 @@ async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = De
     
     try:
         content = await file.read()
-        decoded = content.decode('utf-8')
+        decoded = content.decode('utf-8-sig').strip()
         reader = csv.DictReader(io.StringIO(decoded))
         
         created_leads = []
@@ -5857,13 +5857,15 @@ async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = De
         
         for idx, row in enumerate(reader):
             try:
-                # Map common column names
-                business_name = row.get('business_name') or row.get('company_name') or row.get('company name') or row.get('company') or row.get('name') or row.get('Business Name') or row.get('Company Name') or row.get('Company')
-                phone = row.get('phone') or row.get('Phone') or row.get('phone_number') or row.get('phone number') or row.get('Phone Number')
-                email = row.get('email') or row.get('Email') or row.get('email_address')
-                contact_name = row.get('contact_name') or row.get('contact name') or row.get('contact') or row.get('Contact') or row.get('Contact Name')
-                industry = row.get('industry') or row.get('Industry')
-                company_size = row.get('company_size') or row.get('size') or row.get('Company Size')
+                # Strip whitespace from all keys and values, normalize to lowercase
+                row = {k.strip().lower(): (v.strip() if v else v) for k, v in row.items() if k}
+                
+                business_name = row.get('business_name') or row.get('company_name') or row.get('company name') or row.get('company') or row.get('name') or row.get('business name')
+                phone = row.get('phone') or row.get('phone_number') or row.get('phone number') or row.get('telephone') or row.get('tel') or row.get('mobile')
+                email = row.get('email') or row.get('email_address') or row.get('e-mail')
+                contact_name = row.get('contact_name') or row.get('contact name') or row.get('contact') or row.get('first name') or row.get('full name')
+                industry = row.get('industry')
+                company_size = row.get('company_size') or row.get('size')
                 
                 if not business_name or not phone:
                     errors.append(f"Row {idx + 1}: Missing business_name or phone")

@@ -235,8 +235,8 @@ const GettingStartedPage = () => {
         "B2B is recommended - $0 compliance cost, no FTC registration needed",
         "Read and acknowledge all compliance requirements",
         "If B2C: Go to telemarketing.donotcall.gov and register your organization ($75/area code/year)",
-        "If B2C: Download the National DNC list from the FTC portal after registration",
-        "If B2C: Upload your DNC data file in the Compliance > DNC Management page"
+        "If B2C: After registration, log into the FTC portal and download the Do Not Call list as a CSV file",
+        "If B2C: In DialGenix, go to Compliance > DNC Management > click 'Upload DNC List' and upload the CSV you downloaded from FTC. This prevents your AI from calling numbers on the national Do Not Call registry."
       ],
       externalLink: null,
       externalLinkText: null

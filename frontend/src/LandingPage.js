@@ -791,7 +791,7 @@ const LandingPage = () => {
               Why Most Sales Calls Fail
             </h2>
             <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-              Your reps use <span className="text-red-400">one script</span>. Your buyers <span className="text-purple-400">don't</span>.
+              Your reps follow one script—but every buyer is different.
             </p>
           </div>
           

@@ -4147,6 +4147,7 @@ async def register(user_data: UserCreate):
         "trial_minutes_total": 15.0,
         "trial_seconds_used": 0.0,
         "trial_expired": False,
+        "setup_wizard_completed": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }

@@ -800,7 +800,7 @@ const LandingPage = () => {
             <div>
               <div className="mb-8 p-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-xl border border-emerald-500/30">
                 <p className="text-emerald-300 text-lg font-semibold text-center">
-                  💰 DialGenix detects this in real-time and adapts automatically to close more deals.
+                  DialGenix identifies each buyer's personality in real time and adapts your approach to close more deals.
                 </p>
               </div>
               <h3 className="text-white text-xl font-semibold mb-6">The 4 Buyer Personalities (DISC)</h3>

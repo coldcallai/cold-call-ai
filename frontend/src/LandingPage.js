@@ -2571,7 +2571,7 @@ const LandingPage = () => {
                 </ul>
 
                 <button 
-                  onClick={() => plan.isPayg ? goToLogin() : goToPlan(plan.id || plan.name)}
+                  onClick={() => goToPlan(plan.id || plan.name)}
                   className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
                     plan.isPayg
                       ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0'

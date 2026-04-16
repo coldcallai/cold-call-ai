@@ -290,6 +290,23 @@ const LandingPage = () => {
       cta: "Get Started",
       popular: false,
     },
+    {
+      id: "addon_review_requests",
+      name: "Review Requests",
+      price: "49",
+      period: "/month",
+      description: "Automate your reputation",
+      features: [
+        "Unlimited SMS review requests",
+        "Auto-send after appointments",
+        "Google Review link integration",
+        "Custom message templates",
+        "Review request history",
+        "Add to any plan",
+      ],
+      cta: "Get Started",
+      popular: false,
+    },
   ];
 
   // BYOL Plans - Bring Your Own List
@@ -2510,7 +2527,7 @@ const LandingPage = () => {
 
           {/* Entry Plan - Test Drive (shown on outbound tabs only) */}
           {(pricingTab === 'byol' || pricingTab === 'full') && (
-          <div className="max-w-md mx-auto mb-8">
+          <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
             {pricingPlans.map((plan, idx) => (
               <div 
                 key={idx}

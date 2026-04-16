@@ -274,23 +274,7 @@ const LandingPage = () => {
 
   const pricingPlans = [
     {
-      name: "Pay-as-you-go",
-      price: "0",
-      period: "/month",
-      description: "No commitment, pay per use",
-      features: [
-        "$0.50 per AI call",
-        "$0.25 per lead discovered",
-        "CSV export & upload",
-        "Basic ICP scoring",
-        "3-day call recordings",
-        "Perfect for testing",
-      ],
-      cta: "Start Free",
-      popular: false,
-      isPayg: true,
-    },
-    {
+      id: "test_drive",
       name: "Test Drive",
       price: "49",
       period: "/month",
@@ -305,7 +289,6 @@ const LandingPage = () => {
       ],
       cta: "Get Started",
       popular: false,
-      isTestDrive: true,
     },
   ];
 
@@ -2525,58 +2508,34 @@ const LandingPage = () => {
             </div>
           )}
 
-          {/* Entry Plans (shown on outbound tabs only) */}
+          {/* Entry Plan - Test Drive (shown on outbound tabs only) */}
           {(pricingTab === 'byol' || pricingTab === 'full') && (
-          <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
+          <div className="max-w-md mx-auto mb-8">
             {pricingPlans.map((plan, idx) => (
               <div 
                 key={idx}
-                className={`relative bg-white border rounded-2xl p-6 ${
-                  plan.isPayg
-                    ? 'border-purple-300 shadow-md shadow-purple-500/10'
-                    : 'border-gray-200'
-                }`}
+                className="relative bg-white border rounded-2xl p-6 border-gray-200"
               >
-                {plan.isPayg && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-medium">
-                    No Commitment
-                  </div>
-                )}
-                
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
                 <p className="text-gray-500 text-xs mb-4">{plan.description}</p>
                 
                 <div className="mb-4">
-                  {plan.isPayg ? (
-                    <div>
-                      <span className="text-3xl font-bold text-gray-900">$0</span>
-                      <span className="text-gray-500 text-sm">/month</span>
-                      <p className="text-xs text-purple-600 font-medium mt-1">Pay only for what you use</p>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
-                      <span className="text-gray-500 text-sm">{plan.period}</span>
-                    </>
-                  )}
+                  <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
+                  <span className="text-gray-500 text-sm">{plan.period}</span>
                 </div>
 
                 <ul className="space-y-2 mb-6">
                   {plan.features.map((feature, fidx) => (
                     <li key={fidx} className="flex items-center gap-2 text-xs">
-                      <CheckCircle className={`w-4 h-4 flex-shrink-0 ${plan.isPayg ? 'text-purple-500' : 'text-teal-500'}`} />
+                      <CheckCircle className="w-4 h-4 flex-shrink-0 text-teal-500" />
                       <span className="text-gray-700">{feature}</span>
                     </li>
                   ))}
                 </ul>
 
                 <button 
-                  onClick={() => goToPlan(plan.id || plan.name)}
-                  className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
-                    plan.isPayg
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
-                  }`}
+                  onClick={() => goToPlan(plan.id)}
+                  className="w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all bg-gray-100 hover:bg-gray-200 text-gray-900 border-0"
                 >
                   {plan.cta}
                 </button>

@@ -2840,10 +2840,10 @@ const LandingPage = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button 
-              onClick={() => goToPlan('payg')}
+              onClick={scrollToPricing}
               className="bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white rounded-full px-10 py-7 text-lg font-semibold border-0 flex items-center gap-2 shadow-lg shadow-purple-500/25"
             >
-              Start Free
+              View Plans
             </Button>
             <Button 
               onClick={() => window.open(CALENDLY_LINK, '_blank')}

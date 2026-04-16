@@ -629,7 +629,7 @@ const LandingPage = () => {
           {/* Primary CTA */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
             <Button 
-              onClick={() => window.open(CALENDLY_LINK, '_blank')}
+              onClick={scrollToPricing}
               className="rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white px-10 py-7 text-lg font-semibold border-0 shadow-lg shadow-purple-500/25"
             >
               Get Started

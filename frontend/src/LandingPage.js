@@ -1355,7 +1355,7 @@ const LandingPage = () => {
               </div>
               
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
-                Scale your outreach to <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">thousands of calls</span> simultaneously
+                Scale your outreach with AI that <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">calls, qualifies, and books meetings</span> — while you focus on closing
               </h2>
               
               <p className="text-gray-400 text-lg mb-8 leading-relaxed">

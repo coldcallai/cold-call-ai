@@ -3,67 +3,90 @@
 ## Original Problem Statement
 Build an AI cold calling machine that calls businesses, qualifies them, and routes qualified leads to different sales agents for payment processing.
 
-## Current Status: PRE-LAUNCH
-- Platform fully functional
-- Domain: dialgenix.ai (rebranding to intentbrain.ai pending)
-- ElevenLabs: 8 credits remaining, resets May 5 or upgrade to Scale ($330/mo)
-- All voice now uses eleven_flash_v2 (2x more efficient)
+## Current Status: PRE-LAUNCH (Ready for signups)
+- Platform fully functional, users can sign up and explore
+- AI calling blocked until ElevenLabs upgraded (8 credits remaining, resets May 5)
 - Stripe live payments connected and working
+- Domain: dialgenix.ai (rebranding to intentbrain.ai pending)
 
 ## Architecture
 - **Frontend:** React 18, Tailwind CSS, Shadcn/UI
 - **Backend:** FastAPI, Motor (async MongoDB)
 - **Voice Pipeline:** Twilio → FastAPI WebSocket → GPT-5.2 → ElevenLabs Flash v2
-- **Payments:** Stripe (live key configured on VPS)
+- **Payments:** Stripe (live key on VPS as STRIPE_API_KEY)
 - **Pricing:** BYOK model (users bring own Twilio + ElevenLabs keys)
 
-## Pricing (Aligned Landing Page + Backend)
-| Plan | Price |
-|---|---|
-| Pay-as-you-go | $0/mo + $0.50/call |
-| Test Drive | $49/mo |
-| BYOL Starter | $199/mo (250 calls) |
-| BYOL Pro | $449/mo (750 calls) |
-| BYOL Scale | $799/mo (1,500 calls) |
-| Discovery Starter | $399/mo |
-| Discovery Pro | $899/mo |
-| Discovery Elite | $1,599/mo |
-| Receptionist Lite | $49/mo |
-| Receptionist Pro | $99/mo |
-| Receptionist Plus | $199/mo |
+## Pricing (Aligned Landing Page + Backend — April 15, 2026)
+| Plan | Price | Type |
+|---|---|---|
+| Test Drive | $49/mo | Entry |
+| Review Requests | $49/mo | Add-on |
+| BYOL Starter | $199/mo (250 calls) | BYOL |
+| BYOL Pro | $449/mo (750 calls) | BYOL |
+| BYOL Scale | $799/mo (1,500 calls) | BYOL |
+| Discovery Starter | $399/mo | Full Service |
+| Discovery Pro | $899/mo | Full Service |
+| Discovery Elite | $1,599/mo | Full Service |
+| Receptionist Lite | $49/mo | Inbound |
+| Receptionist Pro | $99/mo | Inbound |
+| Receptionist Plus | $199/mo | Inbound |
 
-**BYOL users cannot purchase credit packs** — must upgrade tier for more calls.
+**PAYG removed.** BYOL users cannot purchase credit packs — must upgrade tier.
 
-## Completed Features (April 2026)
-- [x] BYOK Setup Wizard (4-step guided onboarding)
-- [x] Credit Alert Banner (Twilio <$10, ElevenLabs <20%)
-- [x] ElevenLabs Flash v2 (switched from multilingual_v2)
-- [x] Inbound audio disk caching
-- [x] Campaign Dial Settings (calls/day, calls/hour, time, days)
-- [x] BYOL credit packs blocked (frontend + backend)
+## Getting Started Checklist (7 steps)
+1. Connect Twilio Voice
+2. Connect ElevenLabs Voice (NEW)
+3. Set Up Calendly Booking
+4. Complete Compliance Setup (with FTC/DNC instructions for B2C)
+5. Create Your First Agent
+6. Create a Campaign
+7. Connect CRM (Optional)
+
+## Industry Script Templates (10 total)
+- Sales / Cold Calling (generic)
+- Lead Generation Agency
+- Digital Marketing Agency
+- Insurance Sales
+- Solar Sales
+- Roofing / Home Services
+- Credit Card Processing
+- Appointment Setter
+- Receptionist
+- Customer Service
+
+## Completed Features (April 15, 2026)
+- [x] All landing page CTAs go to pricing (not Calendly)
+- [x] PAYG removed, replaced with Review Requests add-on
 - [x] Pricing alignment (landing page = backend = Stripe)
 - [x] Landing page → Stripe checkout flow
-- [x] CSV parser improved (accepts multiple column name formats)
-- [x] Agency/sales team campaign script (7-state flow)
-- [x] FAQ: "Is there a free trial or demo available?"
-- [x] GitHub repo set to private
-- [x] Twilio auth token rotated
+- [x] BYOL credit packs blocked
+- [x] ElevenLabs added to Getting Started checklist
+- [x] FTC/DNC detailed instructions for B2C
+- [x] CSV parser fixed (BOM, whitespace, mixed case)
+- [x] Inbound AI webhook configured
+- [x] 6 new industry script templates
+- [x] Campaign Dial Settings
+- [x] ElevenLabs Flash v2 switch
+- [x] Inbound audio disk caching
+- [x] BYOK Setup Wizard
+- [x] Credit Alert Banner
+- [x] GitHub repo private, Twilio token rotated
 
 ## Backlog
 
 ### P0 - Before Launch
-- [ ] Test Stripe post-payment redirect (use test key)
-- [ ] IntentBrain.ai rebrand (domain purchased)
-- [ ] CSV upload errors on live site debugging
+- [ ] Upgrade ElevenLabs to Scale ($330/mo)
+- [ ] Test Stripe post-payment redirect
+- [ ] IntentBrain.ai rebrand
 
 ### P1 - High Priority
-- [ ] Industry script template library
-- [ ] Voice Cloning UI integration verification
+- [ ] Verify CSV upload works on live site
+- [ ] Voice Cloning UI verification
 
 ### P2 - Medium Priority
-- [ ] Predictive dialer (parallel calling)
+- [ ] Predictive dialer
 - [ ] Open Dental RPA integration
-- [ ] Monolith refactoring (server.py 12,700+ lines)
+- [ ] Monolith refactoring
 
 ### P3 - Future
 - [ ] Calendly Webhook Sync
@@ -78,6 +101,6 @@ cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --
 | Service | Status | Key Location |
 |---|---|---|
 | OpenAI GPT-5.2 | Active | Emergent LLM Key |
-| ElevenLabs | Active (8 credits) | VPS .env |
+| ElevenLabs | 8 credits left | VPS .env |
 | Twilio | Active (token rotated) | VPS .env |
 | Stripe | Active (live key) | VPS .env as STRIPE_API_KEY |

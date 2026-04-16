@@ -1413,11 +1413,11 @@ const LandingPage = () => {
                     </div>
                     <div>
                       <p className="text-white font-medium">AI Agent Active</p>
-                      <p className="text-cyan-400 text-sm">Making 847 simultaneous calls</p>
+                      <p className="text-cyan-400 text-sm">Calls in progress</p>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
                       <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                      <span className="text-green-400 text-sm">Live</span>
+                      <span className="text-green-400 text-sm">Live Call</span>
                     </div>
                   </div>
                   
@@ -1425,15 +1425,15 @@ const LandingPage = () => {
                   <div className="space-y-3 text-sm">
                     <div className="flex gap-3">
                       <span className="text-cyan-400 font-medium min-w-[40px]">AI:</span>
-                      <span className="text-gray-300">"Hi, this is Sarah from ABC Solutions. Am I speaking with the owner?"</span>
+                      <span className="text-gray-300">"Hi Mike, this is Sarah—quick question, are you the right person for handling your payment processing?"</span>
                     </div>
                     <div className="flex gap-3">
                       <span className="text-amber-400 font-medium min-w-[40px]">Lead:</span>
-                      <span className="text-gray-300">"Yes, this is Mike. What's this about?"</span>
+                      <span className="text-gray-300">"Yeah, that's me. What's this about?"</span>
                     </div>
                     <div className="flex gap-3">
                       <span className="text-cyan-400 font-medium min-w-[40px]">AI:</span>
-                      <span className="text-gray-300">"Great to connect, Mike! We help businesses like yours reduce payment processing fees by up to 40%..."</span>
+                      <span className="text-gray-300">"Got it. I'll be brief—most businesses we speak to are overpaying on fees. Worth a quick look if we could lower them?"</span>
                     </div>
                   </div>
                 </div>

@@ -4984,6 +4984,11 @@ async def get_setup_status(current_user: Dict = Depends(get_current_user)):
     twilio_phone_number = os.environ.get("TWILIO_PHONE_NUMBER")
     twilio_env_configured = all([twilio_account_sid, twilio_auth_token, twilio_phone_number])
     
+    # Check ElevenLabs configuration (BYOK or env)
+    elevenlabs_env_configured = bool(os.environ.get("ELEVENLABS_API_KEY"))
+    elevenlabs_byok_connected = current_user.get("elevenlabs_connected", False)
+    elevenlabs_configured = elevenlabs_env_configured or elevenlabs_byok_connected
+    
     # Check if user has any agents with Calendly links
     agents_with_calendly = await db.agents.count_documents({
         "user_id": user_id,
@@ -5014,6 +5019,12 @@ async def get_setup_status(current_user: Dict = Depends(get_current_user)):
             "id": "twilio",
             "title": "Connect Twilio Voice",
             "completed": twilio_configured or twilio_env_configured,
+            "required": True
+        },
+        {
+            "id": "elevenlabs",
+            "title": "Connect ElevenLabs Voice",
+            "completed": elevenlabs_configured,
             "required": True
         },
         {

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { 
   CheckCircle, Circle, ChevronRight, Phone, Calendar, Shield, Users,
   Settings, Database, AlertTriangle, Rocket, ExternalLink, Lock, Unlock,
-  Sparkles, Target, Search, Megaphone, HelpCircle, RefreshCw, Play, PhoneCall
+  Sparkles, Target, Search, Megaphone, HelpCircle, RefreshCw, Play, PhoneCall, Mic
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -181,6 +181,25 @@ const GettingStartedPage = () => {
       ],
       externalLink: "https://console.twilio.com",
       externalLinkText: "Open Twilio Console"
+    },
+    {
+      id: "elevenlabs",
+      title: "Connect ElevenLabs Voice",
+      description: "Enable natural AI voice for your calls",
+      icon: Mic,
+      color: "bg-violet-500",
+      bgLight: "bg-violet-50",
+      borderColor: "border-violet-200",
+      required: true,
+      path: "/app/settings",
+      instructions: [
+        "Go to elevenlabs.io and create an account",
+        "Navigate to Profile + API Key section",
+        "Copy your API key",
+        "Add your ElevenLabs API key in the Settings page below"
+      ],
+      externalLink: "https://elevenlabs.io",
+      externalLinkText: "Open ElevenLabs"
     },
     {
       id: "calendly",

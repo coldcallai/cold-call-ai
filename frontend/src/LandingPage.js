@@ -602,14 +602,14 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section - Dark */}
-      <section className="bg-[#0B1628] pt-12 pb-24 px-6 relative overflow-hidden">
+      <section className="bg-[#0B1628] pt-6 pb-20 px-6 relative overflow-hidden">
         {/* Gradient orb effect */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-purple-500/20 via-cyan-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         
         <div className="max-w-5xl mx-auto text-center relative">
           {/* Big Centered Logo */}
-          <div className="mb-12">
-            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-40 md:h-52 mx-auto" />
+          <div className="mb-8">
+            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-32 md:h-40 mx-auto" />
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">

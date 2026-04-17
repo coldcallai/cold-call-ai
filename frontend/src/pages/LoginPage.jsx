@@ -244,9 +244,7 @@ const LoginPage = () => {
       <div className="w-full max-w-md relative">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-xl flex items-center justify-center">
-            <Phone className="w-6 h-6 text-white" />
-          </div>
+          <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="w-12 h-12 rounded-xl" />
           <span className="text-2xl font-bold text-white">IntentBrain.ai</span>
         </div>
 

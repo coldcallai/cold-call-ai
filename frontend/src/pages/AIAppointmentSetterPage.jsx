@@ -83,9 +83,7 @@ const AIAppointmentSetterPage = () => {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
-                <Phone className="w-5 h-5 text-white" />
-              </div>
+              <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="w-9 h-9 rounded-lg" />
               <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </Link>
             <div className="flex items-center gap-3">
@@ -270,9 +268,7 @@ const AIAppointmentSetterPage = () => {
       <footer className="bg-[#0B1628] border-t border-gray-800 py-12 px-6">
         <div className="max-w-6xl mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
-              <Phone className="w-5 h-5 text-white" />
-            </div>
+            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="w-9 h-9 rounded-lg" />
             <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
           </div>
           <p className="text-gray-500 mb-6">AI appointment setter that fills your calendar</p>

@@ -1448,3 +1448,12 @@ credentials.json
 frontend/node_modules/.cache/default-development/35.pack
 frontend/node_modules/.cache/default-development/39.pack
 frontend/node_modules/.cache/default-development/40.pack
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials

@@ -544,7 +544,7 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="w-9 h-9 rounded-lg" />
+              <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-10 rounded-lg" />
               <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </div>
             

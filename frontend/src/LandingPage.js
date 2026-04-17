@@ -542,10 +542,7 @@ const LandingPage = () => {
       {/* Navigation */}
       <nav className="bg-[#0B1628] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-20" />
-            </div>
+          <div className="flex items-center justify-center">
             
             <div className="hidden md:flex items-center gap-8">
               <a href="#personality" className="text-sm text-gray-300 hover:text-white transition-colors">Personality AI</a>
@@ -553,9 +550,7 @@ const LandingPage = () => {
               <a href="#how-it-works" className="text-sm text-gray-300 hover:text-white transition-colors">How It Works</a>
               <a href="#pricing" className="text-sm text-gray-300 hover:text-white transition-colors">Pricing</a>
               <a href="#faq" className="text-sm text-gray-300 hover:text-white transition-colors">FAQ</a>
-            </div>
-
-            <div className="hidden md:flex items-center gap-3">
+              <span className="w-px h-5 bg-gray-700"></span>
               <button 
                 onClick={goToLogin}
                 className="rounded-full border border-gray-600 text-white hover:bg-white/10 bg-transparent px-4 py-2 text-sm cursor-pointer"
@@ -607,11 +602,16 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section - Dark */}
-      <section className="bg-[#0B1628] pt-20 pb-24 px-6 relative overflow-hidden">
+      <section className="bg-[#0B1628] pt-12 pb-24 px-6 relative overflow-hidden">
         {/* Gradient orb effect */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-purple-500/20 via-cyan-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         
         <div className="max-w-5xl mx-auto text-center relative">
+          {/* Big Centered Logo */}
+          <div className="mb-12">
+            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-40 md:h-52 mx-auto" />
+          </div>
+
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">
             <span className="text-white">Close More Deals with </span>
             <br />

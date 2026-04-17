@@ -535,7 +535,7 @@ const LandingPage = () => {
       {/* Announcement Bar */}
       <div className="bg-gradient-to-r from-purple-500 via-cyan-500 to-teal-500 py-2 px-4">
         <p className="text-center text-sm text-white font-medium">
-          🧠 NEW: AI Personality Detection — Know your buyer before you speak →
+          Intent Leads + AI Personality Detection &gt; Know your buyer before you speak &gt;
         </p>
       </div>
 
@@ -609,7 +609,7 @@ const LandingPage = () => {
         <div className="max-w-5xl mx-auto text-center relative">
           {/* Big Centered Logo */}
           <div className="mb-8">
-            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-32 md:h-40 mx-auto" />
+            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-44 md:h-56 mx-auto" />
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">

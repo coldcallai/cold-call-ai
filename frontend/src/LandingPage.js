@@ -609,7 +609,7 @@ const LandingPage = () => {
         <div className="max-w-5xl mx-auto text-center relative">
           {/* Big Centered Logo */}
           <div className="mb-6">
-            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-40 md:h-48 mx-auto" />
+            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-64 sm:h-48 md:h-48 mx-auto" />
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">

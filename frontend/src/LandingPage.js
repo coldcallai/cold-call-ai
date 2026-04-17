@@ -535,7 +535,7 @@ const LandingPage = () => {
       {/* Announcement Bar */}
       <div className="bg-gradient-to-r from-purple-500 via-cyan-500 to-teal-500 py-2 px-4">
         <p className="text-center text-sm text-white font-medium">
-          Intent Leads + AI Personality Detection &gt; Know your buyer before you speak &gt;
+          Intent Leads + AI Personality Detection — Know your buyer before you speak →
         </p>
       </div>
 
@@ -602,14 +602,14 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section - Dark */}
-      <section className="bg-[#0B1628] pt-6 pb-20 px-6 relative overflow-hidden">
+      <section className="bg-[#0B1628] pt-4 pb-16 px-6 relative overflow-hidden">
         {/* Gradient orb effect */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-purple-500/20 via-cyan-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         
         <div className="max-w-5xl mx-auto text-center relative">
           {/* Big Centered Logo */}
-          <div className="mb-8">
-            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-44 md:h-56 mx-auto" />
+          <div className="mb-6">
+            <img src="/intentbrain-logo.png" alt="IntentBrain.ai" className="h-40 md:h-48 mx-auto" />
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">
@@ -620,7 +620,7 @@ const LandingPage = () => {
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Instantly detect buyer personality and tailor every sales call to convert high-intent leads.
+            Instantly detect buyer personality and tailor every sales call to convert high&#8209;intent leads.
           </p>
 
           {/* Primary CTA */}

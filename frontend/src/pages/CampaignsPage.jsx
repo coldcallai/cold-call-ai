@@ -954,7 +954,7 @@ const Campaigns = () => {
                 <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
                   <p className="text-sm text-cyan-800">
                     <strong>How it works:</strong> When a call ends with no-answer or voicemail, 
-                    DialGenix automatically schedules a follow-up call based on these settings. 
+                    IntentBrain automatically schedules a follow-up call based on these settings. 
                     Follow-ups stop when the lead answers or gets booked.
                   </p>
                 </div>

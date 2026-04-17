@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DialGenix Dental Demo Audio Generator
+IntentBrain Dental Demo Audio Generator
 Generates sample dental receptionist call recordings using ElevenLabs
 """
 
@@ -199,7 +199,7 @@ async def generate_audio(text: str, output_path: str, voice_id: str = VOICE_ID):
 
 async def main():
     print("=" * 60)
-    print("DialGenix Dental Demo Audio Generator")
+    print("IntentBrain Dental Demo Audio Generator")
     print("=" * 60)
     
     if not ELEVENLABS_API_KEY:

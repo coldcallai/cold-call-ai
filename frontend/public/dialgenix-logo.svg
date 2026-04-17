@@ -12,8 +12,8 @@
   <!-- Phone Handset Icon -->
   <path d="M28 26c-1 0-2 1-2 2v2c0 10 8 18 18 18h2c1 0 2-1 2-2v-4c0-1-1-2-2-2h-4c-1 0-2 1-2 2v1c-5-1-9-5-10-10h1c1 0 2-1 2-2v-4c0-1-1-2-2-2h-3z" fill="white"/>
   
-  <!-- DialGenix.ai Text -->
+  <!-- IntentBrain.ai Text -->
   <text x="90" y="50" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold">
-    <tspan fill="url(#cyanGradient)">DialGenix</tspan><tspan fill="#64748b">.ai</tspan>
+    <tspan fill="url(#cyanGradient)">IntentBrain</tspan><tspan fill="#64748b">.ai</tspan>
   </text>
 </svg>

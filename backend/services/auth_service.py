@@ -20,7 +20,7 @@ ROOT_DIR = Path(__file__).parent.parent
 load_dotenv(ROOT_DIR / '.env')
 
 # JWT Configuration
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'intentbrain_default_secret_key')
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 

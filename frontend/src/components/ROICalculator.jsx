@@ -300,7 +300,7 @@ const ROICalculator = ({ industry = "dental", onGetStarted }) => {
             <Button 
               variant="outline"
               className="border-slate-600 text-slate-300 hover:bg-slate-800 px-8 py-6 text-lg rounded-xl"
-              onClick={() => window.open("https://calendly.com/dialgenix/15-30min", "_blank")}
+              onClick={() => window.open("https://calendly.com/intentbrain/15-30min", "_blank")}
             >
               <Calendar className="w-5 h-5 mr-2" />
               Book a Demo

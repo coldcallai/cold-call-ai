@@ -1,11 +1,11 @@
-# DialGenix.ai - Complete VPS Deployment Guide
+# IntentBrain.ai - Complete VPS Deployment Guide
 # =============================================
 # Save this file and follow step by step
 
 ## PREREQUISITES
 - Namecheap VPS with Ubuntu 22.04
 - SSH access to your server  
-- Domain: dialgenix.ai
+- Domain: intentbrain.ai
 - Your VPS IP address
 
 ---
@@ -40,8 +40,8 @@ sudo systemctl enable mongod
 
 ## STEP 4: CLONE YOUR CODE
 
-sudo mkdir -p /var/www/dialgenix && \
-cd /var/www/dialgenix && \
+sudo mkdir -p /var/www/intentbrain && \
+cd /var/www/intentbrain && \
 git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
 
 ** IMPORTANT: Replace YOUR_USERNAME/YOUR_REPO with your actual GitHub repo **
@@ -50,7 +50,7 @@ git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
 
 ## STEP 5: SETUP BACKEND
 
-cd /var/www/dialgenix/backend && \
+cd /var/www/intentbrain/backend && \
 python3.11 -m venv venv && \
 source venv/bin/activate && \
 pip install --upgrade pip && \
@@ -61,9 +61,9 @@ pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudf
 
 ## STEP 6: CREATE BACKEND .env FILE
 
-cat > /var/www/dialgenix/backend/.env << 'ENVFILE'
+cat > /var/www/intentbrain/backend/.env << 'ENVFILE'
 MONGO_URL=mongodb://localhost:27017
-DB_NAME=dialgenix_prod
+DB_NAME=intentbrain_prod
 EMERGENT_API_KEY=your_emergent_key_here
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
@@ -75,14 +75,14 @@ JWT_SECRET=change_this_to_random_64_characters
 ENVFILE
 
 ** IMPORTANT: Edit this file with your real API keys **
-nano /var/www/dialgenix/backend/.env
+nano /var/www/intentbrain/backend/.env
 
 ---
 
 ## STEP 7: SETUP FRONTEND
 
-cd /var/www/dialgenix/frontend && \
-echo "REACT_APP_BACKEND_URL=https://dialgenix.ai" > .env && \
+cd /var/www/intentbrain/frontend && \
+echo "REACT_APP_BACKEND_URL=https://intentbrain.ai" > .env && \
 npm install --legacy-peer-deps && \
 npm run build
 
@@ -90,13 +90,13 @@ npm run build
 
 ## STEP 8: CONFIGURE NGINX
 
-sudo tee /etc/nginx/sites-available/dialgenix << 'NGINXCONF'
+sudo tee /etc/nginx/sites-available/intentbrain << 'NGINXCONF'
 server {
     listen 80;
-    server_name dialgenix.ai www.dialgenix.ai;
+    server_name intentbrain.ai www.intentbrain.ai;
 
     location / {
-        root /var/www/dialgenix/frontend/build;
+        root /var/www/intentbrain/frontend/build;
         index index.html;
         try_files $uri $uri/ /index.html;
     }
@@ -125,7 +125,7 @@ server {
 }
 NGINXCONF
 
-sudo ln -sf /etc/nginx/sites-available/dialgenix /etc/nginx/sites-enabled/ && \
+sudo ln -sf /etc/nginx/sites-available/intentbrain /etc/nginx/sites-enabled/ && \
 sudo rm -f /etc/nginx/sites-enabled/default && \
 sudo nginx -t && \
 sudo systemctl restart nginx
@@ -135,7 +135,7 @@ sudo systemctl restart nginx
 ## STEP 9: POINT DOMAIN TO SERVER
 
 In Namecheap DNS Settings:
-1. Go to: Domain List > dialgenix.ai > Manage > Advanced DNS
+1. Go to: Domain List > intentbrain.ai > Manage > Advanced DNS
 2. Add these A records:
 
    Type: A    Host: @      Value: YOUR_VPS_IP    TTL: Automatic
@@ -147,7 +147,7 @@ Wait 5-30 minutes for DNS to propagate.
 
 ## STEP 10: SETUP SSL (HTTPS)
 
-sudo certbot --nginx -d dialgenix.ai -d www.dialgenix.ai
+sudo certbot --nginx -d intentbrain.ai -d www.intentbrain.ai
 
 Follow prompts: enter email, agree to terms, select "redirect HTTP to HTTPS"
 
@@ -155,18 +155,18 @@ Follow prompts: enter email, agree to terms, select "redirect HTTP to HTTPS"
 
 ## STEP 11: START BACKEND WITH PM2
 
-cd /var/www/dialgenix/backend && \
+cd /var/www/intentbrain/backend && \
 source venv/bin/activate && \
 cat > ecosystem.config.js << 'PM2CONF'
 module.exports = {
   apps: [{
-    name: 'dialgenix-backend',
+    name: 'intentbrain-backend',
     script: 'venv/bin/uvicorn',
     args: 'server:app --host 0.0.0.0 --port 8001',
-    cwd: '/var/www/dialgenix/backend',
+    cwd: '/var/www/intentbrain/backend',
     interpreter: 'none',
     env: {
-      PATH: '/var/www/dialgenix/backend/venv/bin:' + process.env.PATH
+      PATH: '/var/www/intentbrain/backend/venv/bin:' + process.env.PATH
     }
   }]
 };
@@ -183,41 +183,41 @@ pm2 startup
 ## STEP 12: CONFIGURE STRIPE WEBHOOK
 
 1. Go to: https://dashboard.stripe.com/webhooks
-2. Add endpoint: https://dialgenix.ai/api/stripe/webhook
+2. Add endpoint: https://intentbrain.ai/api/stripe/webhook
 3. Select events: checkout.session.completed, customer.subscription.*
 4. Copy webhook signing secret
-5. Update STRIPE_WEBHOOK_SECRET in /var/www/dialgenix/backend/.env
-6. Run: pm2 restart dialgenix-backend
+5. Update STRIPE_WEBHOOK_SECRET in /var/www/intentbrain/backend/.env
+6. Run: pm2 restart intentbrain-backend
 
 ---
 
 ## STEP 13: CONFIGURE TWILIO WEBHOOKS
 
 1. Go to: https://console.twilio.com > Phone Numbers > Your Number
-2. Voice webhook: https://dialgenix.ai/api/twilio/voice
-3. Status callback: https://dialgenix.ai/api/twilio/status
+2. Voice webhook: https://intentbrain.ai/api/twilio/voice
+3. Status callback: https://intentbrain.ai/api/twilio/status
 
 ---
 
 ## VERIFY DEPLOYMENT
 
 pm2 status
-curl https://dialgenix.ai/api/
+curl https://intentbrain.ai/api/
 
-Visit https://dialgenix.ai in your browser!
+Visit https://intentbrain.ai in your browser!
 
 ---
 
 ## USEFUL COMMANDS FOR LATER
 
 # View logs
-pm2 logs dialgenix-backend
+pm2 logs intentbrain-backend
 
 # Restart after code changes
-cd /var/www/dialgenix && git pull && pm2 restart dialgenix-backend
+cd /var/www/intentbrain && git pull && pm2 restart intentbrain-backend
 
 # Rebuild frontend
-cd /var/www/dialgenix/frontend && npm run build
+cd /var/www/intentbrain/frontend && npm run build
 
 # Renew SSL
 sudo certbot renew

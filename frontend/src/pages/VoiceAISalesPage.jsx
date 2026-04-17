@@ -7,13 +7,13 @@ import {
   PhoneForwarded, Mic, Brain, Headphones, Volume2, Settings
 } from "lucide-react";
 
-const CALENDLY_LINK = "https://calendly.com/dialgenix/15-30min";
+const CALENDLY_LINK = "https://calendly.com/intentbrain/15-30min";
 
 const VoiceAISalesPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "Voice AI for Sales | AI Sales Agent & Dialer | DialGenix.ai";
+    document.title = "Voice AI for Sales | AI Sales Agent & Dialer | IntentBrain.ai";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'Voice AI sales agent that makes natural-sounding calls. DISC personality detection, voice cloning, live transfers & auto-booking. Powered by GPT-5.2 & ElevenLabs.');
@@ -74,7 +74,7 @@ const VoiceAISalesPage = () => {
               <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+              <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </Link>
             <div className="flex items-center gap-3">
               <button 
@@ -194,7 +194,7 @@ const VoiceAISalesPage = () => {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="text-left text-gray-400 py-4 px-6 font-medium">Feature</th>
-                  <th className="text-center text-purple-400 py-4 px-6 font-semibold">DialGenix Voice AI</th>
+                  <th className="text-center text-purple-400 py-4 px-6 font-semibold">IntentBrain Voice AI</th>
                   <th className="text-center text-gray-500 py-4 px-6 font-medium">Traditional Dialers</th>
                 </tr>
               </thead>
@@ -293,7 +293,7 @@ const VoiceAISalesPage = () => {
             <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
               <Phone className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+            <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
           </div>
           <p className="text-gray-500 mb-6">Voice AI that sells like a human</p>
           <div className="flex items-center justify-center gap-6 text-sm text-gray-400">
@@ -302,7 +302,7 @@ const VoiceAISalesPage = () => {
             <Link to="/help" className="hover:text-white">Help Center</Link>
             <Link to="/ai-cold-calling" className="hover:text-white">AI Cold Calling</Link>
           </div>
-          <p className="text-gray-600 text-sm mt-6">© 2025 DialGenix.ai. All rights reserved.</p>
+          <p className="text-gray-600 text-sm mt-6">© 2025 IntentBrain.ai. All rights reserved.</p>
         </div>
       </footer>
     </div>

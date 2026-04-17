@@ -7,13 +7,13 @@ import {
   PhoneForwarded, Mic, Brain, Headphones, CalendarCheck, Building2
 } from "lucide-react";
 
-const CALENDLY_LINK = "https://calendly.com/dialgenix/15-30min";
+const CALENDLY_LINK = "https://calendly.com/intentbrain/15-30min";
 
 const AIAppointmentSetterPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "AI Appointment Setter | Automated Meeting Booking | DialGenix.ai";
+    document.title = "AI Appointment Setter | Automated Meeting Booking | IntentBrain.ai";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'AI appointment setter that books meetings automatically. AI calls leads, qualifies them, checks calendar availability & schedules appointments. Works with Calendly.');
@@ -86,7 +86,7 @@ const AIAppointmentSetterPage = () => {
               <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+              <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </Link>
             <div className="flex items-center gap-3">
               <button 
@@ -273,7 +273,7 @@ const AIAppointmentSetterPage = () => {
             <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
               <Phone className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+            <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
           </div>
           <p className="text-gray-500 mb-6">AI appointment setter that fills your calendar</p>
           <div className="flex items-center justify-center gap-6 text-sm text-gray-400 flex-wrap">
@@ -284,7 +284,7 @@ const AIAppointmentSetterPage = () => {
             <Link to="/ai-sales-dialer" className="hover:text-white">Sales Dialer</Link>
             <Link to="/automated-cold-calling" className="hover:text-white">Automated Calling</Link>
           </div>
-          <p className="text-gray-600 text-sm mt-6">© 2025 DialGenix.ai. All rights reserved.</p>
+          <p className="text-gray-600 text-sm mt-6">© 2025 IntentBrain.ai. All rights reserved.</p>
         </div>
       </footer>
     </div>

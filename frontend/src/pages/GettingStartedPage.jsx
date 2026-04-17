@@ -215,7 +215,7 @@ const GettingStartedPage = () => {
         "Create a Calendly account at calendly.com (free tier works)",
         "Set up an event type for sales meetings (e.g., '30 Min Discovery Call')",
         "Copy your booking link",
-        "Add the Calendly link when creating an Agent in DialGenix"
+        "Add the Calendly link when creating an Agent in IntentBrain"
       ],
       externalLink: "https://calendly.com",
       externalLinkText: "Open Calendly"
@@ -236,7 +236,7 @@ const GettingStartedPage = () => {
         "Read and acknowledge all compliance requirements",
         "If B2C: Go to telemarketing.donotcall.gov and register your organization ($75/area code/year)",
         "If B2C: After registration, log into the FTC portal and download the Do Not Call list as a CSV file",
-        "If B2C: In DialGenix, go to Compliance > DNC Management > click 'Upload DNC List' and upload the CSV you downloaded from FTC. This prevents your AI from calling numbers on the national Do Not Call registry."
+        "If B2C: In IntentBrain, go to Compliance > DNC Management > click 'Upload DNC List' and upload the CSV you downloaded from FTC. This prevents your AI from calling numbers on the national Do Not Call registry."
       ],
       externalLink: null,
       externalLinkText: null

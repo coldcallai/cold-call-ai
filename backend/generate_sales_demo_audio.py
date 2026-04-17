@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-DialGenix Sales Demo Audio Generator - Two Voice Version
-Generates sample sales call recordings showing DialGenix AI in action
+IntentBrain Sales Demo Audio Generator - Two Voice Version
+Generates sample sales call recordings showing IntentBrain AI in action
 """
 
 import os
@@ -19,14 +19,14 @@ PROSPECT_VOICE_ID = "TxGEqnHWrfWFTfGW9XjX"  # Josh - male, natural (Business Own
 OUTPUT_DIR = "/app/frontend/public/audio/sales-demos"
 TEMP_DIR = "/tmp/sales-audio-temp"
 
-# DialGenix Sales Demo Conversations
+# IntentBrain Sales Demo Conversations
 SALES_DEMOS = {
     "sales_cold_call_interested": {
         "name": "Cold Call - Interested Prospect",
         "filename": "dialgenix-cold-call-interested.mp3",
         "description": "AI cold calls a business owner who's interested and books a demo",
         "conversation": [
-            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with DialGenix.ai. We help sales companies bring in more clients with booked meetings, live transfers, personality detection, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"},
+            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with IntentBrain.ai. We help sales companies bring in more clients with booked meetings, live transfers, personality detection, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"},
             {"speaker": "PROSPECT", "text": "AI agent? So you're not a real person?"},
             {"speaker": "AI", "text": "That's right! I'm an AI, and what you're hearing right now is exactly what your prospects would experience. I can have natural conversations, answer questions, handle objections, and book qualified meetings directly into your calendar. Pretty cool, right?"},
             {"speaker": "PROSPECT", "text": "Okay, that's actually impressive. How does this work exactly?"},
@@ -40,7 +40,7 @@ SALES_DEMOS = {
             {"speaker": "PROSPECT", "text": "Thursday at 10 works."},
             {"speaker": "AI", "text": "Wonderful! I've got you down for Thursday at 10 AM. You'll receive a calendar invite shortly. Can I get your email to send that over?"},
             {"speaker": "PROSPECT", "text": "It's john at acme sales dot com."},
-            {"speaker": "AI", "text": "Got it, john at acme sales dot com. You'll have that invite in the next few minutes. Looking forward to showing you what DialGenix can do for your sales team. Have a great day!"},
+            {"speaker": "AI", "text": "Got it, john at acme sales dot com. You'll have that invite in the next few minutes. Looking forward to showing you what IntentBrain can do for your sales team. Have a great day!"},
         ]
     },
     
@@ -49,7 +49,7 @@ SALES_DEMOS = {
         "filename": "dialgenix-objection-handling.mp3",
         "description": "AI handles objections about existing solutions and competitors",
         "conversation": [
-            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with DialGenix.ai. We help sales companies bring in more clients with booked meetings and live transfers. Do you have a quick moment?"},
+            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with IntentBrain.ai. We help sales companies bring in more clients with booked meetings and live transfers. Do you have a quick moment?"},
             {"speaker": "PROSPECT", "text": "We already use a dialer. Not really looking for anything new."},
             {"speaker": "AI", "text": "Totally understand. Out of curiosity, what are you using now? I ask because most dialers just help your team make more calls faster. We actually do the calling for you - your reps never touch the phone until someone's already qualified and interested."},
             {"speaker": "PROSPECT", "text": "Wait, so the AI does the actual cold calling?"},
@@ -70,7 +70,7 @@ SALES_DEMOS = {
         "filename": "dialgenix-live-transfer.mp3",
         "description": "AI qualifies a hot lead and offers to transfer them live",
         "conversation": [
-            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with DialGenix.ai. We help sales teams book more qualified meetings using AI that actually makes the calls for you. Is this something you're actively looking to improve?"},
+            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with IntentBrain.ai. We help sales teams book more qualified meetings using AI that actually makes the calls for you. Is this something you're actively looking to improve?"},
             {"speaker": "PROSPECT", "text": "Actually, yeah. We've been struggling with our outbound. Our team hates cold calling and our numbers are way down."},
             {"speaker": "AI", "text": "I hear that a lot. Cold calling burnout is real - most reps quit within 90 days because of it. What if your team never had to make another cold call? They'd only get on the phone with people who already said they're interested."},
             {"speaker": "PROSPECT", "text": "That sounds great but how does that actually work?"},
@@ -89,7 +89,7 @@ SALES_DEMOS = {
         "filename": "dialgenix-not-interested.mp3",
         "description": "AI handles rejection gracefully and leaves door open",
         "conversation": [
-            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with DialGenix.ai. We help sales companies bring in more clients with AI-powered cold calling. Do you have a quick moment?"},
+            {"speaker": "AI", "text": "Hi, this is Sarah, AI agent with IntentBrain.ai. We help sales companies bring in more clients with AI-powered cold calling. Do you have a quick moment?"},
             {"speaker": "PROSPECT", "text": "Not really interested, thanks."},
             {"speaker": "AI", "text": "No problem at all. Before I let you go - is it that you're not doing outbound sales, or just not the right time?"},
             {"speaker": "PROSPECT", "text": "We do outbound but we're pretty set with our current process."},
@@ -107,7 +107,7 @@ SALES_DEMOS = {
         "filename": "dialgenix-disc-adaptation.mp3",
         "description": "AI demonstrates adapting to a fast-paced D-type personality",
         "conversation": [
-            {"speaker": "AI", "text": "Hi, this is Sarah with DialGenix. We help sales teams book more meetings using AI. Got a minute?"},
+            {"speaker": "AI", "text": "Hi, this is Sarah with IntentBrain. We help sales teams book more meetings using AI. Got a minute?"},
             {"speaker": "PROSPECT", "text": "I've got 60 seconds. What do you got?"},
             {"speaker": "AI", "text": "Straight to it. AI makes your cold calls. Books meetings. Transfers hot leads live. Your team only talks to people who said yes. ROI in week one. Interested?"},
             {"speaker": "PROSPECT", "text": "How much?"},
@@ -222,7 +222,7 @@ async def generate_conversation(demo_id: str, demo: dict):
 
 async def main():
     print("=" * 60)
-    print("DialGenix Sales Demo Audio Generator")
+    print("IntentBrain Sales Demo Audio Generator")
     print("Two-Voice Version (AI + Prospect)")
     print("=" * 60)
     

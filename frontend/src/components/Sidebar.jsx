@@ -49,7 +49,7 @@ const Sidebar = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              DialGenix.ai
+              IntentBrain.ai
             </h1>
             <p className="text-xs text-gray-500">AI Sales Automation</p>
           </div>
@@ -135,7 +135,7 @@ const Sidebar = () => {
             <Phone className="w-4 h-4 text-white" />
           </div>
           <span className="font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            DialGenix.ai
+            IntentBrain.ai
           </span>
         </div>
         <Button

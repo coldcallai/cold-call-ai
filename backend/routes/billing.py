@@ -100,7 +100,7 @@ async def create_subscription(
         price_id = await _get_or_create_stripe_price(plan_id, billing_cycle)
         
         # Build URLs
-        origin = request.headers.get("origin", "https://dialgenix.ai")
+        origin = request.headers.get("origin", "https://intentbrain.ai")
         success_url = f"{origin}/app/settings?subscription=success"
         cancel_url = f"{origin}/app/packs?subscription=canceled"
         
@@ -168,7 +168,7 @@ async def get_customer_portal(
     if not customer_id:
         raise HTTPException(status_code=400, detail="No payment profile found. Please subscribe first.")
     
-    origin = request.headers.get("origin", "https://dialgenix.ai")
+    origin = request.headers.get("origin", "https://intentbrain.ai")
     return_url = f"{origin}/app/settings"
     
     try:

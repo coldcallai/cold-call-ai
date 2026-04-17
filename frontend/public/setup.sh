@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #############################################
-# DialGenix.ai - One-Click Deployment Script
+# IntentBrain.ai - One-Click Deployment Script
 # 
 # Usage: bash setup.sh
 #############################################
@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 
 echo -e "${CYAN}"
 echo "=============================================="
-echo "   DialGenix.ai Automated Deployment"
+echo "   IntentBrain.ai Automated Deployment"
 echo "=============================================="
 echo -e "${NC}"
 
@@ -26,7 +26,7 @@ echo -e "${YELLOW}Please provide the following information:${NC}"
 echo ""
 
 read -p "GitHub repo URL (e.g., https://github.com/user/repo.git): " GITHUB_REPO
-read -p "Your domain (e.g., dialgenix.ai): " DOMAIN
+read -p "Your domain (e.g., intentbrain.ai): " DOMAIN
 read -p "Your email (for SSL certificate): " EMAIL
 
 echo ""
@@ -80,14 +80,14 @@ sudo systemctl enable mongod
 
 # Step 7: Clone repository
 echo -e "${CYAN}[7/12] Cloning repository...${NC}"
-sudo mkdir -p /var/www/dialgenix
-cd /var/www/dialgenix
+sudo mkdir -p /var/www/intentbrain
+cd /var/www/intentbrain
 sudo git clone $GITHUB_REPO .
-sudo chown -R $USER:$USER /var/www/dialgenix
+sudo chown -R $USER:$USER /var/www/intentbrain
 
 # Step 8: Setup Backend
 echo -e "${CYAN}[8/12] Setting up backend...${NC}"
-cd /var/www/dialgenix/backend
+cd /var/www/intentbrain/backend
 python3.11 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
@@ -97,7 +97,7 @@ pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudf
 # Create backend .env
 cat > .env << ENVEOF
 MONGO_URL=mongodb://localhost:27017
-DB_NAME=dialgenix_prod
+DB_NAME=intentbrain_prod
 EMERGENT_API_KEY=$EMERGENT_KEY
 TWILIO_ACCOUNT_SID=$TWILIO_SID
 TWILIO_AUTH_TOKEN=$TWILIO_TOKEN
@@ -110,20 +110,20 @@ ENVEOF
 
 # Step 9: Setup Frontend
 echo -e "${CYAN}[9/12] Setting up frontend (this may take a few minutes)...${NC}"
-cd /var/www/dialgenix/frontend
+cd /var/www/intentbrain/frontend
 echo "REACT_APP_BACKEND_URL=https://$DOMAIN" > .env
 npm install --legacy-peer-deps
 npm run build
 
 # Step 10: Configure Nginx
 echo -e "${CYAN}[10/12] Configuring Nginx...${NC}"
-sudo tee /etc/nginx/sites-available/dialgenix > /dev/null << NGINXEOF
+sudo tee /etc/nginx/sites-available/intentbrain > /dev/null << NGINXEOF
 server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
 
     location / {
-        root /var/www/dialgenix/frontend/build;
+        root /var/www/intentbrain/frontend/build;
         index index.html;
         try_files \$uri \$uri/ /index.html;
     }
@@ -152,26 +152,26 @@ server {
 }
 NGINXEOF
 
-sudo ln -sf /etc/nginx/sites-available/dialgenix /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/intentbrain /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 
 # Step 11: Start Backend with PM2
 echo -e "${CYAN}[11/12] Starting backend with PM2...${NC}"
-cd /var/www/dialgenix/backend
+cd /var/www/intentbrain/backend
 source venv/bin/activate
 
 cat > ecosystem.config.js << PM2EOF
 module.exports = {
   apps: [{
-    name: 'dialgenix-backend',
+    name: 'intentbrain-backend',
     script: 'venv/bin/uvicorn',
     args: 'server:app --host 0.0.0.0 --port 8001',
-    cwd: '/var/www/dialgenix/backend',
+    cwd: '/var/www/intentbrain/backend',
     interpreter: 'none',
     env: {
-      PATH: '/var/www/dialgenix/backend/venv/bin:' + process.env.PATH
+      PATH: '/var/www/intentbrain/backend/venv/bin:' + process.env.PATH
     }
   }]
 };
@@ -211,15 +211,15 @@ echo ""
 echo -e "${YELLOW}NEXT STEPS:${NC}"
 echo "1. Configure Stripe webhook at: https://dashboard.stripe.com/webhooks"
 echo "   Endpoint: https://$DOMAIN/api/stripe/webhook"
-echo "   Then update STRIPE_WEBHOOK_SECRET in /var/www/dialgenix/backend/.env"
+echo "   Then update STRIPE_WEBHOOK_SECRET in /var/www/intentbrain/backend/.env"
 echo ""
 echo "2. Configure Twilio webhooks at: https://console.twilio.com"
 echo "   Voice URL: https://$DOMAIN/api/twilio/voice"
 echo "   Status URL: https://$DOMAIN/api/twilio/status"
 echo ""
 echo -e "${YELLOW}USEFUL COMMANDS:${NC}"
-echo "  View logs:     pm2 logs dialgenix-backend"
-echo "  Restart app:   pm2 restart dialgenix-backend"
+echo "  View logs:     pm2 logs intentbrain-backend"
+echo "  Restart app:   pm2 restart intentbrain-backend"
 echo "  Check status:  pm2 status"
 echo ""
 echo -e "${GREEN}Deployment successful!${NC}"

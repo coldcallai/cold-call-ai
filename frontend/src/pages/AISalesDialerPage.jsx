@@ -7,13 +7,13 @@ import {
   PhoneForwarded, Mic, Brain, Headphones, Settings, TrendingUp
 } from "lucide-react";
 
-const CALENDLY_LINK = "https://calendly.com/dialgenix/15-30min";
+const CALENDLY_LINK = "https://calendly.com/intentbrain/15-30min";
 
 const AISalesDialerPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "AI Sales Dialer | Automated Outbound Calling Software | DialGenix.ai";
+    document.title = "AI Sales Dialer | Automated Outbound Calling Software | IntentBrain.ai";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'AI sales dialer that automates outbound calls. Power dialer with DISC personality detection, auto-booking, live transfers & call recording. Scale your sales team 10x.');
@@ -73,7 +73,7 @@ const AISalesDialerPage = () => {
               <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+              <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </Link>
             <div className="flex items-center gap-3">
               <button 
@@ -261,7 +261,7 @@ const AISalesDialerPage = () => {
             <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
               <Phone className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+            <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
           </div>
           <p className="text-gray-500 mb-6">AI sales dialer that 10x your outbound</p>
           <div className="flex items-center justify-center gap-6 text-sm text-gray-400 flex-wrap">
@@ -271,7 +271,7 @@ const AISalesDialerPage = () => {
             <Link to="/voice-ai-sales" className="hover:text-white">Voice AI</Link>
             <Link to="/automated-cold-calling" className="hover:text-white">Automated Calling</Link>
           </div>
-          <p className="text-gray-600 text-sm mt-6">© 2025 DialGenix.ai. All rights reserved.</p>
+          <p className="text-gray-600 text-sm mt-6">© 2025 IntentBrain.ai. All rights reserved.</p>
         </div>
       </footer>
     </div>

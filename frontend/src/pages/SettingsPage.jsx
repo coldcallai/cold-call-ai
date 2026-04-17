@@ -1449,8 +1449,8 @@ const SettingsPage = () => {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
               <div>
-                <p className="font-medium">Hide DialGenix Branding</p>
-                <p className="text-sm text-gray-500">Remove DialGenix logo and mentions from the dashboard</p>
+                <p className="font-medium">Hide IntentBrain Branding</p>
+                <p className="text-sm text-gray-500">Remove IntentBrain logo and mentions from the dashboard</p>
               </div>
               <Button
                 variant={settings?.whitelabel_enabled ? "default" : "outline"}
@@ -1472,7 +1472,7 @@ const SettingsPage = () => {
                     onChange={(e) => updateSettings({ custom_brand_name: e.target.value })}
                     className="mt-1"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Replaces "DialGenix" throughout the app</p>
+                  <p className="text-xs text-gray-500 mt-1">Replaces "IntentBrain" throughout the app</p>
                 </div>
 
                 <div>
@@ -1510,7 +1510,7 @@ const SettingsPage = () => {
 
             <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
               <p className="text-sm text-purple-800">
-                <strong>🏢 Agency Feature:</strong> Perfect for reselling DialGenix to your clients under your own brand.
+                <strong>🏢 Agency Feature:</strong> Perfect for reselling IntentBrain to your clients under your own brand.
               </p>
             </div>
           </CardContent>

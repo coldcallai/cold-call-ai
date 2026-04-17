@@ -17,6 +17,6 @@
     <path d="M4 4c0 20 16 36 36 36v-8c-4 0-8-2-10-4l-4-4c-2-2-2-5 0-7l2-2c2-2 2-5 0-7l-6-6c-2-2-5-2-7 0l-3 3c-4 4-5 10-2 15"/>
   </g>
   
-  <!-- DialGenix.ai Text -->
-  <text x="95" y="60" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="white">DialGenix.ai</text>
+  <!-- IntentBrain.ai Text -->
+  <text x="95" y="60" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="white">IntentBrain.ai</text>
 </svg>

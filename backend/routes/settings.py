@@ -38,7 +38,7 @@ _cipher = None
 def _get_cipher():
     global _cipher
     if _cipher is None:
-        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key')
+        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'intentbrain_default_secret_key')
         key_bytes = jwt_secret.encode()[:32].ljust(32, b'0')
         _cipher = Fernet(base64.urlsafe_b64encode(key_bytes))
     return _cipher

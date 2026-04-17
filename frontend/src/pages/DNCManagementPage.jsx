@@ -583,7 +583,7 @@ const DNCManagementPage = () => {
                 <div className="flex gap-4 items-start">
                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold shrink-0">3</div>
                   <div>
-                    <h4 className="font-semibold">Upload to DialGenix.ai</h4>
+                    <h4 className="font-semibold">Upload to IntentBrain.ai</h4>
                     <p className="text-sm text-gray-500 mt-1">
                       Use the upload button above to import your FTC DNC data. You can upload multiple area code files - they'll be merged automatically.
                     </p>

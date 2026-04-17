@@ -34,7 +34,7 @@ const ROICalculatorPage = () => {
             </Button>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-white">DialGenix.ai</span>
+            <span className="text-xl font-bold text-white">IntentBrain.ai</span>
           </div>
           <Button
             variant="outline"

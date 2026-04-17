@@ -1,4 +1,4 @@
-# DialGenix Video Tutorial Scripts
+# IntentBrain Video Tutorial Scripts
 ## AI Voiceover Ready - Record Loom Over These
 
 ---
@@ -7,7 +7,7 @@
 
 **[SHOW: Landing page → Login]**
 
-Hey, welcome to DialGenix! I'm Sarah, and in the next five minutes, I'll show you everything you need to launch your first AI cold calling campaign.
+Hey, welcome to IntentBrain! I'm Sarah, and in the next five minutes, I'll show you everything you need to launch your first AI cold calling campaign.
 
 **[SHOW: Dashboard overview]**
 

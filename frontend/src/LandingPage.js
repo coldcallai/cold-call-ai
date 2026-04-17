@@ -12,7 +12,7 @@ import axios from "axios";
 import { toast } from "sonner";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
-const CALENDLY_LINK = "https://calendly.com/dialgenix/15-30min";
+const CALENDLY_LINK = "https://calendly.com/intentbrain/15-30min";
 
 // Call Yourself Demo Component for Landing Page
 const CallYourselfHero = () => {
@@ -203,7 +203,7 @@ const LandingPage = () => {
   };
 
   const goToCalendly = () => {
-    window.open('https://calendly.com/dialgenix/15-30min', '_blank');
+    window.open('https://calendly.com/intentbrain/15-30min', '_blank');
   };
 
   const handleSubmit = (e) => {
@@ -493,8 +493,8 @@ const LandingPage = () => {
 
   const faqs = [
     {
-      question: "Is DialGenix.ai compliant for cold calling?",
-      answer: "Yes. DialGenix.ai is built to align with TCPA regulations and industry standards. It includes features such as DNC list management, call time restrictions, and proper disclosure protocols. For specific requirements, we recommend consulting your compliance team.",
+      question: "Is IntentBrain.ai compliant for cold calling?",
+      answer: "Yes. IntentBrain.ai is built to align with TCPA regulations and industry standards. It includes features such as DNC list management, call time restrictions, and proper disclosure protocols. For specific requirements, we recommend consulting your compliance team.",
     },
     {
       question: "Will this sound robotic?",
@@ -522,11 +522,11 @@ const LandingPage = () => {
     },
     {
       question: "How do I get started?",
-      answer: "Book a free demo with our team. We'll show you how DialGenix works and help you set up your first campaign—usually takes about 15 minutes.",
+      answer: "Book a free demo with our team. We'll show you how IntentBrain works and help you set up your first campaign—usually takes about 15 minutes.",
     },
     {
       question: "Is there a free trial or demo available?",
-      answer: "While we don't offer a free trial, we do offer live customized demos so you can see DialGenix.ai's platform in action and get all your questions answered based on your specific use case.",
+      answer: "While we don't offer a free trial, we do offer live customized demos so you can see IntentBrain.ai's platform in action and get all your questions answered based on your specific use case.",
     },
   ];
 
@@ -547,7 +547,7 @@ const LandingPage = () => {
               <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+              <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </div>
             
             <div className="hidden md:flex items-center gap-8">
@@ -800,7 +800,7 @@ const LandingPage = () => {
             <div>
               <div className="mb-8 p-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-xl border border-emerald-500/30">
                 <p className="text-emerald-300 text-lg font-semibold text-center">
-                  DialGenix identifies each buyer's personality in real time and adapts your approach to close more deals.
+                  IntentBrain identifies each buyer's personality in real time and adapts your approach to close more deals.
                 </p>
               </div>
               <h3 className="text-white text-xl font-semibold mb-6">The 4 Buyer Personalities (DISC)</h3>
@@ -979,7 +979,7 @@ const LandingPage = () => {
               Your AI Sales Pipeline
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Watch how DialGenix.ai automates your entire cold calling workflow
+              Watch how IntentBrain.ai automates your entire cold calling workflow
             </p>
           </div>
         </div>
@@ -1816,7 +1816,7 @@ const LandingPage = () => {
               <div className="space-y-6">
                 <div>
                   <h4 className="text-white font-semibold text-lg mb-3">How It Works</h4>
-                  <p className="text-gray-400 mb-4">When a prospect shows interest or curiosity, DialGenix takes action in real time:</p>
+                  <p className="text-gray-400 mb-4">When a prospect shows interest or curiosity, IntentBrain takes action in real time:</p>
                   
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
@@ -2416,7 +2416,7 @@ const LandingPage = () => {
       <section className="bg-gray-50 py-24 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">DialGenix.ai vs. Hiring SDRs</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">IntentBrain.ai vs. Hiring SDRs</h2>
             <p className="text-gray-600 text-lg">See why AI-powered calling makes sense</p>
           </div>
 
@@ -2427,7 +2427,7 @@ const LandingPage = () => {
                 <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-2">
                   <Phone className="w-5 h-5 text-white" />
                 </div>
-                <p className="font-semibold text-gray-900">DialGenix.ai</p>
+                <p className="font-semibold text-gray-900">IntentBrain.ai</p>
               </div>
               <div className="p-6">
                 <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center mx-auto mb-2">
@@ -2521,7 +2521,7 @@ const LandingPage = () => {
           {/* Full Service Description */}
           {pricingTab === 'full' && (
             <div className="text-center mb-8">
-              <p className="text-teal-600 font-medium">✨ Only DialGenix finds high-intent leads with GPT AND calls them automatically</p>
+              <p className="text-teal-600 font-medium">✨ Only IntentBrain finds high-intent leads with GPT AND calls them automatically</p>
             </div>
           )}
 
@@ -2844,20 +2844,20 @@ const LandingPage = () => {
             Need Help? We're Here.
           </h2>
           <p className="text-gray-400 mb-8 max-w-2xl mx-auto">
-            Questions about DialGenix? Want to see a live demo? Our team is ready to help you get started.
+            Questions about IntentBrain? Want to see a live demo? Our team is ready to help you get started.
           </p>
           
           <div className="grid md:grid-cols-3 gap-6">
             {/* Email Support */}
             <a 
-              href="mailto:support@dialgenix.ai" 
+              href="mailto:support@intentbrain.ai" 
               className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group"
             >
               <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Mail className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-white font-semibold mb-2">Email Us</h3>
-              <p className="text-cyan-400 group-hover:text-cyan-300 transition-colors">support@dialgenix.ai</p>
+              <p className="text-cyan-400 group-hover:text-cyan-300 transition-colors">support@intentbrain.ai</p>
             </a>
             
             {/* Phone */}
@@ -2895,7 +2895,7 @@ const LandingPage = () => {
               <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-4 h-4 text-white" />
               </div>
-              <span className="font-semibold text-white">DialGenix.ai</span>
+              <span className="font-semibold text-white">IntentBrain.ai</span>
             </div>
 
             <div className="flex items-center gap-6 text-sm text-gray-400 flex-wrap justify-center">
@@ -2907,10 +2907,10 @@ const LandingPage = () => {
                 <Phone className="w-3 h-3" />
                 (888) 513-1913
               </a>
-              <a href="mailto:support@dialgenix.ai" className="hover:text-white transition-colors">Contact</a>
+              <a href="mailto:support@intentbrain.ai" className="hover:text-white transition-colors">Contact</a>
             </div>
 
-            <p className="text-sm text-gray-500">© 2025 DialGenix.ai. All rights reserved.</p>
+            <p className="text-sm text-gray-500">© 2025 IntentBrain.ai. All rights reserved.</p>
           </div>
         </div>
       </footer>

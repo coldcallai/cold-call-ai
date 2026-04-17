@@ -203,7 +203,7 @@ const LoginPage = () => {
         localStorage.setItem("session_token", data.session_token);
       }
       
-      toast.success("Account created! Welcome to DialGenix.ai");
+      toast.success("Account created! Welcome to IntentBrain.ai");
       const pendingPlan = localStorage.getItem('selected_plan');
       if (pendingPlan) {
         navigate("/app/packs", { replace: true });
@@ -247,7 +247,7 @@ const LoginPage = () => {
           <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-xl flex items-center justify-center">
             <Phone className="w-6 h-6 text-white" />
           </div>
-          <span className="text-2xl font-bold text-white">DialGenix.ai</span>
+          <span className="text-2xl font-bold text-white">IntentBrain.ai</span>
         </div>
 
         <Card className="bg-white/5 border-white/10 backdrop-blur-xl">

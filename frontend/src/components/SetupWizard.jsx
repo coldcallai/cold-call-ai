@@ -144,7 +144,7 @@ const SetupWizard = ({ user, onComplete, onNavigate }) => {
               <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Bot className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900">Welcome to DialGenix!</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Welcome to IntentBrain!</h2>
               <p className="text-gray-600 mt-2">Let's get your AI sales agent up and running in about 10 minutes.</p>
             </div>
 
@@ -175,7 +175,7 @@ const SetupWizard = ({ user, onComplete, onNavigate }) => {
               <h3 className="font-semibold text-gray-800 mb-3">Typical Monthly Cost</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white rounded-lg p-4 border-2 border-emerald-200">
-                  <p className="text-sm text-gray-500">DialGenix</p>
+                  <p className="text-sm text-gray-500">IntentBrain</p>
                   <p className="text-2xl font-bold text-emerald-600">$130-250</p>
                   <p className="text-xs text-emerald-600">No hidden fees</p>
                 </div>
@@ -467,7 +467,7 @@ const SetupWizard = ({ user, onComplete, onNavigate }) => {
               <h3 className="font-semibold text-gray-800 mb-3">Your Estimated Monthly Cost</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">DialGenix Platform</span>
+                  <span className="text-gray-600">IntentBrain Platform</span>
                   <span className="font-medium">$99/mo</span>
                 </div>
                 <div className="flex justify-between">

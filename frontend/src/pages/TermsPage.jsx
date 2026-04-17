@@ -16,7 +16,7 @@ const TermsPage = () => {
             <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-xl flex items-center justify-center">
               <Phone className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-white">DialGenix.ai</span>
+            <span className="text-xl font-bold text-white">IntentBrain.ai</span>
           </Link>
           <Link to="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -32,7 +32,7 @@ const TermsPage = () => {
 
         <div className="prose prose-invert max-w-none">
           <p className="text-gray-300 leading-relaxed mb-8">
-            Welcome to DialGenix AI. These Terms of Service ("Terms") govern your access to and use of our AI-powered communication platform, including any related services, applications, and features (collectively, the "Service"). By using DialGenix AI, you agree to these Terms.
+            Welcome to IntentBrain AI. These Terms of Service ("Terms") govern your access to and use of our AI-powered communication platform, including any related services, applications, and features (collectively, the "Service"). By using IntentBrain AI, you agree to these Terms.
           </p>
 
           {/* Section 1 */}
@@ -53,12 +53,12 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-white mb-4">2. AI-Generated Communications</h2>
             <p className="text-gray-300 leading-relaxed mb-4">
-              DialGenix AI enables automated and AI-assisted communications. You acknowledge that:
+              IntentBrain AI enables automated and AI-assisted communications. You acknowledge that:
             </p>
             <ul className="list-disc list-inside text-gray-300 space-y-2 ml-4">
               <li>AI-generated responses may not always be accurate or appropriate</li>
               <li>You are solely responsible for how the Service is used in outreach</li>
-              <li>DialGenix AI is a technology provider only and is not responsible for your compliance with any laws or regulations</li>
+              <li>IntentBrain AI is a technology provider only and is not responsible for your compliance with any laws or regulations</li>
             </ul>
             
             <div className="bg-gray-800/50 rounded-lg p-4 mt-4 border border-gray-700">
@@ -95,7 +95,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-white mb-4">4. Fees and Payment</h2>
             <p className="text-gray-300 leading-relaxed mb-4">
-              You agree to pay DialGenix AI the fees listed in your chosen Subscription Plan ("Subscription Fees").
+              You agree to pay IntentBrain AI the fees listed in your chosen Subscription Plan ("Subscription Fees").
             </p>
             
             <div className="space-y-4">
@@ -109,28 +109,28 @@ const TermsPage = () => {
               <div>
                 <h3 className="text-lg font-medium text-white mb-2">Credit Card Payments</h3>
                 <p className="text-gray-300 leading-relaxed">
-                  If a payment cannot be processed for reasons beyond DialGenix AI's control, you must provide an alternative payment method.
+                  If a payment cannot be processed for reasons beyond IntentBrain AI's control, you must provide an alternative payment method.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-medium text-white mb-2">Billing Cycle</h3>
                 <p className="text-gray-300 leading-relaxed">
-                  Payments are due according to the billing schedule in your Subscription Plan. Switching from annual to monthly billing requires DialGenix AI's confirmation.
+                  Payments are due according to the billing schedule in your Subscription Plan. Switching from annual to monthly billing requires IntentBrain AI's confirmation.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-medium text-white mb-2">Invoices</h3>
                 <p className="text-gray-300 leading-relaxed">
-                  DialGenix AI will email invoices for each billing cycle.
+                  IntentBrain AI will email invoices for each billing cycle.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-medium text-white mb-2">Late Payment</h3>
                 <p className="text-gray-300 leading-relaxed">
-                  If payment is overdue by more than five (5) days, DialGenix AI may suspend access to the Service until payment is received. Continued non-payment after notice may result in termination of your account.
+                  If payment is overdue by more than five (5) days, IntentBrain AI may suspend access to the Service until payment is received. Continued non-payment after notice may result in termination of your account.
                 </p>
               </div>
 
@@ -144,7 +144,7 @@ const TermsPage = () => {
               <div>
                 <h3 className="text-lg font-medium text-white mb-2">Taxes</h3>
                 <p className="text-gray-300 leading-relaxed">
-                  All fees are net of taxes. You are responsible for all applicable taxes, levies, or governmental charges. If DialGenix AI must pay taxes on your behalf, you will reimburse the amount unless a valid exemption certificate is provided. DialGenix AI is responsible only for taxes on its own income, property, or employees.
+                  All fees are net of taxes. You are responsible for all applicable taxes, levies, or governmental charges. If IntentBrain AI must pay taxes on your behalf, you will reimburse the amount unless a valid exemption certificate is provided. IntentBrain AI is responsible only for taxes on its own income, property, or employees.
                 </p>
               </div>
             </div>
@@ -152,7 +152,7 @@ const TermsPage = () => {
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-6">
               <p className="text-red-400 font-medium mb-2">No Refund Policy</p>
               <p className="text-gray-300 text-sm">
-                All payments made to DialGenix AI are final and non-refundable. We do not provide refunds or credits for partial subscription periods, unused services, or cancellations, unless required by applicable law. Cancellation will only take effect at the end of the current billing cycle.
+                All payments made to IntentBrain AI are final and non-refundable. We do not provide refunds or credits for partial subscription periods, unused services, or cancellations, unless required by applicable law. Cancellation will only take effect at the end of the current billing cycle.
               </p>
             </div>
             
@@ -173,7 +173,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-white mb-4">6. Intellectual Property</h2>
             <p className="text-gray-300 leading-relaxed">
-              All rights, title, and interest in the Service remain with DialGenix AI. You retain ownership of your data, but grant us a license to use it to operate and improve the Service.
+              All rights, title, and interest in the Service remain with IntentBrain AI. You retain ownership of your data, but grant us a license to use it to operate and improve the Service.
             </p>
           </section>
 
@@ -200,7 +200,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-white mb-4">9. Disclaimers</h2>
             <p className="text-gray-300 leading-relaxed">
-              The Service is provided "as is" without warranties of any kind. DialGenix AI does not guarantee uninterrupted or error-free operation.
+              The Service is provided "as is" without warranties of any kind. IntentBrain AI does not guarantee uninterrupted or error-free operation.
             </p>
           </section>
 
@@ -208,7 +208,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-white mb-4">10. Limitation of Liability</h2>
             <p className="text-gray-300 leading-relaxed">
-              To the fullest extent permitted by law, DialGenix AI shall not be liable for any damages arising from your use of the Service.
+              To the fullest extent permitted by law, IntentBrain AI shall not be liable for any damages arising from your use of the Service.
             </p>
           </section>
 
@@ -224,7 +224,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-white mb-4">12. Contact</h2>
             <p className="text-gray-300 leading-relaxed">
-              For questions, contact us at: <a href="mailto:support@dialgenix.ai" className="text-cyan-400 hover:underline">support@dialgenix.ai</a>
+              For questions, contact us at: <a href="mailto:support@intentbrain.ai" className="text-cyan-400 hover:underline">support@intentbrain.ai</a>
             </p>
           </section>
         </div>
@@ -233,7 +233,7 @@ const TermsPage = () => {
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8">
         <div className="max-w-4xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-gray-500 text-sm">© 2025 DialGenix.ai. All rights reserved.</p>
+          <p className="text-gray-500 text-sm">© 2025 IntentBrain.ai. All rights reserved.</p>
           <div className="flex gap-6">
             <Link to="/terms" className="text-gray-400 hover:text-white text-sm">Terms of Service</Link>
             <Link to="/privacy" className="text-gray-400 hover:text-white text-sm">Privacy Policy</Link>

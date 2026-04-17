@@ -7,13 +7,13 @@ import {
   PhoneForwarded, Mic, Brain, Headphones, Repeat, Settings
 } from "lucide-react";
 
-const CALENDLY_LINK = "https://calendly.com/dialgenix/15-30min";
+const CALENDLY_LINK = "https://calendly.com/intentbrain/15-30min";
 
 const AutomatedColdCallingPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "Automated Cold Calling Software | AI-Powered Outbound Calls | DialGenix.ai";
+    document.title = "Automated Cold Calling Software | AI-Powered Outbound Calls | IntentBrain.ai";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'Automated cold calling software that runs 24/7. AI makes calls, qualifies leads, handles objections & books meetings automatically. No human intervention needed.');
@@ -86,7 +86,7 @@ const AutomatedColdCallingPage = () => {
               <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+              <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </Link>
             <div className="flex items-center gap-3">
               <button 
@@ -277,7 +277,7 @@ const AutomatedColdCallingPage = () => {
             <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
               <Phone className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+            <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
           </div>
           <p className="text-gray-500 mb-6">Automated cold calling on complete autopilot</p>
           <div className="flex items-center justify-center gap-6 text-sm text-gray-400 flex-wrap">
@@ -287,7 +287,7 @@ const AutomatedColdCallingPage = () => {
             <Link to="/voice-ai-sales" className="hover:text-white">Voice AI</Link>
             <Link to="/ai-sales-dialer" className="hover:text-white">AI Sales Dialer</Link>
           </div>
-          <p className="text-gray-600 text-sm mt-6">© 2025 DialGenix.ai. All rights reserved.</p>
+          <p className="text-gray-600 text-sm mt-6">© 2025 IntentBrain.ai. All rights reserved.</p>
         </div>
       </footer>
     </div>

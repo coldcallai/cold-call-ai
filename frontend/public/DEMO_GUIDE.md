@@ -1,4 +1,4 @@
-# DialGenix.ai - Live Demo Script
+# IntentBrain.ai - Live Demo Script
 ## Sales Presentation Guide for Screen Sharing
 
 ---
@@ -6,8 +6,8 @@
 # BEFORE THE CALL
 
 ### Prep Checklist:
-- [ ] DialGenix dashboard logged in (test@example.com)
-- [ ] Landing page open in separate tab (dialgenix.ai)
+- [ ] IntentBrain dashboard logged in (test@example.com)
+- [ ] Landing page open in separate tab (intentbrain.ai)
 - [ ] Sample campaign ready with test leads
 - [ ] Calendly link ready to share
 - [ ] Twilio phone ready for live demo call (optional)
@@ -53,7 +53,7 @@
 ## STEP 3: LIVE DASHBOARD TOUR (5 min)
 
 ### Login to Dashboard
-**URL:** app.dialgenix.ai/login
+**URL:** app.intentbrain.ai/login
 
 ### Show Each Section:
 
@@ -140,20 +140,20 @@ Show AI Receptionist pricing:
 **Say:**
 > "Let's get you set up. I can have you live in 15 minutes."
 
-Share Calendly link: calendly.com/dialgenix/15-30min
+Share Calendly link: calendly.com/intentbrain/15-30min
 
 ### Option B: Free Trial
 **Say:**
 > "Want to try it yourself first? You get 15 free minutes - no credit card required."
 
-Direct them to: dialgenix.ai → "Start Free"
+Direct them to: intentbrain.ai → "Start Free"
 
 ---
 
 # OBJECTION HANDLING
 
 ### "Is this legal?"
-> "Yes. DialGenix is TCPA compliant. Every call starts with an AI disclosure, we manage DNC lists, and respect calling hours (8am-9pm local time)."
+> "Yes. IntentBrain is TCPA compliant. Every call starts with an AI disclosure, we manage DNC lists, and respect calling hours (8am-9pm local time)."
 
 ### "Will it sound robotic?"
 > "Not at all. We use ElevenLabs - the same technology behind viral AI videos. Plus you can tune the voice and even clone your own."
@@ -189,13 +189,13 @@ Direct them to: dialgenix.ai → "Start Free"
 # QUICK REFERENCE
 
 ### Key URLs:
-- Landing Page: https://dialgenix.ai
-- Login: https://dialgenix.ai/login
-- Book Demo: https://calendly.com/dialgenix/15-30min
+- Landing Page: https://intentbrain.ai
+- Login: https://intentbrain.ai/login
+- Book Demo: https://calendly.com/intentbrain/15-30min
 
 ### Support:
 - Phone: (888) 513-1913
-- Email: support@dialgenix.ai
+- Email: support@intentbrain.ai
 
 ### Key Stats to Mention:
 - 80% of calls go to voicemail (VM Drop handles this)
@@ -215,4 +215,4 @@ Direct them to: dialgenix.ai → "Start Free"
 
 ---
 
-*© 2025 DialGenix.ai - Confidential Sales Material*
+*© 2025 IntentBrain.ai - Confidential Sales Material*

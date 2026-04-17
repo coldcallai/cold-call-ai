@@ -23,7 +23,7 @@ const STEP_BY_STEP_GUIDES = [
     steps: [
       {
         title: "Create Your Account",
-        content: "Sign up at dialgenix.ai using your email or Google account. Verify your phone number to unlock your free trial minutes.",
+        content: "Sign up at intentbrain.ai using your email or Google account. Verify your phone number to unlock your free trial minutes.",
         tip: "Use a phone number you have access to — you'll receive a verification code via SMS."
       },
       {
@@ -337,7 +337,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Is there a free trial or demo available?",
-        a: "While we don't offer a free trial, we do offer live customized demos so you can see DialGenix.ai's platform in action and get all your questions answered based on your specific use case."
+        a: "While we don't offer a free trial, we do offer live customized demos so you can see IntentBrain.ai's platform in action and get all your questions answered based on your specific use case."
       },
       {
         q: "Can I cancel anytime?",
@@ -505,7 +505,7 @@ const HelpCenterPage = () => {
           </Link>
           <h1 className="text-4xl font-bold mb-4">Help Center</h1>
           <p className="text-blue-100 text-lg mb-8">
-            Everything you need to master DialGenix AI
+            Everything you need to master IntentBrain AI
           </p>
           
           {/* Search */}

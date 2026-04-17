@@ -31,7 +31,7 @@ const AuthCallback = () => {
 
       try {
         await exchangeSessionId(sessionId);
-        toast.success("Welcome to DialGenix.ai!");
+        toast.success("Welcome to IntentBrain.ai!");
         // Navigate to dashboard, clearing the hash
         navigate("/app", { replace: true });
       } catch (error) {
@@ -51,7 +51,7 @@ const AuthCallback = () => {
           <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-xl flex items-center justify-center">
             <Phone className="w-6 h-6 text-white" />
           </div>
-          <span className="text-2xl font-bold text-white">DialGenix.ai</span>
+          <span className="text-2xl font-bold text-white">IntentBrain.ai</span>
         </div>
         <Loader2 className="w-10 h-10 text-cyan-500 animate-spin mx-auto mb-4" />
         <p className="text-gray-400">Completing sign in...</p>

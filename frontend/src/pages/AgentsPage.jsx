@@ -551,7 +551,7 @@ const Agents = () => {
                 data-testid="agent-company-input"
                 value={newAgent.company_name}
                 onChange={(e) => setNewAgent({...newAgent, company_name: e.target.value})}
-                placeholder="DialGenix"
+                placeholder="IntentBrain"
                 className="mt-1"
               />
               <p className="text-xs text-gray-500 mt-1">Company the AI represents (replaces {'{company}'} in script)</p>
@@ -785,7 +785,7 @@ const Agents = () => {
                     data-testid="opening-script-input"
                     value={newAgent.opening_script}
                     onChange={(e) => setNewAgent({...newAgent, opening_script: e.target.value})}
-                    placeholder="Hi {contact_name}, this is {agent_name} with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
+                    placeholder="Hi {contact_name}, this is {agent_name} with IntentBrain. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
                     rows={3}
                     className="mt-1 text-sm"
                   />
@@ -798,7 +798,7 @@ const Agents = () => {
                     data-testid="opening-script-mobile-input"
                     value={newAgent.opening_script_mobile}
                     onChange={(e) => setNewAgent({...newAgent, opening_script_mobile: e.target.value})}
-                    placeholder="Hi {contact_name}, this is {agent_name}, AI agent with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
+                    placeholder="Hi {contact_name}, this is {agent_name}, AI agent with IntentBrain. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo?"
                     rows={3}
                     className="mt-1 text-sm"
                   />
@@ -958,7 +958,7 @@ const Agents = () => {
                       data-testid="edit-opening-script"
                       value={editingAgent.opening_script}
                       onChange={(e) => setEditingAgent({...editingAgent, opening_script: e.target.value})}
-                      placeholder="Hi {contact_name}, this is {agent_name} with DialGenix..."
+                      placeholder="Hi {contact_name}, this is {agent_name} with IntentBrain..."
                       rows={2}
                       className="mt-1 text-sm"
                     />

@@ -1,5 +1,5 @@
 """
-Test Voice Preview Feature for AI Cold Calling SaaS (DialGenix.ai)
+Test Voice Preview Feature for AI Cold Calling SaaS (IntentBrain.ai)
 Tests the /api/voices/preview endpoint and related functionality
 """
 import pytest

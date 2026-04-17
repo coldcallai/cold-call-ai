@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DialGenix Demo Call Audio Generator
+IntentBrain Demo Call Audio Generator
 Generates sample call recordings for sales demos using ElevenLabs
 """
 
@@ -45,7 +45,7 @@ DEMO_CALLS = {
         "name": "Voicemail Drop - Conversational",
         "duration": "~20 seconds", 
         "script": [
-            {"speaker": "AI", "text": "Hi, this is Sarah with DialGenix. I just wanted to raise my hand and let you know I'm out here. I focus on helping sales teams get more qualified leads and booked appointments. If you need help with live transfers or just want to bounce an idea, I'm happy to chat, whether you're a client or not. My number is 8 8 8, 5 1 3, 1 9 1 3. Talk soon."},
+            {"speaker": "AI", "text": "Hi, this is Sarah with IntentBrain. I just wanted to raise my hand and let you know I'm out here. I focus on helping sales teams get more qualified leads and booked appointments. If you need help with live transfers or just want to bounce an idea, I'm happy to chat, whether you're a client or not. My number is 8 8 8, 5 1 3, 1 9 1 3. Talk soon."},
         ]
     }
 }
@@ -116,7 +116,7 @@ async def generate_demo_call(call_key: str, output_dir: str = "/app/frontend/pub
 async def generate_all_demos():
     """Generate all demo call audio files"""
     print("=" * 50)
-    print("DialGenix Demo Audio Generator")
+    print("IntentBrain Demo Audio Generator")
     print("=" * 50)
     
     if not ELEVENLABS_API_KEY:
@@ -137,7 +137,7 @@ async def generate_all_demos():
         print(f"{status} {call_key}: {path or 'FAILED'}")
     
     print("\n📁 Audio files saved to: /app/frontend/public/demo-audio/")
-    print("🌐 Access at: https://dialgenix.ai/demo-audio/d_type_call.mp3")
+    print("🌐 Access at: https://intentbrain.ai/demo-audio/d_type_call.mp3")
 
 if __name__ == "__main__":
     asyncio.run(generate_all_demos())

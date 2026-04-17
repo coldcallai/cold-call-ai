@@ -16,7 +16,7 @@ const PrivacyPage = () => {
             <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-xl flex items-center justify-center">
               <Phone className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-white">DialGenix.ai</span>
+            <span className="text-xl font-bold text-white">IntentBrain.ai</span>
           </Link>
           <Link to="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -32,7 +32,7 @@ const PrivacyPage = () => {
 
         <div className="prose prose-invert max-w-none">
           <p className="text-gray-300 leading-relaxed mb-8">
-            DialGenix AI ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information.
+            IntentBrain AI ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information.
           </p>
 
           {/* Section 1 */}
@@ -139,7 +139,7 @@ const PrivacyPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-white mb-4">11. Contact Us</h2>
             <p className="text-gray-300 leading-relaxed">
-              For privacy-related inquiries, contact: <a href="mailto:support@dialgenix.ai" className="text-cyan-400 hover:underline">support@dialgenix.ai</a>
+              For privacy-related inquiries, contact: <a href="mailto:support@intentbrain.ai" className="text-cyan-400 hover:underline">support@intentbrain.ai</a>
             </p>
           </section>
         </div>
@@ -148,7 +148,7 @@ const PrivacyPage = () => {
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8">
         <div className="max-w-4xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-gray-500 text-sm">© 2025 DialGenix.ai. All rights reserved.</p>
+          <p className="text-gray-500 text-sm">© 2025 IntentBrain.ai. All rights reserved.</p>
           <div className="flex gap-6">
             <Link to="/terms" className="text-gray-400 hover:text-white text-sm">Terms of Service</Link>
             <Link to="/privacy" className="text-gray-400 hover:text-white text-sm">Privacy Policy</Link>

@@ -7,13 +7,13 @@ import {
   PhoneForwarded, Mic, Brain, Headphones
 } from "lucide-react";
 
-const CALENDLY_LINK = "https://calendly.com/dialgenix/15-30min";
+const CALENDLY_LINK = "https://calendly.com/intentbrain/15-30min";
 
 const AIColdCallingPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "AI Cold Calling Software | Automate B2B Sales Calls | DialGenix.ai";
+    document.title = "AI Cold Calling Software | Automate B2B Sales Calls | IntentBrain.ai";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'AI cold calling software that makes 1000s of calls daily. Automated lead qualification, DISC personality detection, live transfers & Calendly booking. Start free trial.');
@@ -82,7 +82,7 @@ const AIColdCallingPage = () => {
               <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
                 <Phone className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+              <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
             </Link>
             <div className="flex items-center gap-3">
               <button 
@@ -194,7 +194,7 @@ const AIColdCallingPage = () => {
               AI Cold Calling Use Cases
             </h2>
             <p className="text-xl text-gray-400">
-              Industries using DialGenix to automate their sales outreach
+              Industries using IntentBrain to automate their sales outreach
             </p>
           </div>
 
@@ -245,7 +245,7 @@ const AIColdCallingPage = () => {
             <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-cyan-500 rounded-lg flex items-center justify-center">
               <Phone className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-white">DialGenix.ai</span>
+            <span className="text-xl font-semibold text-white">IntentBrain.ai</span>
           </div>
           <p className="text-gray-500 mb-6">AI-powered cold calling that closes more deals</p>
           <div className="flex items-center justify-center gap-6 text-sm text-gray-400">
@@ -253,7 +253,7 @@ const AIColdCallingPage = () => {
             <Link to="/privacy" className="hover:text-white">Privacy Policy</Link>
             <Link to="/help" className="hover:text-white">Help Center</Link>
           </div>
-          <p className="text-gray-600 text-sm mt-6">© 2025 DialGenix.ai. All rights reserved.</p>
+          <p className="text-gray-600 text-sm mt-6">© 2025 IntentBrain.ai. All rights reserved.</p>
         </div>
       </footer>
     </div>

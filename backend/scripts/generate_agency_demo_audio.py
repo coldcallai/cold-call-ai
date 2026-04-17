@@ -25,7 +25,7 @@ MODEL_ID = "eleven_flash_v2"
 
 # All audio segments for the agency pitch
 SEGMENTS = {
-    "opening": "Hey — this is Sarah from DialGenix. Quick one — am I speaking with someone who handles lead generation or outbound for your sales team?",
+    "opening": "Hey — this is Sarah from IntentBrain. Quick one — am I speaking with someone who handles lead generation or outbound for your sales team?",
     
     "what_is_this": "I'll keep it simple — we built an AI system that reaches out to businesses actively looking for services like yours and turns them into booked meetings or live transfers. You're actually experiencing it right now — this call is being made by it.",
     

@@ -10,4 +10,4 @@ Allow: /help
 Disallow: /app/
 Disallow: /api/
 
-Sitemap: https://dialgenix.ai/sitemap.xml
+Sitemap: https://intentbrain.ai/sitemap.xml

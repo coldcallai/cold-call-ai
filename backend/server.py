@@ -70,7 +70,7 @@ else:
 db = client[os.environ['DB_NAME']]
 
 # JWT Configuration
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'intentbrain_default_secret_key')
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
@@ -1094,12 +1094,12 @@ class NotificationService:
                 </div>
                 
                 <div style="margin-top: 20px; text-align: center;">
-                    <p style="color: #6b7280; font-size: 14px;">This lead is ready for booking! Log in to DialGenix.ai to assign an agent.</p>
+                    <p style="color: #6b7280; font-size: 14px;">This lead is ready for booking! Log in to IntentBrain.ai to assign an agent.</p>
                 </div>
             </div>
             
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
-                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by DialGenix.ai - AI Sales Automation</p>
+                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by IntentBrain.ai - AI Sales Automation</p>
             </div>
         </div>
         """
@@ -1182,7 +1182,7 @@ class NotificationService:
             </div>
             
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
-                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by DialGenix.ai - AI Sales Automation</p>
+                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by IntentBrain.ai - AI Sales Automation</p>
             </div>
         </div>
         """
@@ -1208,7 +1208,7 @@ class NotificationService:
             logger.info("Email notifications not configured - skipping low balance notification")
             return None
         
-        subject = "⚠️ Low Credit Balance Alert - DialGenix.ai"
+        subject = "⚠️ Low Credit Balance Alert - IntentBrain.ai"
         
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -1219,7 +1219,7 @@ class NotificationService:
             <div style="background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
                 <p style="color: #1f2937; font-size: 16px;">Hi {user_name},</p>
                 
-                <p style="color: #4b5563;">Your DialGenix.ai credit balance is running low. Here's your current status:</p>
+                <p style="color: #4b5563;">Your IntentBrain.ai credit balance is running low. Here's your current status:</p>
                 
                 <div style="display: flex; gap: 20px; margin: 20px 0;">
                     <div style="flex: 1; background: {'#FEF3C7' if lead_credits <= 20 else '#ECFDF5'}; padding: 15px; border-radius: 8px; text-align: center;">
@@ -1245,7 +1245,7 @@ class NotificationService:
             </div>
             
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
-                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by DialGenix.ai - AI Sales Automation</p>
+                <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by IntentBrain.ai - AI Sales Automation</p>
             </div>
         </div>
         """
@@ -1472,7 +1472,7 @@ calendly_service = CalendlyService()
 
 # Object Storage Configuration
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-APP_NAME = "dialgenix-ai"
+APP_NAME = "intentbrain-ai"
 storage_key = None
 
 def init_storage():
@@ -3002,7 +3002,7 @@ class CRMIntegrationService:
     
     def __init__(self):
         # Generate encryption key from JWT secret for secure credential storage
-        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'dialgenix_default_secret_key')
+        jwt_secret = os.environ.get('JWT_SECRET_KEY', 'intentbrain_default_secret_key')
         # Use a consistent key derivation
         key_bytes = jwt_secret.encode()[:32].ljust(32, b'0')
         self.cipher = Fernet(base64.urlsafe_b64encode(key_bytes))
@@ -3251,7 +3251,7 @@ class CRMIntegrationService:
                     "email": lead.get("email", ""),
                     "phone": lead.get("phone", ""),
                     "companyName": lead.get("business_name", ""),
-                    "source": "DialGenix.ai",
+                    "source": "IntentBrain.ai",
                     "tags": ["qualified-lead", "ai-cold-call"],
                 }
                 
@@ -3297,7 +3297,7 @@ class CRMIntegrationService:
                     "Email": lead.get("email", ""),
                     "Phone": lead.get("phone", ""),
                     "Company": lead.get("business_name", "Unknown Company"),
-                    "LeadSource": "DialGenix.ai",
+                    "LeadSource": "IntentBrain.ai",
                     "Status": "Open - Not Contacted",
                     "Rating": "Warm",
                     "Industry": lead.get("industry", ""),
@@ -3954,7 +3954,7 @@ async def send_phone_verification(request: PhoneVerificationRequest):
     if twilio_service.is_configured:
         try:
             twilio_client.messages.create(
-                body=f"Your DialGenix.ai verification code is: {verification_code}. Valid for 10 minutes.",
+                body=f"Your IntentBrain.ai verification code is: {verification_code}. Valid for 10 minutes.",
                 from_=os.environ.get("TWILIO_PHONE_NUMBER"),
                 to=phone
             )
@@ -5104,10 +5104,10 @@ async def help_chat(
 ):
     """AI-powered help chat that guides users through the system"""
     
-    system_prompt = """You are DialGenix.ai's helpful assistant. You guide sales agents through using the AI cold calling platform.
+    system_prompt = """You are IntentBrain.ai's helpful assistant. You guide sales agents through using the AI cold calling platform.
 
 PLATFORM OVERVIEW:
-DialGenix.ai is a B2B SaaS that:
+IntentBrain.ai is a B2B SaaS that:
 1. Discovers high-intent leads using AI (businesses actively searching for solutions)
 2. Makes AI-powered cold calls to qualify leads
 3. Handles INBOUND calls 24/7 - answers, qualifies, and books appointments
@@ -8162,7 +8162,7 @@ async def get_or_create_stripe_customer(user: Dict) -> str:
             name=user.get("name", user["email"]),
             metadata={
                 "user_id": user["user_id"],
-                "platform": "dialgenix"
+                "platform": "intentbrain"
             }
         )
         
@@ -8226,7 +8226,7 @@ async def get_or_create_stripe_price(plan_id: str, billing_cycle: str) -> str:
         
         if not product:
             product = stripe.Product.create(
-                name=f"DialGenix {plan['name']}",
+                name=f"IntentBrain {plan['name']}",
                 description=f"{plan.get('leads_per_month', 0)} leads/mo, {plan.get('calls_per_month', 0)} calls/mo",
                 metadata={"plan_id": plan_id}
             )
@@ -8285,7 +8285,7 @@ async def create_subscription(
         price_id = await get_or_create_stripe_price(plan_id, billing_cycle)
         
         # Build URLs
-        origin = request.headers.get("origin", "https://dialgenix.ai")
+        origin = request.headers.get("origin", "https://intentbrain.ai")
         success_url = f"{origin}/app/settings?subscription=success"
         cancel_url = f"{origin}/app/packs?subscription=canceled"
         
@@ -8356,7 +8356,7 @@ async def get_customer_portal(
     if not customer_id:
         raise HTTPException(status_code=400, detail="No payment profile found. Please subscribe first.")
     
-    origin = request.headers.get("origin", "https://dialgenix.ai")
+    origin = request.headers.get("origin", "https://intentbrain.ai")
     return_url = f"{origin}/app/settings"
     
     try:
@@ -10266,7 +10266,7 @@ async def submit_demo_request(request: DemoRequestForm):
         try:
             if notification_service:
                 await notification_service.send_email(
-                    to_email=os.environ.get("ADMIN_EMAIL", "admin@dialgenix.ai"),
+                    to_email=os.environ.get("ADMIN_EMAIL", "admin@intentbrain.ai"),
                     subject=f"New Demo Request: {request.name} from {request.companySize} company",
                     html_content=f"""
                     <h2>New Demo Request</h2>
@@ -10339,7 +10339,7 @@ async def call_yourself_demo(
     try:
         # Get the base URL for webhooks
         host = http_request.headers.get("host", "")
-        protocol = "https" if "https" in str(http_request.url) or "preview" in host or "dialgenix" in host else "http"
+        protocol = "https" if "https" in str(http_request.url) or "preview" in host or "intentbrain" in host else "http"
         base_url = f"{protocol}://{host}"
         
         # Create a demo call record
@@ -10391,8 +10391,8 @@ async def demo_call_twiml(demo_call_id: str, http_request: Request):
     response = VoiceResponse()
     
     # Get the host for audio URL
-    host = http_request.headers.get("host", "dialgenix.ai")
-    protocol = "https" if "dialgenix" in host or "preview" in host else "http"
+    host = http_request.headers.get("host", "intentbrain.ai")
+    protocol = "https" if "intentbrain" in host or "preview" in host else "http"
     base_url = f"{protocol}://{host}"
     
     # Play pre-generated ElevenLabs audio for the demo
@@ -10413,13 +10413,13 @@ async def demo_audio(demo_call_id: str):
     if _demo_audio_cache:
         return Response(content=_demo_audio_cache, media_type="audio/mpeg")
     
-    demo_script = """Hey! This is Sarah from DialGenix... Glad you picked up!
+    demo_script = """Hey! This is Sarah from IntentBrain... Glad you picked up!
 
 I know what you're thinking— great, another sales call, right? 
 
 But here's the twist... I'm actually an AI. Yeah— a real-time AI, having a natural conversation with you, right now.
 
-And this? This is exactly what DialGenix lets you do.
+And this? This is exactly what IntentBrain lets you do.
 
 Imagine having AI agents like me— making hundreds of calls for your business, every single day. No breaks. No missed follow-ups. No awkward pauses.
 
@@ -10813,7 +10813,7 @@ async def twilio_book_webhook(request: Request):
     return Response(content=str(response), media_type="application/xml")
 
 # ============== INBOUND SALES CALL HANDLER ==============
-# Handles incoming calls to the DialGenix.ai sales line (888) 513-1913
+# Handles incoming calls to the IntentBrain.ai sales line (888) 513-1913
 
 # Cache for pre-generated inbound audio
 _inbound_audio_cache = {}
@@ -10892,14 +10892,14 @@ async def cache_inbound_audio():
         return
     
     common_responses = {
-        "greeting": "Hi, thanks for calling DialGenix! This is Sarah, your AI sales assistant. I can answer questions about our platform, help you understand if we're a good fit, and even book a demo with our team. How can I help you today?",
+        "greeting": "Hi, thanks for calling IntentBrain! This is Sarah, your AI sales assistant. I can answer questions about our platform, help you understand if we're a good fit, and even book a demo with our team. How can I help you today?",
         "pricing": "Great question! We have flexible plans. Our Starter plan is $199 per month and includes 250 leads and 500 AI calls. Our Pro plan at $499 gives you 1,000 leads and 2,000 calls with advanced features. We also offer a free trial, no credit card required. Would you like me to book a quick demo so our team can walk you through which plan fits your needs?",
-        "how_it_works": "Here's how DialGenix works... First, our AI discovers leads by finding businesses actively searching for services like yours. Second, our voice agents call these leads with natural, human-like conversations. Third, the AI qualifies leads based on your criteria. Fourth, qualified leads get booked directly into your calendar. You basically wake up to booked meetings! Would you like to see a demo?",
+        "how_it_works": "Here's how IntentBrain works... First, our AI discovers leads by finding businesses actively searching for services like yours. Second, our voice agents call these leads with natural, human-like conversations. Third, the AI qualifies leads based on your criteria. Fourth, qualified leads get booked directly into your calendar. You basically wake up to booked meetings! Would you like to see a demo?",
         "book_demo": "Perfect! I'd love to get you scheduled with one of our product specialists. They can give you a personalized walkthrough. Can you tell me your email address so I can send you a calendar invite?",
-        "features": "DialGenix has some powerful features. We offer AI lead discovery, natural voice conversations, voicemail drops, automatic call transcription, CRM integrations with HubSpot and Salesforce, and Calendly integration for auto-booking meetings. Our AI agents can even handle objections and qualify leads. What's most important to you?",
-        "not_interested": "No problem at all! Thanks for calling DialGenix. If you ever want to explore AI-powered sales automation, we're here. Have a great day!",
-        "default": "I'd be happy to help with that. DialGenix is an AI-powered cold calling platform that automates your sales outreach. Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. Would you like to know about pricing, see how it works, or schedule a demo?",
-        "didnt_catch": "I didn't quite catch that. Feel free to ask me anything about DialGenix... pricing, how it works, or if you'd like a demo.",
+        "features": "IntentBrain has some powerful features. We offer AI lead discovery, natural voice conversations, voicemail drops, automatic call transcription, CRM integrations with HubSpot and Salesforce, and Calendly integration for auto-booking meetings. Our AI agents can even handle objections and qualify leads. What's most important to you?",
+        "not_interested": "No problem at all! Thanks for calling IntentBrain. If you ever want to explore AI-powered sales automation, we're here. Have a great day!",
+        "default": "I'd be happy to help with that. IntentBrain is an AI-powered cold calling platform that automates your sales outreach. Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. Would you like to know about pricing, see how it works, or schedule a demo?",
+        "didnt_catch": "I didn't quite catch that. Feel free to ask me anything about IntentBrain... pricing, how it works, or if you'd like a demo.",
         "anything_else": "Is there anything else you'd like to know?"
     }
     
@@ -10953,7 +10953,7 @@ async def serve_inbound_audio(audio_key: str):
 @api_router.post("/twilio/inbound")
 async def handle_inbound_sales_call(request: Request):
     """
-    Handle incoming calls to the DialGenix.ai sales line.
+    Handle incoming calls to the IntentBrain.ai sales line.
     AI Sales Assistant 'Sarah' answers and qualifies callers.
     """
     form_data = await request.form()
@@ -10980,7 +10980,7 @@ async def handle_inbound_sales_call(request: Request):
         response.play(f"{os.environ.get('BACKEND_URL', '')}/api/inbound-audio/greeting")
     else:
         response.say(
-            "Hi, thanks for calling DialGenix! "
+            "Hi, thanks for calling IntentBrain! "
             "This is Sarah, your AI sales assistant. "
             "I can answer questions about our platform, help you understand if we're a good fit, "
             "and even book a demo with our team. "
@@ -10999,7 +10999,7 @@ async def handle_inbound_sales_call(request: Request):
     response.append(gather)
     
     # Fallback if no response
-    response.say("I didn't catch that. Feel free to ask me anything about DialGenix.", voice='Polly.Joanna-Neural')
+    response.say("I didn't catch that. Feel free to ask me anything about IntentBrain.", voice='Polly.Joanna-Neural')
     response.redirect('/api/twilio/inbound')
     
     return Response(content=str(response), media_type="application/xml")
@@ -11043,7 +11043,7 @@ async def handle_inbound_response(request: Request):
     # How it works
     elif any(word in speech_result for word in ["how", "work", "what do", "tell me", "explain", "more"]):
         play_or_say("how_it_works",
-            "Here's how DialGenix works... "
+            "Here's how IntentBrain works... "
             "First, our AI discovers leads by finding businesses actively searching for services like yours. "
             "Second, our voice agents call these leads with natural, human-like conversations. "
             "Third, the AI qualifies leads based on your criteria. "
@@ -11072,7 +11072,7 @@ async def handle_inbound_response(request: Request):
     # Features
     elif any(word in speech_result for word in ["feature", "can it", "does it", "integration", "crm", "calendly"]):
         play_or_say("features",
-            "DialGenix has some powerful features. "
+            "IntentBrain has some powerful features. "
             "We offer AI lead discovery, natural voice conversations, voicemail drops, "
             "automatic call transcription, CRM integrations with HubSpot and Salesforce, "
             "and Calendly integration for auto-booking meetings. "
@@ -11083,7 +11083,7 @@ async def handle_inbound_response(request: Request):
     # Not interested / end call
     elif any(word in speech_result for word in ["not interested", "no thanks", "goodbye", "bye", "no"]):
         play_or_say("not_interested",
-            "No problem at all! Thanks for calling DialGenix. "
+            "No problem at all! Thanks for calling IntentBrain. "
             "If you ever want to explore AI-powered sales automation, we're here. "
             "Have a great day!"
         )
@@ -11099,7 +11099,7 @@ async def handle_inbound_response(request: Request):
     else:
         play_or_say("default",
             "I'd be happy to help with that. "
-            "DialGenix is an AI-powered cold calling platform that automates your sales outreach. "
+            "IntentBrain is an AI-powered cold calling platform that automates your sales outreach. "
             "Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. "
             "Would you like to know about pricing, see how it works, or schedule a demo?"
         )
@@ -11158,7 +11158,7 @@ async def capture_caller_email(request: Request):
     response.say(
         f"I've noted your email. "
         "Our team will send you a calendar invite shortly with available demo times. "
-        "You'll also receive an email with information about DialGenix and a link to start your free trial. "
+        "You'll also receive an email with information about IntentBrain and a link to start your free trial. "
         "Is there anything else I can help you with before we wrap up?",
         voice='Polly.Joanna'
     )
@@ -11173,7 +11173,7 @@ async def capture_caller_email(request: Request):
     response.append(gather)
     
     response.say(
-        "Thanks for calling DialGenix.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
+        "Thanks for calling IntentBrain.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
         voice='Polly.Joanna'
     )
     response.hangup()
@@ -11203,7 +11203,7 @@ async def handle_final_response(request: Request):
         return Response(content=str(response), media_type="application/xml")
     
     response.say(
-        "Thanks for calling DialGenix.ai! We're excited to help you automate your sales outreach. Have a fantastic day!",
+        "Thanks for calling IntentBrain.ai! We're excited to help you automate your sales outreach. Have a fantastic day!",
         voice='Polly.Joanna'
     )
     response.hangup()
@@ -11924,10 +11924,10 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             greeting = greeting.replace('{agent_name}', agent_name)
                         elif auto_disclosure and is_mobile:
                             # Default mobile greeting with AI disclosure
-                            greeting = f"Hi {contact_name or 'there'}, this is {agent_name}, an AI assistant with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"
+                            greeting = f"Hi {contact_name or 'there'}, this is {agent_name}, an AI assistant with IntentBrain. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"
                         else:
                             # Default landline greeting without AI disclosure
-                            greeting = f"Hi {contact_name or 'there'}, this is {agent_name} with DialGenix. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"
+                            greeting = f"Hi {contact_name or 'there'}, this is {agent_name} with IntentBrain. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"
                         
                         logger.info(f"Call to {business} - Line type: {line_type}, Mobile: {is_mobile}, Auto-disclosure: {auto_disclosure}")
                     else:
@@ -12401,7 +12401,7 @@ async def get_available_voices():
 DEMO_NARRATIONS = {
     "step1": {
         "title": "Visual Sales Funnel",
-        "text": "Welcome to DialGenix. Your visual sales funnel shows every lead's journey - from discovery to booked meeting. Track real-time stats on qualification rates, calls made, and bookings. Just click 'Call' to let AI do the heavy lifting."
+        "text": "Welcome to IntentBrain. Your visual sales funnel shows every lead's journey - from discovery to booked meeting. Track real-time stats on qualification rates, calls made, and bookings. Just click 'Call' to let AI do the heavy lifting."
     },
     "step2": {
         "title": "AI Lead Discovery",
@@ -12710,13 +12710,13 @@ async def startup_pre_cache():
     global _demo_audio_cache
     if elevenlabs_api_key and not _demo_audio_cache:
         try:
-            demo_script = """Hey! This is Sarah from DialGenix... Glad you picked up!
+            demo_script = """Hey! This is Sarah from IntentBrain... Glad you picked up!
 
 I know what you're thinking— great, another sales call, right? 
 
 But here's the twist... I'm actually an AI. Yeah— a real-time AI, having a natural conversation with you, right now.
 
-And this? This is exactly what DialGenix lets you do.
+And this? This is exactly what IntentBrain lets you do.
 
 Imagine having AI agents like me— making hundreds of calls for your business, every single day. No breaks. No missed follow-ups. No awkward pauses.
 

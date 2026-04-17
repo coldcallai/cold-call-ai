@@ -131,7 +131,7 @@ async def send_phone_verification(request: PhoneVerificationRequest):
     if _twilio_client:
         try:
             _twilio_client.messages.create(
-                body=f"Your DialGenix.ai verification code is: {verification_code}. Valid for 10 minutes.",
+                body=f"Your IntentBrain.ai verification code is: {verification_code}. Valid for 10 minutes.",
                 from_=_twilio_phone_number,
                 to=phone
             )

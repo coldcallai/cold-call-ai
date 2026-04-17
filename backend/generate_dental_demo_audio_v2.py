@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DialGenix Dental Demo Audio Generator - Two Voice Version
+IntentBrain Dental Demo Audio Generator - Two Voice Version
 Generates sample dental receptionist call recordings with separate voices for AI and Patient
 """
 
@@ -228,7 +228,7 @@ async def generate_conversation(demo_id: str, demo: dict):
 
 async def main():
     print("=" * 60)
-    print("DialGenix Dental Demo Audio Generator")
+    print("IntentBrain Dental Demo Audio Generator")
     print("Two-Voice Version (AI + Patient)")
     print("=" * 60)
     

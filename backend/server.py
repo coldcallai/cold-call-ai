@@ -10339,8 +10339,12 @@ async def call_yourself_demo(
     try:
         # Get the base URL for webhooks
         host = http_request.headers.get("host", "")
-        protocol = "https" if "https" in str(http_request.url) or "preview" in host or "intentbrain" in host else "http"
-        base_url = f"{protocol}://{host}"
+        if "intentbrain" in host or "127.0.0.1" in host or "localhost" in host:
+            base_url = "https://intentbrain.ai"
+        elif "preview" in host:
+            base_url = f"https://{host}"
+        else:
+            base_url = "https://intentbrain.ai"
         
         # Create a demo call record
         demo_call_id = str(uuid.uuid4())

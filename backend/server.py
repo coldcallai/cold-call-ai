@@ -10901,7 +10901,7 @@ async def cache_inbound_audio():
         "default": "I'd be happy to help with that. IntentBrain is an AI-powered cold calling platform that automates your sales outreach. Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. Would you like to know about pricing, see how it works, or schedule a demo?",
         "didnt_catch": "I didn't quite catch that. Feel free to ask me anything about IntentBrain... pricing, how it works, or if you'd like a demo.",
         "anything_else": "Is there anything else you'd like to know?",
-        "closing": "Thanks for calling IntentBrain.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
+        "closing": "Thanks for calling IntentBrain. We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
         "about_us": "IntentBrain is an AI-powered sales platform that launched recently. We help businesses automate their outbound outreach with AI that sounds completely natural. Our system finds high-intent leads, calls them, qualifies them based on your criteria, detects their personality type, and either books a meeting or transfers them live to your team. We're a small team with big technology behind us."
     }
     
@@ -11197,7 +11197,7 @@ async def capture_caller_email(request: Request):
     )
     response.append(gather)
     
-    closing_text = "Thanks for calling IntentBrain.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!"
+    closing_text = "Thanks for calling IntentBrain. We're excited to show you how we can automate your sales outreach. Have a fantastic day!"
     if "inbound_closing" in _inbound_audio_cache:
         response.play(f"{backend_url}/api/inbound-audio/closing")
     else:
@@ -11237,7 +11237,7 @@ async def handle_final_response(request: Request):
         response.play(f"{backend_url}/api/inbound-audio/closing")
     else:
         response.say(
-            "Thanks for calling IntentBrain.ai! We're excited to help you automate your sales outreach. Have a fantastic day!",
+            "Thanks for calling IntentBrain. We're excited to help you automate your sales outreach. Have a fantastic day!",
             voice='Polly.Joanna-Neural'
         )
     response.hangup()

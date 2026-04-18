@@ -10312,7 +10312,7 @@ async def call_yourself_demo(
         user = await db.users.find_one({"user_id": user_id})
         if user:
             demo_calls_used = user.get("demo_calls_used", 0)
-            MAX_DEMO_CALLS = 5
+            MAX_DEMO_CALLS = 10
             if demo_calls_used >= MAX_DEMO_CALLS:
                 raise HTTPException(
                     status_code=400, 
@@ -10900,7 +10900,9 @@ async def cache_inbound_audio():
         "not_interested": "No problem at all! Thanks for calling IntentBrain. If you ever want to explore AI-powered sales automation, we're here. Have a great day!",
         "default": "I'd be happy to help with that. IntentBrain is an AI-powered cold calling platform that automates your sales outreach. Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. Would you like to know about pricing, see how it works, or schedule a demo?",
         "didnt_catch": "I didn't quite catch that. Feel free to ask me anything about IntentBrain... pricing, how it works, or if you'd like a demo.",
-        "anything_else": "Is there anything else you'd like to know?"
+        "anything_else": "Is there anything else you'd like to know?",
+        "closing": "Thanks for calling IntentBrain.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
+        "about_us": "IntentBrain is an AI-powered sales platform that launched recently. We help businesses automate their outbound outreach with AI that sounds completely natural. Our system finds high-intent leads, calls them, qualifies them based on your criteria, detects their personality type, and either books a meeting or transfers them live to your team. We're a small team with big technology behind us."
     }
     
     os.makedirs(_INBOUND_AUDIO_DIR, exist_ok=True)
@@ -11095,6 +11097,16 @@ async def handle_inbound_response(request: Request):
         )
         return Response(content=str(response), media_type="application/xml")
     
+    # About the company / who are you / new company
+    elif any(word in speech_result for word in ["who are you", "about you", "your company", "are you new", "how long", "how old", "what is intent", "what is this", "who is intent", "tell me about intent", "new company", "startup"]):
+        play_or_say("about_us",
+            "IntentBrain is an AI-powered sales platform that launched recently. "
+            "We help businesses automate their outbound outreach with AI that sounds completely natural. "
+            "Our system finds high-intent leads, calls them, qualifies them based on your criteria, "
+            "detects their personality type, and either books a meeting or transfers them live to your team. "
+            "We're a small team with big technology behind us."
+        )
+    
     # Default response
     else:
         play_or_say("default",
@@ -11155,13 +11167,26 @@ async def capture_caller_email(request: Request):
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     
-    response.say(
-        f"I've noted your email. "
+    # Generate natural response for email capture confirmation
+    confirmation_text = (
+        "I've noted your email. "
         "Our team will send you a calendar invite shortly with available demo times. "
         "You'll also receive an email with information about IntentBrain and a link to start your free trial. "
-        "Is there anything else I can help you with before we wrap up?",
-        voice='Polly.Joanna'
+        "Is there anything else I can help you with before we wrap up?"
     )
+    
+    backend_url = os.environ.get('BACKEND_URL', '')
+    if elevenlabs_api_key:
+        try:
+            audio = await generate_inbound_audio(confirmation_text, cache_key="inbound_email_confirm")
+            if audio:
+                response.play(f"{backend_url}/api/inbound-audio/email_confirm")
+            else:
+                response.say(confirmation_text, voice='Polly.Joanna-Neural')
+        except Exception:
+            response.say(confirmation_text, voice='Polly.Joanna-Neural')
+    else:
+        response.say(confirmation_text, voice='Polly.Joanna-Neural')
     
     gather = Gather(
         input='speech',
@@ -11172,10 +11197,11 @@ async def capture_caller_email(request: Request):
     )
     response.append(gather)
     
-    response.say(
-        "Thanks for calling IntentBrain.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
-        voice='Polly.Joanna'
-    )
+    closing_text = "Thanks for calling IntentBrain.ai! We're excited to show you how we can automate your sales outreach. Have a fantastic day!"
+    if "inbound_closing" in _inbound_audio_cache:
+        response.play(f"{backend_url}/api/inbound-audio/closing")
+    else:
+        response.say(closing_text, voice='Polly.Joanna-Neural')
     response.hangup()
     
     return Response(content=str(response), media_type="application/xml")
@@ -11189,8 +11215,13 @@ async def handle_final_response(request: Request):
     
     response = VoiceResponse()
     
+    backend_url = os.environ.get('BACKEND_URL', '')
+    
     if any(word in speech_result for word in ["yes", "question", "actually", "one more"]):
-        response.say("Sure, what else would you like to know?", voice='Polly.Joanna')
+        if "inbound_anything_else" in _inbound_audio_cache:
+            response.play(f"{backend_url}/api/inbound-audio/anything_else")
+        else:
+            response.say("Sure, what else would you like to know?", voice='Polly.Joanna-Neural')
         
         gather = Gather(
             input='speech',
@@ -11202,10 +11233,13 @@ async def handle_final_response(request: Request):
         response.append(gather)
         return Response(content=str(response), media_type="application/xml")
     
-    response.say(
-        "Thanks for calling IntentBrain.ai! We're excited to help you automate your sales outreach. Have a fantastic day!",
-        voice='Polly.Joanna'
-    )
+    if "inbound_closing" in _inbound_audio_cache:
+        response.play(f"{backend_url}/api/inbound-audio/closing")
+    else:
+        response.say(
+            "Thanks for calling IntentBrain.ai! We're excited to help you automate your sales outreach. Have a fantastic day!",
+            voice='Polly.Joanna-Neural'
+        )
     response.hangup()
     
     await db.inbound_calls.update_one(

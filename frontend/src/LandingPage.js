@@ -620,7 +620,7 @@ const LandingPage = () => {
           </h1>
           
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
-            Instantly detect buyer personality and tailor every sales call to convert high&#8209;intent leads.
+            Instantly detect buyer intent and personality, then tailor every sales call to convert more high&#8209;intent leads.
           </p>
 
           {/* Primary CTA */}

@@ -70,9 +70,9 @@ class Agent(BaseModel):
 
 class AgentCreate(BaseModel):
     name: str
-    email: str
+    email: Optional[str] = ""
     phone: Optional[str] = None
-    calendly_link: str
+    calendly_link: Optional[str] = ""
     calendly_api_token: Optional[str] = None
     max_daily_calls: int = 50
     use_case: str = "sales_cold_calling"
@@ -80,6 +80,8 @@ class AgentCreate(BaseModel):
     voice_type: str = "preset"
     preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     voice_settings: Optional[Dict[str, Any]] = None
+    company_name: Optional[str] = ""
+    notification_email: Optional[str] = ""
 
 
 # ============== AGENT CRUD ENDPOINTS ==============

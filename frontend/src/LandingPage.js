@@ -2479,31 +2479,31 @@ const LandingPage = () => {
                 onClick={() => setPricingTab('byol')}
                 className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
                   pricingTab === 'byol' 
-                    ? 'bg-white shadow text-gray-900' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 shadow text-white' 
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
                 }`}
               >
-                📋 Outbound (BYOL)
+                Outbound (BYOL)
               </button>
               <button 
                 onClick={() => setPricingTab('full')}
                 className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
                   pricingTab === 'full' 
                     ? 'bg-gradient-to-r from-cyan-500 to-teal-500 shadow text-white' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    : 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200'
                 }`}
               >
-                🚀 Outbound (Full Service)
+                Outbound (Full Service)
               </button>
               <button 
                 onClick={() => setPricingTab('inbound')}
                 className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
                   pricingTab === 'inbound' 
                     ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow text-white' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
                 }`}
               >
-                📞 AI Receptionist
+                AI Receptionist
               </button>
             </div>
           </div>

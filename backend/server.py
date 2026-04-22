@@ -869,7 +869,7 @@ class AIService:
     def __init__(self):
         self.api_key = os.environ.get('EMERGENT_LLM_KEY')
     
-    async def gpt_intent_search(self, query: str, industry: str = None, location: str = None, max_results: int = 10, custom_keywords: List[str] = None) -> List[Dict]:
+    async def gpt_intent_search(self, query: str, industry: str = None, location: str = None, max_results: int = 10, custom_keywords: List[str] = None, exclude_industries: List[str] = None) -> List[Dict]:
         """Use GPT-5.2 to research and find businesses with buying intent"""
         if not self.api_key:
             logger.warning("EMERGENT_LLM_KEY not configured, using mock data")
@@ -885,7 +885,6 @@ class AIService:
         
         # Use custom keywords if provided (up to 100), otherwise use defaults
         if custom_keywords and len(custom_keywords) > 0:
-            # Limit to 100 keywords and filter empty strings
             intent_keywords = [kw.strip() for kw in custom_keywords[:100] if kw and kw.strip()]
             logger.info(f"Using {len(intent_keywords)} custom intent keywords for search")
         else:
@@ -897,51 +896,57 @@ class AIService:
                 session_id=f"intent-search-{uuid.uuid4()}",
                 system_message="""You are a B2B lead research assistant specializing in finding businesses actively searching for solutions.
 
-Your job is to generate realistic business leads that are IN BUYING MODE - meaning they are actively searching based on the keywords provided.
+Your job is to generate realistic business leads that are IN BUYING MODE - matching the EXACT industry and keywords provided.
 
-These are HIGH-INTENT leads - people who are ready to switch or sign up NOW.
+CRITICAL RULES (NEVER VIOLATE):
+1. If an INDUSTRY is specified, EVERY lead you return MUST be in that exact industry. Do NOT return leads from other industries.
+2. If EXCLUDED industries are listed, NEVER return a lead from those industries. No exceptions.
+3. Every lead's `industry` field must match the target industry semantically (e.g. "Digital Marketing Agency" matches "Digital Marketing", "Dental Practice" matches "Dental").
+4. Intent signals MUST come from the provided keyword list — do not invent generic signals.
+5. If you cannot find enough in-industry leads, return FEWER results rather than filling with off-industry leads.
 
 For each lead, provide:
-- Business name (realistic)
-- Industry
-- Phone number (realistic US format)
-- Email (realistic business email)
-- Intent signals (SPECIFIC search terms or actions showing buying intent from the provided keywords)
-- Location (city, state)
-- Pain point (why they're looking)
+- name: Business name (realistic, fits the industry)
+- industry: Specific industry (must match target)
+- phone: US phone in +1-XXX-XXX-XXXX format
+- email: Realistic business email (use the business domain)
+- intent_signals: Array of 2-4 actual search terms from the keywords provided
+- location: City, State
+- pain_point: Specific pain point tied to the industry and keywords
 
-Return your response as a valid JSON array of objects with these fields:
-- name: string
-- industry: string  
-- phone: string
-- email: string
-- intent_signals: array of strings (include actual search terms from the keywords provided)
-- location: string
-- pain_point: string
-
-Only return the JSON array, no other text."""
+Return ONLY a valid JSON array. No prose, no markdown fences."""
             ).with_model("openai", "gpt-5.2")
             
             # Build keyword list for prompt
-            keywords_prompt = chr(10).join(f'- Searching for "{kw}"' for kw in intent_keywords[:50])  # Limit in prompt to avoid token overflow
+            keywords_prompt = chr(10).join(f'- "{kw}"' for kw in intent_keywords[:50])
             
-            search_prompt = f"""Find {max_results} businesses that are ACTIVELY IN BUYING MODE based on these search signals.
+            exclude_block = ""
+            if exclude_industries and len(exclude_industries) > 0:
+                exclude_list = ", ".join(exclude_industries)
+                exclude_block = f"\n\nEXCLUDE these industries — DO NOT return any lead from: {exclude_list}"
+            
+            industry_block = (
+                f"REQUIRED INDUSTRY (every lead must be in this industry): {industry}"
+                if industry else
+                "Industry: Any (but be consistent with the query and keywords)"
+            )
+            
+            search_prompt = f"""Find up to {max_results} businesses that are ACTIVELY IN BUYING MODE based on these signals.
 
-Search criteria:
-- Primary query: {query}
-- Industry focus: {industry or 'Any relevant industry'}
-- Location: {location or 'United States'}
+Primary search query: {query}
+{industry_block}
+Location: {location or 'United States'}{exclude_block}
 
-Target businesses showing these high-intent signals:
+High-intent keywords they are searching for:
 {keywords_prompt}
 
-These leads should be people who:
-1. Are actively comparing solutions
+Target businesses that are:
+1. Actively comparing solutions in the target industry
 2. Searching for alternatives or new providers
 3. Looking to switch due to pain points
 4. New businesses setting up for the first time
 
-Return as JSON array with realistic business details and specific intent signals matching the keywords."""
+Return a JSON array. Every lead's industry field MUST match the required industry. If you can't find {max_results} true matches, return fewer — quality over quantity."""
 
             user_message = UserMessage(text=search_prompt)
             response = await chat.send_message(user_message)
@@ -956,6 +961,25 @@ Return as JSON array with realistic business details and specific intent signals
             response_text = response_text.strip()
             
             leads = json.loads(response_text)
+            
+            # Post-filter: drop any leads whose industry clearly doesn't match filters
+            if industry or exclude_industries:
+                filtered = []
+                target = (industry or "").lower().strip()
+                excludes = [e.lower().strip() for e in (exclude_industries or []) if e]
+                for lead in leads:
+                    lead_ind = (lead.get("industry") or "").lower()
+                    if excludes and any(x in lead_ind for x in excludes):
+                        continue
+                    if target:
+                        # Fuzzy match: target tokens should appear in lead industry
+                        target_tokens = [t for t in target.split() if len(t) > 2]
+                        if target_tokens and not any(t in lead_ind for t in target_tokens):
+                            continue
+                    filtered.append(lead)
+                logger.info(f"GPT Intent Search: {len(leads)} returned, {len(filtered)} passed industry filter")
+                return filtered
+            
             logger.info(f"GPT Intent Search found {len(leads)} high-intent leads")
             return leads
             
@@ -5299,12 +5323,14 @@ class GPTIntentSearchRequest(BaseModel):
     max_results: int = 10
     custom_keywords: Optional[List[str]] = None
     campaign_id: Optional[str] = None
+    exclude_industries: Optional[List[str]] = None
 
 class PreviewLeadsRequest(BaseModel):
     search_query: str = "credit card processing"
     industry: Optional[str] = None
     location: Optional[str] = None
     custom_keywords: Optional[List[str]] = None
+    exclude_industries: Optional[List[str]] = None
 
 @api_router.post("/leads/preview-examples")
 async def preview_lead_examples(
@@ -5326,7 +5352,8 @@ async def preview_lead_examples(
         industry=request.industry,
         location=request.location,
         max_results=3,  # Only 3 examples
-        custom_keywords=custom_keywords
+        custom_keywords=custom_keywords,
+        exclude_industries=request.exclude_industries
     )
     
     return {
@@ -5405,7 +5432,8 @@ async def gpt_intent_search(
         industry=request.industry,
         location=request.location,
         max_results=request.max_results,
-        custom_keywords=custom_keywords
+        custom_keywords=custom_keywords,
+        exclude_industries=request.exclude_industries
     )
     
     created_leads = []

@@ -53,6 +53,103 @@ const LeadDiscovery = () => {
   // Line type filter
   const [lineTypeFilter, setLineTypeFilter] = useState("all");
 
+  // Exclude industries filter (e.g., exclude medical/grocery/motels)
+  const [excludeIndustries, setExcludeIndustries] = useState("");
+
+  // Keyword Template Packs — one-click vertical presets
+  const KEYWORD_PACKS = {
+    "digital_marketing": {
+      label: "Digital Marketing / Agency Clients",
+      industry: "Digital Marketing, SEO, Advertising Agency",
+      exclude: "",
+      keywords: [
+        "need more leads", "SEO agency", "Google Ads management", "Facebook Ads agency",
+        "lead generation services", "digital marketing agency", "PPC management",
+        "hire SEO company", "social media marketing", "website conversion optimization",
+        "marketing automation", "grow my business online", "need more customers"
+      ]
+    },
+    "roofing": {
+      label: "Roofing Contractors",
+      industry: "Roofing",
+      exclude: "medical, grocery, hotel, motel, restaurant",
+      keywords: [
+        "roofing contractor", "roof repair", "roof replacement", "commercial roofing",
+        "residential roofing", "storm damage roofing", "metal roofing", "shingle replacement",
+        "roofing company near me", "emergency roof repair", "roof inspection"
+      ]
+    },
+    "dental": {
+      label: "Dental Practices",
+      industry: "Dental Practice",
+      exclude: "grocery, hotel, motel, restaurant, retail",
+      keywords: [
+        "dental practice management", "dental marketing", "patient acquisition",
+        "dental SEO", "grow dental practice", "dental patient financing",
+        "new patient dentistry", "dental office software", "dental appointment scheduling"
+      ]
+    },
+    "restaurants_pos": {
+      label: "Restaurants (POS/Payments)",
+      industry: "Restaurant, Food & Beverage",
+      exclude: "medical, grocery, hotel, motel",
+      keywords: [
+        "Toast alternative", "Square alternative", "Clover alternative",
+        "restaurant POS system", "restaurant credit card processing", "reduce restaurant fees",
+        "best POS for restaurants", "switch payment processor", "restaurant online ordering"
+      ]
+    },
+    "saas_b2b": {
+      label: "SaaS / B2B Tech",
+      industry: "SaaS, Software",
+      exclude: "medical, grocery, hotel, motel, restaurant, retail",
+      keywords: [
+        "SaaS lead generation", "B2B sales tools", "CRM alternative", "sales automation",
+        "outbound sales software", "cold email tools", "sales engagement platform",
+        "lead enrichment", "sales pipeline software"
+      ]
+    },
+    "hvac_contractors": {
+      label: "HVAC / Home Services",
+      industry: "HVAC, Home Services",
+      exclude: "medical, grocery, hotel, motel, restaurant",
+      keywords: [
+        "HVAC repair", "AC installation", "heating and cooling", "HVAC service",
+        "plumber near me", "electrician", "home services marketing", "contractor lead gen",
+        "emergency HVAC"
+      ]
+    },
+    "insurance_agents": {
+      label: "Insurance Agents",
+      industry: "Insurance",
+      exclude: "grocery, hotel, motel, restaurant",
+      keywords: [
+        "insurance leads", "life insurance leads", "medicare leads", "auto insurance quotes",
+        "commercial insurance", "insurance agency marketing", "insurance CRM",
+        "exclusive insurance leads"
+      ]
+    },
+    "real_estate": {
+      label: "Real Estate Agents",
+      industry: "Real Estate",
+      exclude: "grocery, hotel, motel, restaurant, medical",
+      keywords: [
+        "real estate leads", "seller leads", "buyer leads", "FSBO leads",
+        "real estate CRM", "real estate marketing", "realtor website", "MLS tools",
+        "expired listings"
+      ]
+    }
+  };
+
+  const applyKeywordPack = (packKey) => {
+    const pack = KEYWORD_PACKS[packKey];
+    if (!pack) return;
+    setCustomKeywords(pack.keywords);
+    setIndustry(pack.industry);
+    setExcludeIndustries(pack.exclude);
+    toast.success(`Loaded "${pack.label}" pack — ${pack.keywords.length} keywords`);
+  };
+
   const defaultIntentKeywords = [
     "Toast alternative",
     "Square alternative",
@@ -111,11 +208,15 @@ const LeadDiscovery = () => {
     setShowPreview(true);
     try {
       const token = localStorage.getItem('session_token');
+      const excludeList = excludeIndustries
+        ? excludeIndustries.split(",").map(s => s.trim()).filter(Boolean)
+        : null;
       const response = await axios.post(`${API}/leads/preview-examples`, {
         search_query: searchQuery,
         industry: industry || null,
         location: location || null,
-        custom_keywords: customKeywords.length > 0 ? customKeywords : null
+        custom_keywords: customKeywords.length > 0 ? customKeywords : null,
+        exclude_industries: excludeList
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -202,20 +303,25 @@ const LeadDiscovery = () => {
     setDiscovering(true);
     try {
       const token = localStorage.getItem('session_token');
+      const excludeList = excludeIndustries
+        ? excludeIndustries.split(",").map(s => s.trim()).filter(Boolean)
+        : null;
       const response = await axios.post(`${API}/leads/gpt-intent-search`, {
         search_query: searchQuery,
         industry: industry || null,
         location: location || null,
         max_results: 10,
         custom_keywords: customKeywords.length > 0 ? customKeywords : null,
-        campaign_id: selectedCampaign || null
+        campaign_id: selectedCampaign || null,
+        exclude_industries: excludeList
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      const { discovered, credits_used, credits_remaining } = response.data;
+      const { discovered, credits_used, credits_remaining, skipped_duplicates } = response.data;
+      const dupeNote = skipped_duplicates > 0 ? ` (${skipped_duplicates} skipped as duplicates)` : '';
       toast.success(
-        `Discovered ${discovered} high-intent leads! (${credits_used} credits used, ${credits_remaining} remaining)`
+        `Discovered ${discovered} high-intent leads${dupeNote}! ${credits_used} credits used, ${credits_remaining} remaining`
       );
       fetchLeads();
       // Refresh user data to update sidebar credits
@@ -611,6 +717,33 @@ const LeadDiscovery = () => {
             </CardContent>
           </Card>
 
+          {/* Keyword Template Packs — one-click vertical presets */}
+          <Card className="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 shadow-sm mb-4" data-testid="keyword-packs-card">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Zap className="w-4 h-4 text-violet-700" />
+                <span className="text-sm font-semibold text-violet-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  Quick Start — Keyword Packs
+                </span>
+                <span className="text-xs text-violet-700">(loads industry + keywords + exclusions in one click)</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(KEYWORD_PACKS).map(([key, pack]) => (
+                  <Button
+                    key={key}
+                    data-testid={`keyword-pack-${key}`}
+                    size="sm"
+                    variant="outline"
+                    className="border-violet-300 bg-white text-violet-800 hover:bg-violet-100 text-xs"
+                    onClick={() => applyKeywordPack(key)}
+                  >
+                    {pack.label}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Search Form */}
           <Card className="bg-white border border-gray-200 shadow-sm">
             <CardContent className="p-6">
@@ -661,6 +794,19 @@ const LeadDiscovery = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="mt-4">
+                <Label htmlFor="exclude-industries" className="text-xs text-gray-600">
+                  Exclude Industries (comma separated — blocks GPT from returning these)
+                </Label>
+                <Input
+                  id="exclude-industries"
+                  data-testid="exclude-industries-input"
+                  value={excludeIndustries}
+                  onChange={(e) => setExcludeIndustries(e.target.value)}
+                  placeholder="e.g., medical, grocery, motel, hotel, restaurant"
+                  className="mt-1 text-sm"
+                />
               </div>
               <div className="mt-4 flex justify-end gap-3">
                 <Button 

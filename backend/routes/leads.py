@@ -108,6 +108,7 @@ class GPTIntentSearchRequest(BaseModel):
     max_results: int = 10
     custom_keywords: Optional[List[str]] = None
     campaign_id: Optional[str] = None
+    exclude_industries: Optional[List[str]] = None
 
 
 class PreviewLeadsRequest(BaseModel):
@@ -115,6 +116,7 @@ class PreviewLeadsRequest(BaseModel):
     location: Optional[str] = None
     industry: Optional[str] = None
     custom_keywords: Optional[List[str]] = None
+    exclude_industries: Optional[List[str]] = None
 
 
 class BulkVerifyRequest(BaseModel):
@@ -148,7 +150,8 @@ async def preview_lead_examples(
         industry=request.industry,
         location=request.location,
         max_results=3,
-        custom_keywords=custom_keywords
+        custom_keywords=custom_keywords,
+        exclude_industries=request.exclude_industries
     )
     
     return {
@@ -234,7 +237,8 @@ async def gpt_intent_search(
         industry=request.industry,
         location=request.location,
         max_results=request.max_results,
-        custom_keywords=custom_keywords
+        custom_keywords=custom_keywords,
+        exclude_industries=request.exclude_industries
     )
     
     created_leads = []

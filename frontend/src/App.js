@@ -320,6 +320,7 @@ const AppRouter = () => {
                 <main className="flex-1 min-h-screen lg:pt-0 pt-14">
                   <Routes>
                     <Route path="/" element={<FunnelPage />} />
+                    <Route path="/funnel" element={<FunnelPage />} />
                     <Route path="/getting-started" element={<GettingStartedPage />} />
                     <Route path="/usage" element={<UsageDashboard />} />
                     <Route path="/leads" element={<LeadDiscovery />} />

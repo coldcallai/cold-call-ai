@@ -5409,10 +5409,28 @@ async def gpt_intent_search(
     )
     
     created_leads = []
+    skipped_duplicates = 0
     for biz in discovered:
+        phone = (biz.get("phone") or "").strip()
+        biz_name = biz.get("name", "Unknown Business")
+        
+        # Dedupe: skip if this user already has a lead with same phone OR same business name
+        if phone or biz_name:
+            or_conditions = []
+            if phone:
+                or_conditions.append({"phone": phone})
+            if biz_name and biz_name != "Unknown Business":
+                or_conditions.append({"business_name": biz_name})
+            if or_conditions:
+                dupe_query = {"user_id": user_id, "$or": or_conditions}
+                existing = await db.leads.find_one(dupe_query, {"_id": 0, "id": 1})
+                if existing:
+                    skipped_duplicates += 1
+                    continue
+        
         lead_data = Lead(
-            business_name=biz.get("name", "Unknown Business"),
-            phone=biz.get("phone", ""),
+            business_name=biz_name,
+            phone=phone,
             email=biz.get("email"),
             source="gpt_intent_search",
             intent_signals=biz.get("intent_signals", [])
@@ -5447,6 +5465,7 @@ async def gpt_intent_search(
     
     return {
         "discovered": leads_discovered,
+        "skipped_duplicates": skipped_duplicates,
         "source": "gpt_intent_search",
         "leads": created_leads,
         "credits_used": leads_discovered,
@@ -5506,6 +5525,69 @@ async def backfill_orphan_leads(
         "assigned_to_campaign": campaign_assigned,
         "total_leads_for_user": total_user_leads,
         "message": f"Adopted {adopt_result.modified_count} orphan leads. Assigned {campaign_assigned} to campaign."
+    }
+
+
+@api_router.post("/leads/deduplicate")
+async def deduplicate_leads(current_user: Dict = Depends(get_current_user)):
+    """
+    Remove duplicate leads for current user.
+    Keeps the oldest in each phone/business_name group, deletes the rest.
+    Preserves any lead that has been actioned (status != 'new').
+    """
+    user_id = current_user["user_id"]
+    
+    leads = await db.leads.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(50000)
+    
+    seen_phones = {}
+    seen_names = {}
+    to_delete = []
+    
+    for lead in leads:
+        lead_id = lead.get("id")
+        phone = (lead.get("phone") or "").strip()
+        name = (lead.get("business_name") or "").strip().lower()
+        status = lead.get("status", "new")
+        
+        if status != "new":
+            if phone:
+                seen_phones[phone] = lead_id
+            if name:
+                seen_names[name] = lead_id
+            continue
+        
+        is_dup = False
+        if phone and phone in seen_phones:
+            is_dup = True
+        elif name and name in seen_names and name != "unknown business":
+            is_dup = True
+        
+        if is_dup:
+            to_delete.append(lead_id)
+        else:
+            if phone:
+                seen_phones[phone] = lead_id
+            if name:
+                seen_names[name] = lead_id
+    
+    deleted_count = 0
+    if to_delete:
+        result = await db.leads.delete_many({
+            "user_id": user_id,
+            "id": {"$in": to_delete},
+            "status": "new"
+        })
+        deleted_count = result.deleted_count
+    
+    remaining = await db.leads.count_documents({"user_id": user_id})
+    
+    return {
+        "success": True,
+        "duplicates_removed": deleted_count,
+        "remaining_leads": remaining,
+        "message": f"Removed {deleted_count} duplicate leads. {remaining} unique leads remain."
     }
 
 

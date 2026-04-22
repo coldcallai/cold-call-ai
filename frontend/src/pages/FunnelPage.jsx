@@ -10,7 +10,7 @@ import BookingDialog from "@/components/BookingDialog";
 import TrustLine from "@/components/TrustLine";
 import {
   Plus, Phone, Calendar, CheckCircle, Zap, PhoneCall,
-  UserCheck, CalendarCheck, ArrowRight, Wrench
+  UserCheck, CalendarCheck, ArrowRight, Wrench, Copy
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -118,6 +118,26 @@ const FunnelPage = () => {
     }
   };
 
+  const removeDuplicates = async () => {
+    if (!window.confirm("Remove duplicate leads? This keeps the oldest of each duplicate set and deletes the rest (only 'new' status leads will be removed).")) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem('session_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API}/leads/deduplicate`, {}, { headers });
+      const { duplicates_removed, remaining_leads } = res.data;
+      if (duplicates_removed === 0) {
+        toast.success(`No duplicates found. ${remaining_leads} leads in your account.`);
+      } else {
+        toast.success(`Removed ${duplicates_removed} duplicates. ${remaining_leads} unique leads remain.`);
+      }
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to deduplicate");
+    }
+  };
+
   // Group leads by status, filtered by selected campaign
   const safeLeads = Array.isArray(leads) ? leads : [];
   const filteredLeads = selectedCampaign 
@@ -179,6 +199,16 @@ const FunnelPage = () => {
           >
             <Wrench className="w-4 h-4 mr-2" />
             Fix Missing Leads
+          </Button>
+          <Button
+            data-testid="funnel-dedupe-btn"
+            variant="outline"
+            className="border-red-300 text-red-700 hover:bg-red-50"
+            onClick={removeDuplicates}
+            title="Remove duplicate leads (same phone or business name)"
+          >
+            <Copy className="w-4 h-4 mr-2" />
+            Remove Duplicates
           </Button>
           <Button 
             data-testid="funnel-discover-btn"

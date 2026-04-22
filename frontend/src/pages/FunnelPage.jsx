@@ -93,12 +93,15 @@ const FunnelPage = () => {
     }
   };
 
-  // Group leads by status
-  const newLeads = leads.filter(l => l.status === 'new');
-  const contactedLeads = leads.filter(l => l.status === 'contacted');
-  const qualifiedLeads = leads.filter(l => l.status === 'qualified');
-  const bookedLeads = leads.filter(l => l.status === 'booked');
-  const notQualifiedLeads = leads.filter(l => l.status === 'not_qualified');
+  // Group leads by status, filtered by selected campaign
+  const filteredLeads = selectedCampaign 
+    ? leads.filter(l => l.campaign_id === selectedCampaign || !l.campaign_id) 
+    : leads;
+  const newLeads = filteredLeads.filter(l => l.status === 'new');
+  const contactedLeads = filteredLeads.filter(l => l.status === 'contacted');
+  const qualifiedLeads = filteredLeads.filter(l => l.status === 'qualified');
+  const bookedLeads = filteredLeads.filter(l => l.status === 'booked');
+  const notQualifiedLeads = filteredLeads.filter(l => l.status === 'not_qualified' || l.status === 'rejected');
 
   const funnelStages = [
     { id: 'new', title: 'New Leads', leads: newLeads, icon: Zap, color: 'bg-blue-500', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', textColor: 'text-blue-700' },

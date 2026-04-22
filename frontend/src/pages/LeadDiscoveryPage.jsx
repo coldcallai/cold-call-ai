@@ -207,7 +207,8 @@ const LeadDiscovery = () => {
         industry: industry || null,
         location: location || null,
         max_results: 10,
-        custom_keywords: customKeywords.length > 0 ? customKeywords : null
+        custom_keywords: customKeywords.length > 0 ? customKeywords : null,
+        campaign_id: selectedCampaign || null
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });

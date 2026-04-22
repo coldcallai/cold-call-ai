@@ -5297,7 +5297,8 @@ class GPTIntentSearchRequest(BaseModel):
     industry: Optional[str] = None
     location: Optional[str] = None
     max_results: int = 10
-    custom_keywords: Optional[List[str]] = None  # Up to 100 custom intent keywords
+    custom_keywords: Optional[List[str]] = None
+    campaign_id: Optional[str] = None
 
 class PreviewLeadsRequest(BaseModel):
     search_query: str = "credit card processing"
@@ -5416,8 +5417,12 @@ async def gpt_intent_search(
             source="gpt_intent_search",
             intent_signals=biz.get("intent_signals", [])
         )
-        await db.leads.insert_one(lead_data.model_dump())
-        created_leads.append(lead_data)
+        lead_dict = lead_data.model_dump()
+        if request.campaign_id:
+            lead_dict["campaign_id"] = request.campaign_id
+        lead_dict["user_id"] = user_id
+        await db.leads.insert_one(lead_dict)
+        created_leads.append(lead_dict)
     
     leads_discovered = len(created_leads)
     

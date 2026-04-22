@@ -31,12 +31,13 @@ const FunnelPage = () => {
   const fetchData = useCallback(async () => {
     try {
       const token = localStorage.getItem('session_token');
+      const headers = { Authorization: `Bearer ${token}` };
       const [leadsRes, statsRes, agentsRes, campaignsRes, setupRes] = await Promise.all([
-        axios.get(`${API}/leads`),
-        axios.get(`${API}/dashboard/stats`),
-        axios.get(`${API}/agents`),
-        axios.get(`${API}/campaigns`),
-        axios.get(`${API}/setup/status`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: { can_make_calls: true } }))
+        axios.get(`${API}/leads`, { headers }),
+        axios.get(`${API}/dashboard/stats`, { headers }),
+        axios.get(`${API}/agents`, { headers }),
+        axios.get(`${API}/campaigns`, { headers }),
+        axios.get(`${API}/setup/status`, { headers }).catch(() => ({ data: { can_make_calls: true } }))
       ]);
       setLeads(leadsRes.data);
       setStats(statsRes.data);

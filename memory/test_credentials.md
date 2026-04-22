@@ -1,5 +1,9 @@
 # Test Credentials
 
+## Production (User's Live VPS)
+- Email: interactivelead@yahoo.com
+- Password: IntentBrain2024!
+
 ## Admin User
 - Email: test@example.com
 - Password: Test123!

@@ -4,7 +4,7 @@ Contains all lead-related API endpoints.
 Extracted from server.py as part of the Strangler Fig refactoring pattern (Phase 3).
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -98,6 +98,7 @@ class LeadDiscoveryRequest(BaseModel):
     location: Optional[str] = None
     industry: Optional[str] = None
     max_results: int = 10
+    campaign_id: Optional[str] = None
 
 
 class GPTIntentSearchRequest(BaseModel):
@@ -106,6 +107,7 @@ class GPTIntentSearchRequest(BaseModel):
     industry: Optional[str] = None
     max_results: int = 10
     custom_keywords: Optional[List[str]] = None
+    campaign_id: Optional[str] = None
 
 
 class PreviewLeadsRequest(BaseModel):
@@ -179,12 +181,15 @@ async def discover_leads(request: LeadDiscoveryRequest, current_user: Dict = Dep
             source="ai_discovery",
             intent_signals=biz.get("intent_signals", ["credit_card_processing_intent"])
         )
-        await db.leads.insert_one(lead_data.model_dump())
-        created_leads.append(lead_data)
+        lead_dict = lead_data.model_dump()
+        if request.campaign_id:
+            lead_dict["campaign_id"] = request.campaign_id
+        await db.leads.insert_one(lead_dict)
+        created_leads.append(lead_dict)
     
     return {
         "discovered": len(created_leads),
-        "leads": [lead.model_dump() for lead in created_leads]
+        "leads": created_leads
     }
 
 
@@ -235,14 +240,18 @@ async def gpt_intent_search(
     created_leads = []
     for biz in discovered:
         lead_data = Lead(
+            user_id=user_id,
             business_name=biz.get("name", "Unknown Business"),
             phone=biz.get("phone", ""),
             email=biz.get("email"),
             source="gpt_intent_search",
             intent_signals=biz.get("intent_signals", [])
         )
-        await db.leads.insert_one(lead_data.model_dump())
-        created_leads.append(lead_data)
+        lead_dict = lead_data.model_dump()
+        if request.campaign_id:
+            lead_dict["campaign_id"] = request.campaign_id
+        await db.leads.insert_one(lead_dict)
+        created_leads.append(lead_dict)
     
     leads_discovered = len(created_leads)
     
@@ -267,9 +276,73 @@ async def gpt_intent_search(
     return {
         "discovered": leads_discovered,
         "source": "gpt_intent_search",
-        "leads": [lead.model_dump() for lead in created_leads],
+        "leads": created_leads,
         "credits_used": leads_discovered,
         "credits_remaining": leads_remaining - leads_discovered
+    }
+
+
+# ============== BACKFILL / ORPHAN LEAD REPAIR ==============
+
+class BackfillOrphanRequest(BaseModel):
+    campaign_id: Optional[str] = None  # If provided, assign orphan leads to this campaign
+
+
+@router.post("/backfill-orphans")
+async def backfill_orphan_leads(
+    request: BackfillOrphanRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Repair leads that were saved without user_id or campaign_id due to old bug.
+    - Assigns user_id = current user to any lead missing user_id that was created via discovery sources.
+    - Optionally assigns provided campaign_id to leads with missing/null campaign_id.
+    Safe to run multiple times.
+    """
+    db = get_db()
+    user_id = current_user["user_id"]
+    
+    # Step 1: adopt orphan discovery leads (no user_id at all) created in the last 30 days
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    adopt_query = {
+        "$or": [{"user_id": {"$exists": False}}, {"user_id": None}],
+        "source": {"$in": ["gpt_intent_search", "ai_discovery"]},
+        "created_at": {"$gte": cutoff}
+    }
+    adopt_result = await db.leads.update_many(
+        adopt_query,
+        {"$set": {"user_id": user_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Step 2: optionally assign a campaign to this user's leads that have none
+    campaign_assigned = 0
+    if request.campaign_id:
+        # Verify campaign belongs to user
+        campaign = await db.campaigns.find_one(
+            {"id": request.campaign_id, "user_id": user_id}, {"_id": 0}
+        )
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        campaign_query = {
+            "user_id": user_id,
+            "$or": [{"campaign_id": {"$exists": False}}, {"campaign_id": None}, {"campaign_id": ""}]
+        }
+        campaign_result = await db.leads.update_many(
+            campaign_query,
+            {"$set": {"campaign_id": request.campaign_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        campaign_assigned = campaign_result.modified_count
+    
+    # Stats for confirmation
+    total_user_leads = await db.leads.count_documents({"user_id": user_id})
+    
+    return {
+        "success": True,
+        "adopted_orphan_leads": adopt_result.modified_count,
+        "assigned_to_campaign": campaign_assigned,
+        "total_leads_for_user": total_user_leads,
+        "message": f"Adopted {adopt_result.modified_count} orphan leads. Assigned {campaign_assigned} to campaign."
     }
 
 

@@ -5448,10 +5448,66 @@ async def gpt_intent_search(
     return {
         "discovered": leads_discovered,
         "source": "gpt_intent_search",
-        "leads": [lead.model_dump() for lead in created_leads],
+        "leads": created_leads,
         "credits_used": leads_discovered,
         "credits_remaining": leads_remaining - leads_discovered
     }
+
+# ----- Orphan Lead Backfill (repairs leads saved without user_id/campaign_id) -----
+class BackfillOrphanRequest(BaseModel):
+    campaign_id: Optional[str] = None
+
+
+@api_router.post("/leads/backfill-orphans")
+async def backfill_orphan_leads(
+    request: BackfillOrphanRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Repair leads that were saved without user_id or campaign_id due to old bug.
+    Safe to run multiple times.
+    """
+    user_id = current_user["user_id"]
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    
+    adopt_query = {
+        "$or": [{"user_id": {"$exists": False}}, {"user_id": None}],
+        "source": {"$in": ["gpt_intent_search", "ai_discovery"]},
+        "created_at": {"$gte": cutoff}
+    }
+    adopt_result = await db.leads.update_many(
+        adopt_query,
+        {"$set": {"user_id": user_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    campaign_assigned = 0
+    if request.campaign_id:
+        campaign = await db.campaigns.find_one(
+            {"id": request.campaign_id, "user_id": user_id}, {"_id": 0}
+        )
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        campaign_query = {
+            "user_id": user_id,
+            "$or": [{"campaign_id": {"$exists": False}}, {"campaign_id": None}, {"campaign_id": ""}]
+        }
+        campaign_result = await db.leads.update_many(
+            campaign_query,
+            {"$set": {"campaign_id": request.campaign_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        campaign_assigned = campaign_result.modified_count
+    
+    total_user_leads = await db.leads.count_documents({"user_id": user_id})
+    
+    return {
+        "success": True,
+        "adopted_orphan_leads": adopt_result.modified_count,
+        "assigned_to_campaign": campaign_assigned,
+        "total_leads_for_user": total_user_leads,
+        "message": f"Adopted {adopt_result.modified_count} orphan leads. Assigned {campaign_assigned} to campaign."
+    }
+
 
 # ----- Leads CRUD -----
 @api_router.get("/leads", response_model=List[Lead])

@@ -10,7 +10,7 @@ import BookingDialog from "@/components/BookingDialog";
 import TrustLine from "@/components/TrustLine";
 import {
   Plus, Phone, Calendar, CheckCircle, Zap, PhoneCall,
-  UserCheck, CalendarCheck, ArrowRight
+  UserCheck, CalendarCheck, ArrowRight, Wrench
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -97,6 +97,27 @@ const FunnelPage = () => {
     }
   };
 
+  const fixOrphanLeads = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(
+        `${API}/leads/backfill-orphans`,
+        { campaign_id: selectedCampaign || null },
+        { headers }
+      );
+      const { adopted_orphan_leads, assigned_to_campaign, total_leads_for_user } = res.data;
+      toast.success(
+        `Repaired ${adopted_orphan_leads} orphan leads` +
+        (assigned_to_campaign ? `, assigned ${assigned_to_campaign} to this campaign` : '') +
+        `. Total leads: ${total_leads_for_user}`
+      );
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to repair leads");
+    }
+  };
+
   // Group leads by status, filtered by selected campaign
   const safeLeads = Array.isArray(leads) ? leads : [];
   const filteredLeads = selectedCampaign 
@@ -149,6 +170,16 @@ const FunnelPage = () => {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            data-testid="funnel-fix-orphans-btn"
+            variant="outline"
+            className="border-amber-300 text-amber-700 hover:bg-amber-50"
+            onClick={fixOrphanLeads}
+            title="Repair leads missing user/campaign assignment"
+          >
+            <Wrench className="w-4 h-4 mr-2" />
+            Fix Missing Leads
+          </Button>
           <Button 
             data-testid="funnel-discover-btn"
             className="bg-blue-600 hover:bg-blue-700 text-white"

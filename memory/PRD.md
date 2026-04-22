@@ -36,6 +36,14 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - Primary: https://intentbrain.ai (live, SSL)
 - Legacy: https://dialgenix.ai (still works, same server)
 
+## Completed (April 22, 2026)
+- [x] **Lead Discovery → Funnel bug FIXED**: Modular `routes/leads.py` was saving discovered leads with `user_id=None` and without `campaign_id`, making them invisible to Funnel (which filters by user_id)
+- [x] Added `/api/leads/backfill-orphans` endpoint (one-click repair for existing orphan leads)
+- [x] Added "Fix Missing Leads" button in Funnel page (calls backfill)
+- [x] Fixed `.model_dump()` crash on dict in server.py gpt_intent_search
+- [x] Added `campaign_id` to `GPTIntentSearchRequest` + `LeadDiscoveryRequest` in routes/leads.py
+- [x] Ensured `user_id` is stamped on every lead created via `/leads/discover` and `/leads/gpt-intent-search` in both monolith and modular routes
+
 ## Completed (April 17, 2026)
 - [x] Full rebrand DialGenix → IntentBrain (143+ references)
 - [x] New circular logo (hero, navbar, sidebar, login, SEO pages)

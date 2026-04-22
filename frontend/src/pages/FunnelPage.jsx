@@ -31,18 +31,18 @@ const FunnelPage = () => {
   const fetchData = useCallback(async () => {
     try {
       const token = localStorage.getItem('session_token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const [leadsRes, statsRes, agentsRes, campaignsRes, setupRes] = await Promise.all([
-        axios.get(`${API}/leads`, { headers }),
-        axios.get(`${API}/dashboard/stats`, { headers }),
-        axios.get(`${API}/agents`, { headers }),
-        axios.get(`${API}/campaigns`, { headers }),
+        axios.get(`${API}/leads`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/dashboard/stats`, { headers }).catch(() => ({ data: {} })),
+        axios.get(`${API}/agents`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/campaigns`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/setup/status`, { headers }).catch(() => ({ data: { can_make_calls: true } }))
       ]);
-      setLeads(leadsRes.data);
-      setStats(statsRes.data);
-      setAgents(agentsRes.data.filter(a => a.is_active));
-      setCampaigns(campaignsRes.data.filter(c => c.status === 'active'));
+      setLeads(Array.isArray(leadsRes.data) ? leadsRes.data : []);
+      setStats(statsRes.data || {});
+      setAgents(Array.isArray(agentsRes.data) ? agentsRes.data.filter(a => a.is_active) : []);
+      setCampaigns(Array.isArray(campaignsRes.data) ? campaignsRes.data.filter(c => c.status === 'active') : []);
       setSetupStatus(setupRes.data);
     } catch (error) {
       console.error("Failed to fetch data:", error);

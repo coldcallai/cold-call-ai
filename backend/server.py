@@ -10579,35 +10579,32 @@ async def call_yourself_demo(
 
 @api_router.api_route("/demo/twiml/{demo_call_id}", methods=["GET", "POST"])
 async def demo_call_twiml(demo_call_id: str, http_request: Request):
-    """Generate TwiML for the demo call - uses ElevenLabs voice"""
+    """Generate TwiML for the demo call. Plays ElevenLabs audio if cached, falls back to Polly Neural."""
     response = VoiceResponse()
     
-    # Get the host for audio URL
     host = http_request.headers.get("host", "intentbrain.ai")
     protocol = "https" if "intentbrain" in host or "preview" in host else "http"
     base_url = f"{protocol}://{host}"
     
-    # Play pre-generated ElevenLabs audio for the demo
-    response.play(f"{base_url}/api/demo/audio/{demo_call_id}")
+    # If we have audio cached (memory or disk), play it. Otherwise fall back to Polly Say.
+    audio_available = bool(_demo_audio_cache) or os.path.exists(_DEMO_AUDIO_DISK_PATH)
+    
+    if audio_available:
+        response.play(f"{base_url}/api/demo/audio/{demo_call_id}")
+    else:
+        # Polly fallback so caller hears something instead of "application error"
+        response.say(DEMO_SCRIPT, voice='Polly.Joanna-Neural')
     
     return Response(content=str(response), media_type="application/xml")
 
 
 # Cache for demo audio to avoid regenerating each time
 _demo_audio_cache = None
+_DEMO_AUDIO_DISK_PATH = os.path.join(os.path.dirname(__file__), "inbound_audio_cache", "demo_call_yourself.mp3")
 
-@api_router.get("/demo/audio/{demo_call_id}")
-async def demo_audio(demo_call_id: str):
-    """Generate ElevenLabs audio for the demo call - cached for speed"""
-    global _demo_audio_cache
-    
-    # Return cached audio if available
-    if _demo_audio_cache:
-        return Response(content=_demo_audio_cache, media_type="audio/mpeg")
-    
-    demo_script = """Hey! This is Sarah from IntentBrain... Glad you picked up!
+DEMO_SCRIPT = """Hey! This is Sarah from IntentBrain... Glad you picked up!
 
-I know what you're thinking— great, another sales call, right? 
+I know what you're thinking— great, another sales call, right?
 
 But here's the twist... I'm actually an AI. Yeah— a real-time AI, having a natural conversation with you, right now.
 
@@ -10627,38 +10624,108 @@ Pretty cool, right?
 
 Anyway— I'll let you get back to it. Talk soon!"""
 
+
+@app.on_event("startup")
+async def cache_demo_audio_on_startup():
+    """Load demo audio from disk; if missing and ElevenLabs available, generate & save."""
+    global _demo_audio_cache
+    
+    # Try disk first (free, instant)
+    if os.path.exists(_DEMO_AUDIO_DISK_PATH):
+        try:
+            with open(_DEMO_AUDIO_DISK_PATH, "rb") as f:
+                _demo_audio_cache = f.read()
+            logger.info(f"Demo audio loaded from disk ({len(_demo_audio_cache)} bytes)")
+            return
+        except Exception as e:
+            logger.error(f"Failed to load demo audio from disk: {e}")
+    
+    # Generate fresh from ElevenLabs (only if no disk cache)
+    if not elevenlabs_api_key:
+        logger.warning("Demo audio: no ElevenLabs key & no disk cache. Will use Polly fallback at call time.")
+        return
+    
     try:
-        # Use Rachel voice - American English female (same as homepage)
-        voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
+        voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            r = await client.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-                headers={
-                    "xi-api-key": elevenlabs_api_key,
-                    "Content-Type": "application/json"
-                },
+                headers={"xi-api-key": elevenlabs_api_key, "Content-Type": "application/json"},
                 json={
-                    "text": demo_script,
-                    "model_id": "eleven_flash_v2",
+                    "text": DEMO_SCRIPT,
+                    "model_id": "eleven_turbo_v2_5",
                     "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.75
+                        "stability": 0.35,
+                        "similarity_boost": 0.85,
+                        "style": 0.55,
+                        "use_speaker_boost": True
                     }
-                },
-                timeout=60.0
+                }
             )
-            
-            if response.status_code == 200:
-                # Cache the audio for future calls
-                _demo_audio_cache = response.content
-                return Response(content=response.content, media_type="audio/mpeg")
+            if r.status_code == 200 and r.content:
+                _demo_audio_cache = r.content
+                os.makedirs(os.path.dirname(_DEMO_AUDIO_DISK_PATH), exist_ok=True)
+                with open(_DEMO_AUDIO_DISK_PATH, "wb") as f:
+                    f.write(r.content)
+                logger.info(f"Demo audio generated & saved to disk ({len(r.content)} bytes)")
             else:
-                logger.error(f"ElevenLabs error: {response.status_code} - {response.text}")
-                return Response(content=b"", media_type="audio/mpeg")
+                logger.error(f"Demo audio gen failed: {r.status_code} - {r.text[:200]}")
+    except Exception as e:
+        logger.error(f"Demo audio startup generation failed: {e}")
+
+
+@api_router.get("/demo/audio/{demo_call_id}")
+async def demo_audio(demo_call_id: str):
+    """Serve cached ElevenLabs audio for the demo call. Falls back gracefully."""
+    global _demo_audio_cache
+    
+    # Disk fallback if memory cache empty
+    if not _demo_audio_cache and os.path.exists(_DEMO_AUDIO_DISK_PATH):
+        try:
+            with open(_DEMO_AUDIO_DISK_PATH, "rb") as f:
+                _demo_audio_cache = f.read()
+        except Exception as e:
+            logger.error(f"Demo audio disk read failed: {e}")
+    
+    if _demo_audio_cache:
+        return Response(content=_demo_audio_cache, media_type="audio/mpeg")
+    
+    # Last-resort: generate fresh (slow but better than failing)
+    if not elevenlabs_api_key:
+        # No way to make audio — return 404 so the TwiML fallback (Polly Say) kicks in
+        raise HTTPException(status_code=404, detail="Demo audio unavailable")
+    
+    try:
+        voice_id = "21m00Tcm4TlvDq8ikWAM"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                headers={"xi-api-key": elevenlabs_api_key, "Content-Type": "application/json"},
+                json={
+                    "text": DEMO_SCRIPT,
+                    "model_id": "eleven_turbo_v2_5",
+                    "voice_settings": {
+                        "stability": 0.35,
+                        "similarity_boost": 0.85,
+                        "style": 0.55,
+                        "use_speaker_boost": True
+                    }
+                }
+            )
+            if r.status_code == 200 and r.content:
+                _demo_audio_cache = r.content
+                try:
+                    os.makedirs(os.path.dirname(_DEMO_AUDIO_DISK_PATH), exist_ok=True)
+                    with open(_DEMO_AUDIO_DISK_PATH, "wb") as f:
+                        f.write(r.content)
+                except Exception as e:
+                    logger.error(f"Demo audio disk save failed: {e}")
+                return Response(content=r.content, media_type="audio/mpeg")
+            logger.error(f"ElevenLabs error: {r.status_code} - {r.text[:200]}")
     except Exception as e:
         logger.error(f"Demo audio generation failed: {e}")
-        return Response(content=b"", media_type="audio/mpeg")
+    
+    raise HTTPException(status_code=404, detail="Demo audio unavailable")
 
 
 @api_router.get("/demo/calls-remaining")
@@ -11099,7 +11166,8 @@ async def cache_inbound_audio():
         "book_demo": "Perfect! I'd love to get you scheduled with one of our product specialists. They can give you a personalized walkthrough. Can you tell me your email address so I can send you a calendar invite?",
         "features": "IntentBrain has some powerful features. We offer AI lead discovery, natural voice conversations, voicemail drops, automatic call transcription, CRM integrations with HubSpot and Salesforce, and Calendly integration for auto-booking meetings. Our AI agents can even handle objections and qualify leads. What's most important to you?",
         "not_interested": "No problem at all! Thanks for calling IntentBrain. If you ever want to explore AI-powered sales automation, we're here. Have a great day!",
-        "default": "I'd be happy to help with that. IntentBrain is an AI-powered cold calling platform that automates your sales outreach. Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. Would you like to know about pricing, see how it works, or schedule a demo?",
+        "default": "I'll show you how this works in under a minute, then I can book you a demo or connect you live. Which would you prefer — book a quick demo, or get connected live right now?",
+        "demo_or_transfer_prompt": "I'll show you how this works in under a minute, then I can book you a demo or connect you live. Which would you prefer — book a quick demo, or get connected live right now?",
         "didnt_catch": "I didn't quite catch that. Feel free to ask me anything about IntentBrain... pricing, how it works, or if you'd like a demo.",
         "anything_else": "Is there anything else you'd like to know?",
         "closing": "Thanks for calling IntentBrain. We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
@@ -11281,8 +11349,88 @@ async def handle_inbound_response(request: Request):
     
     speech_lower = speech_result
     
+    # === STAGE: awaiting_demo_or_transfer — caller heard the deflection line ===
+    if last_stage == "awaiting_demo_or_transfer":
+        # Check for transfer intent first (more specific keywords)
+        if any(w in speech_lower for w in ["connect", "live", "transfer", "now", "speak to", "talk to", "real person", "human", "agent now"]):
+            # Live transfer requested
+            transfer_phone = os.environ.get("INBOUND_TRANSFER_PHONE", "")
+            if transfer_phone:
+                response.say(
+                    "Great, connecting you now. One moment please.",
+                    voice='Polly.Joanna-Neural'
+                )
+                response.dial(transfer_phone, timeout=20, caller_id=twilio_phone_number)
+                # If dial fails or no answer, fall through to demo booking
+                response.say(
+                    "Looks like our team is on another call. Let me get you booked for a demo instead. What's your email?",
+                    voice='Polly.Joanna-Neural'
+                )
+                gather = Gather(
+                    input='speech',
+                    timeout=10,
+                    speech_timeout=2,
+                    action='/api/twilio/inbound/capture-email',
+                    method='POST'
+                )
+                response.append(gather)
+            else:
+                # No transfer number configured — pivot to demo
+                response.say(
+                    "Our team is in a meeting at the moment, but I can get you booked for a personal walkthrough today. What's your email?",
+                    voice='Polly.Joanna-Neural'
+                )
+                gather = Gather(
+                    input='speech',
+                    timeout=10,
+                    speech_timeout=2,
+                    action='/api/twilio/inbound/capture-email',
+                    method='POST'
+                )
+                response.append(gather)
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "transfer_attempted"}}
+            )
+            return Response(content=str(response), media_type="application/xml")
+        elif any(w in speech_lower for w in ["demo", "book", "schedule", "yes", "sure", "okay", "let's", "alright", "show me"]):
+            # Demo requested
+            play_or_say("book_demo",
+                "Perfect! I'd love to get you scheduled with one of our product specialists. "
+                "Can you tell me your email address so I can send you a calendar invite?"
+            )
+            gather = Gather(
+                input='speech',
+                timeout=10,
+                speech_timeout=2,
+                action='/api/twilio/inbound/capture-email',
+                method='POST'
+            )
+            response.append(gather)
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "awaiting_email"}}
+            )
+            return Response(content=str(response), media_type="application/xml")
+        elif any(w in speech_lower for w in ["no", "not now", "later", "thinking", "think about"]):
+            play_or_say("not_interested",
+                "No problem at all! Feel free to call back any time. Have a great day!"
+            )
+            response.hangup()
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"status": "completed", "outcome": "deferred", "ended_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            return Response(content=str(response), media_type="application/xml")
+        else:
+            # Still unclear — clarify
+            response.say(
+                "Sorry, did you want me to book a demo, or connect you live to our team right now?",
+                voice='Polly.Joanna-Neural'
+            )
+            # stay in same stage
     # === STAGE: post_pricing — caller heard pricing and we offered Test Drive fallback ===
-    if last_stage == "post_pricing":
+    elif last_stage == "post_pricing":
         if any(w in speech_lower for w in ["walk me through", "starter", "forty-nine", "$49", "49 dollar", "smaller", "test drive", "yes", "sure", "show me that"]) and not any(w in speech_lower for w in ["demo", "schedule", "book", "specialist"]):
             # They want the $49 starter
             play_or_say("pricing_test_drive",
@@ -11451,13 +11599,15 @@ async def handle_inbound_response(request: Request):
             "We're a small team with big technology behind us."
         )
     
-    # Default response
+    # Default response — redirect to demo or live transfer
     else:
         play_or_say("default",
-            "I'd be happy to help with that. "
-            "IntentBrain is an AI-powered cold calling platform that automates your sales outreach. "
-            "Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. "
-            "Would you like to know about pricing, see how it works, or schedule a demo?"
+            "I'll show you how this works in under a minute, then I can book you a demo or connect you live. "
+            "Which would you prefer — book a quick demo, or get connected live right now?"
+        )
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {"conversation_stage": "awaiting_demo_or_transfer"}}
         )
     
     # Continue conversation — REDUCED interruption sensitivity

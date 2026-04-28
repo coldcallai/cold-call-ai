@@ -36,6 +36,14 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - Primary: https://intentbrain.ai (live, SSL)
 - Legacy: https://dialgenix.ai (still works, same server)
 
+## Completed (April 28, 2026)
+- [x] **Inbound 888 agent pricing fix**: Replaced wrong "$199/$499" tiers with correct Discovery Starter $399, Pro $899, Elite $1,599
+- [x] **Qualifying question added**: AI now asks "How many leads/calls per month?" before quoting price; recommends tier based on answer (≥2000=Elite, ≥750=Pro, ≥100=Starter)
+- [x] **Reduced speech sensitivity**: All inbound `Gather` blocks changed from `speech_timeout='auto'` (~700ms, triggers on noise) to `speech_timeout=2` (2s pause required) and `timeout=5→8`
+- [x] **Call Me button error handling**: Maps Twilio error codes (21211/21214/21215/21610/401) to friendly messages; surfaces actionable detail instead of generic 500
+- [x] Deleted stale `inbound_pricing.b64` cache so VPS regenerates with correct pricing audio
+- [x] New audio cache keys: `qualify_volume`, `pricing_starter`, `pricing_pro`, `pricing_elite`, `pricing_overview`
+
 ## Completed (April 22, 2026)
 - [x] **Lead Discovery → Funnel bug FIXED**: Modular `routes/leads.py` was saving discovered leads with `user_id=None` and without `campaign_id`, making them invisible to Funnel (which filters by user_id)
 - [x] Added `/api/leads/backfill-orphans` endpoint (one-click repair for existing orphan leads)

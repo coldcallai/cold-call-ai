@@ -10507,6 +10507,9 @@ async def call_yourself_demo(
     if not twilio_client:
         raise HTTPException(status_code=503, detail="Calling service not configured. Please add TWILIO credentials.")
     
+    if not twilio_phone_number:
+        raise HTTPException(status_code=503, detail="Twilio phone number not configured on the server. Add TWILIO_PHONE_NUMBER to your environment.")
+    
     try:
         # Get the base URL for webhooks
         host = http_request.headers.get("host", "")
@@ -10556,9 +10559,23 @@ async def call_yourself_demo(
             "call_id": demo_call_id
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Demo call failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to initiate demo call: {str(e)}")
+        err_str = str(e)
+        logger.error(f"Demo call failed for {phone}: {err_str}")
+        # Surface friendly errors for common Twilio failures
+        if "21211" in err_str or "not a valid phone" in err_str.lower():
+            raise HTTPException(status_code=400, detail="That phone number doesn't look valid. Use format: +1 555 123 4567")
+        if "21214" in err_str or "is not a mobile number" in err_str.lower():
+            raise HTTPException(status_code=400, detail="Couldn't reach that number. Try a mobile phone number.")
+        if "21215" in err_str or "geographic permission" in err_str.lower():
+            raise HTTPException(status_code=400, detail="That country isn't enabled for calls yet. US/Canada numbers only right now.")
+        if "401" in err_str or "Authenticate" in err_str:
+            raise HTTPException(status_code=503, detail="Calling service is temporarily unavailable. Please try again in a moment.")
+        if "21610" in err_str:
+            raise HTTPException(status_code=400, detail="That number opted out of receiving calls. Use a different number.")
+        raise HTTPException(status_code=500, detail=f"Failed to initiate demo call: {err_str[:120]}")
 
 @api_router.api_route("/demo/twiml/{demo_call_id}", methods=["GET", "POST"])
 async def demo_call_twiml(demo_call_id: str, http_request: Request):
@@ -11068,7 +11085,11 @@ async def cache_inbound_audio():
     
     common_responses = {
         "greeting": "Hi, thanks for calling IntentBrain! This is Sarah, your AI sales assistant. I can answer questions about our platform, help you understand if we're a good fit, and even book a demo with our team. How can I help you today?",
-        "pricing": "Great question! We have flexible plans. Our Starter plan is $199 per month and includes 250 leads and 500 AI calls. Our Pro plan at $499 gives you 1,000 leads and 2,000 calls with advanced features. We also offer a free trial, no credit card required. Would you like me to book a quick demo so our team can walk you through which plan fits your needs?",
+        "qualify_volume": "Great question! Before I quote pricing, can I ask roughly how many leads or calls you'd handle per month? That way I can recommend the right plan for you.",
+        "pricing_starter": "Got it. Based on that, our Discovery Starter plan at three hundred ninety-nine dollars a month is a great fit. You get five hundred high-intent leads, two hundred fifty AI calls, AI qualification, auto-booking, and seven-day call recordings. One user seat. Want me to get you scheduled with a specialist to walk through it?",
+        "pricing_pro": "Perfect. Our Discovery Pro plan at eight hundred ninety-nine dollars a month is our best value for that volume. You get fifteen hundred high-intent leads, seven hundred fifty AI calls, full call transcripts, thirty-day recordings, custom scripts, and three user seats. Want me to book a demo so our team can show you everything?",
+        "pricing_elite": "Excellent. For that volume, our Discovery Elite plan at fifteen hundred ninety-nine dollars a month is the right fit. You get three thousand high-intent leads, two thousand AI calls, ninety-day recordings, priority support, and five user seats. Want me to set up a demo with our team?",
+        "pricing_overview": "Sure! We have three plans. Discovery Starter at three hundred ninety-nine a month for five hundred leads and two hundred fifty calls. Discovery Pro at eight hundred ninety-nine for fifteen hundred leads and seven hundred fifty calls — that's our best value. And Discovery Elite at fifteen hundred ninety-nine for three thousand leads and two thousand calls. Would you like me to book a quick demo to find your fit?",
         "how_it_works": "Here's how IntentBrain works... First, our AI discovers leads by finding businesses actively searching for services like yours. Second, our voice agents call these leads with natural, human-like conversations. Third, the AI qualifies leads based on your criteria. Fourth, qualified leads get booked directly into your calendar. You basically wake up to booked meetings! Would you like to see a demo?",
         "book_demo": "Perfect! I'd love to get you scheduled with one of our product specialists. They can give you a personalized walkthrough. Can you tell me your email address so I can send you a calendar invite?",
         "features": "IntentBrain has some powerful features. We offer AI lead discovery, natural voice conversations, voicemail drops, automatic call transcription, CRM integrations with HubSpot and Salesforce, and Calendly integration for auto-booking meetings. Our AI agents can even handle objections and qualify leads. What's most important to you?",
@@ -11165,11 +11186,11 @@ async def handle_inbound_sales_call(request: Request):
             voice='Polly.Joanna-Neural'
         )
     
-    # Gather caller's response
+    # Gather caller's response — REDUCED sensitivity to background noise
     gather = Gather(
         input='speech',
-        timeout=5,
-        speech_timeout='auto',
+        timeout=8,
+        speech_timeout=2,
         action='/api/twilio/inbound/respond',
         method='POST'
     )
@@ -11194,6 +11215,10 @@ async def handle_inbound_response(request: Request):
     response = VoiceResponse()
     backend_url = os.environ.get('BACKEND_URL', '')
     
+    # Look up conversation state to know if we already asked the volume question
+    call_doc = await db.inbound_calls.find_one({"call_sid": call_sid}, {"_id": 0})
+    last_stage = (call_doc or {}).get("conversation_stage", "greeting")
+    
     # Update conversation log
     await db.inbound_calls.update_one(
         {"call_sid": call_sid},
@@ -11207,18 +11232,87 @@ async def handle_inbound_response(request: Request):
         else:
             response.say(fallback_text, voice='Polly.Joanna-Neural')
     
-    # Pricing questions
-    if any(word in speech_result for word in ["price", "cost", "pricing", "how much", "expensive", "afford"]):
-        play_or_say("pricing", 
-            "Great question! We have flexible plans. "
-            "Our Starter plan is $199 per month and includes 250 leads and 500 AI calls. "
-            "Our Pro plan at $499 gives you 1,000 leads and 2,000 calls with advanced features. "
-            "We also offer a free trial, no credit card required. "
-            "Would you like me to book a quick demo so our team can walk you through which plan fits your needs?"
+    # Helper to detect approximate monthly volume from speech
+    def detect_volume_tier(text: str) -> Optional[str]:
+        """Return 'starter', 'pro', 'elite', or None if unclear."""
+        import re
+        # Extract any numbers spoken (e.g., "1500", "fifteen hundred")
+        nums = [int(n) for n in re.findall(r"\d+", text)]
+        # Try simple word-to-number for common volumes
+        word_volumes = {
+            "hundred": 100, "two hundred": 200, "five hundred": 500,
+            "thousand": 1000, "two thousand": 2000, "three thousand": 3000,
+            "fifteen hundred": 1500, "ten thousand": 10000
+        }
+        for phrase, val in word_volumes.items():
+            if phrase in text:
+                nums.append(val)
+        max_num = max(nums) if nums else 0
+        
+        # Tier mapping based on monthly call/lead volume
+        if max_num >= 2000:
+            return "elite"
+        elif max_num >= 750:
+            return "pro"
+        elif max_num >= 100:
+            return "starter"
+        # Fallback: keyword cues
+        if any(w in text for w in ["small", "starting out", "just testing", "trying it"]):
+            return "starter"
+        if any(w in text for w in ["large", "enterprise", "lots of", "ton of", "huge"]):
+            return "elite"
+        if any(w in text for w in ["medium", "growing", "scaling"]):
+            return "pro"
+        return None
+    
+    speech_lower = speech_result
+    
+    # If we previously asked them volume, route to a specific tier recommendation
+    if last_stage == "awaiting_volume":
+        tier = detect_volume_tier(speech_lower)
+        if tier == "elite":
+            play_or_say("pricing_elite",
+                "For that volume, our Discovery Elite plan at $1,599 per month is the right fit. "
+                "You get 3,000 high-intent leads, 2,000 AI calls, 90-day recordings, priority support, and 5 user seats. "
+                "Want me to set up a demo with our team?"
+            )
+        elif tier == "pro":
+            play_or_say("pricing_pro",
+                "Our Discovery Pro plan at $899 per month is our best value for that volume. "
+                "1,500 leads, 750 AI calls, full call transcripts, 30-day recordings, and 3 user seats. "
+                "Want me to book a demo so our team can show you everything?"
+            )
+        elif tier == "starter":
+            play_or_say("pricing_starter",
+                "Our Discovery Starter plan at $399 per month is a great fit. "
+                "500 leads, 250 AI calls, AI qualification, auto-booking, and 7-day recordings. "
+                "Want me to get you scheduled with a specialist?"
+            )
+        else:
+            # Couldn't detect — give the overview
+            play_or_say("pricing_overview",
+                "We have three plans. Discovery Starter at $399 a month for 500 leads and 250 calls. "
+                "Discovery Pro at $899 for 1,500 leads and 750 calls — our best value. "
+                "And Discovery Elite at $1,599 for 3,000 leads and 2,000 calls. "
+                "Would you like me to book a quick demo to find your fit?"
+            )
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {"conversation_stage": "post_pricing"}}
+        )
+    # Pricing questions — ASK qualifying question first
+    elif any(word in speech_lower for word in ["price", "cost", "pricing", "how much", "expensive", "afford", "plans", "plan"]):
+        play_or_say("qualify_volume",
+            "Great question! Before I quote pricing, can I ask roughly how many leads or calls you'd handle per month? "
+            "That way I can recommend the right plan for you."
+        )
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {"conversation_stage": "awaiting_volume"}}
         )
     
     # How it works
-    elif any(word in speech_result for word in ["how", "work", "what do", "tell me", "explain", "more"]):
+    elif any(word in speech_lower for word in ["how", "work", "what do", "tell me", "explain", "more"]):
         play_or_say("how_it_works",
             "Here's how IntentBrain works... "
             "First, our AI discovers leads by finding businesses actively searching for services like yours. "
@@ -11229,7 +11323,7 @@ async def handle_inbound_response(request: Request):
         )
     
     # Demo / meeting request
-    elif any(word in speech_result for word in ["demo", "meeting", "schedule", "book", "yes", "sure", "okay", "interested"]):
+    elif any(word in speech_lower for word in ["demo", "meeting", "schedule", "book", "yes", "sure", "okay", "interested"]):
         play_or_say("book_demo",
             "Perfect! I'd love to get you scheduled with one of our product specialists. "
             "They can give you a personalized walkthrough. "
@@ -11239,7 +11333,7 @@ async def handle_inbound_response(request: Request):
         gather = Gather(
             input='speech',
             timeout=10,
-            speech_timeout='auto',
+            speech_timeout=2,
             action='/api/twilio/inbound/capture-email',
             method='POST'
         )
@@ -11247,7 +11341,7 @@ async def handle_inbound_response(request: Request):
         return Response(content=str(response), media_type="application/xml")
     
     # Features
-    elif any(word in speech_result for word in ["feature", "can it", "does it", "integration", "crm", "calendly"]):
+    elif any(word in speech_lower for word in ["feature", "can it", "does it", "integration", "crm", "calendly"]):
         play_or_say("features",
             "IntentBrain has some powerful features. "
             "We offer AI lead discovery, natural voice conversations, voicemail drops, "
@@ -11258,7 +11352,7 @@ async def handle_inbound_response(request: Request):
         )
     
     # Not interested / end call
-    elif any(word in speech_result for word in ["not interested", "no thanks", "goodbye", "bye", "no"]):
+    elif any(word in speech_lower for word in ["not interested", "no thanks", "goodbye", "bye"]):
         play_or_say("not_interested",
             "No problem at all! Thanks for calling IntentBrain. "
             "If you ever want to explore AI-powered sales automation, we're here. "
@@ -11273,7 +11367,7 @@ async def handle_inbound_response(request: Request):
         return Response(content=str(response), media_type="application/xml")
     
     # About the company / who are you / new company
-    elif any(word in speech_result for word in ["who are you", "about you", "your company", "are you new", "how long", "how old", "what is intent", "what is this", "who is intent", "tell me about intent", "new company", "startup"]):
+    elif any(word in speech_lower for word in ["who are you", "about you", "your company", "are you new", "how long", "how old", "what is intent", "what is this", "who is intent", "tell me about intent", "new company", "startup"]):
         play_or_say("about_us",
             "IntentBrain is an AI-powered sales platform that launched recently. "
             "We help businesses automate their outbound outreach with AI that sounds completely natural. "
@@ -11291,11 +11385,13 @@ async def handle_inbound_response(request: Request):
             "Would you like to know about pricing, see how it works, or schedule a demo?"
         )
     
-    # Continue conversation
+    # Continue conversation — REDUCED interruption sensitivity
+    # speech_timeout=2 means caller must pause 2s before AI considers them done
+    # (vs 'auto' which is ~700ms and triggers on background noise/coughs)
     gather = Gather(
         input='speech',
-        timeout=5,
-        speech_timeout='auto',
+        timeout=8,
+        speech_timeout=2,
         action='/api/twilio/inbound/respond',
         method='POST'
     )
@@ -11365,8 +11461,8 @@ async def capture_caller_email(request: Request):
     
     gather = Gather(
         input='speech',
-        timeout=5,
-        speech_timeout='auto',
+        timeout=8,
+        speech_timeout=2,
         action='/api/twilio/inbound/final',
         method='POST'
     )
@@ -11400,8 +11496,8 @@ async def handle_final_response(request: Request):
         
         gather = Gather(
             input='speech',
-            timeout=5,
-            speech_timeout='auto',
+            timeout=8,
+            speech_timeout=2,
             action='/api/twilio/inbound/respond',
             method='POST'
         )

@@ -11086,10 +11086,15 @@ async def cache_inbound_audio():
     common_responses = {
         "greeting": "Hi, thanks for calling IntentBrain! This is Sarah, your AI sales assistant. I can answer questions about our platform, help you understand if we're a good fit, and even book a demo with our team. How can I help you today?",
         "qualify_volume": "Great question! Before I quote pricing, can I ask roughly how many leads or calls you'd handle per month? That way I can recommend the right plan for you.",
-        "pricing_starter": "Got it. Based on that, our Discovery Starter plan at three hundred ninety-nine dollars a month is a great fit. You get five hundred high-intent leads, two hundred fifty AI calls, AI qualification, auto-booking, and seven-day call recordings. One user seat. Want me to get you scheduled with a specialist to walk through it?",
-        "pricing_pro": "Perfect. Our Discovery Pro plan at eight hundred ninety-nine dollars a month is our best value for that volume. You get fifteen hundred high-intent leads, seven hundred fifty AI calls, full call transcripts, thirty-day recordings, custom scripts, and three user seats. Want me to book a demo so our team can show you everything?",
-        "pricing_elite": "Excellent. For that volume, our Discovery Elite plan at fifteen hundred ninety-nine dollars a month is the right fit. You get three thousand high-intent leads, two thousand AI calls, ninety-day recordings, priority support, and five user seats. Want me to set up a demo with our team?",
-        "pricing_overview": "Sure! We have three plans. Discovery Starter at three hundred ninety-nine a month for five hundred leads and two hundred fifty calls. Discovery Pro at eight hundred ninety-nine for fifteen hundred leads and seven hundred fifty calls — that's our best value. And Discovery Elite at fifteen hundred ninety-nine for three thousand leads and two thousand calls. Would you like me to book a quick demo to find your fit?",
+        "qualify_byol_or_discovery": "Got it. Quick question — do you already have your own list of leads you want us to call, or do you need us to find them for you?",
+        "pricing_starter": "Got it. Based on that, our Discovery Starter plan at three hundred ninety-nine dollars a month is a great fit. You get five hundred high-intent prospects we surface for you each month, two hundred fifty AI calls, AI qualification, auto-booking, and seven-day call recordings. One user seat. We also have a starter package at forty-nine dollars a month if that would suit you better — want me to walk you through that, or schedule you with a specialist for the Discovery plan?",
+        "pricing_pro": "Perfect. Our Discovery Pro plan at eight hundred ninety-nine dollars a month is our best value for that volume. You get fifteen hundred high-intent prospects, seven hundred fifty AI calls, full call transcripts, thirty-day recordings, custom scripts, and three user seats. We also have a starter package at forty-nine dollars a month if that would suit you better — want me to walk you through that, or book a demo for the Pro plan?",
+        "pricing_elite": "Excellent. For that volume, our Discovery Elite plan at fifteen hundred ninety-nine dollars a month is the right fit. You get three thousand high-intent prospects, two thousand AI calls, ninety-day recordings, priority support, and five user seats. We also have a starter package at forty-nine dollars a month if you'd rather start smaller — want me to walk you through that, or book a demo for Elite?",
+        "pricing_overview": "Sure! We have three Discovery plans that include lead discovery and AI calling. Discovery Starter at three hundred ninety-nine a month for five hundred prospects and two hundred fifty calls. Discovery Pro at eight hundred ninety-nine for fifteen hundred prospects and seven hundred fifty calls — that's our best value. And Discovery Elite at fifteen hundred ninety-nine for three thousand prospects and two thousand calls. We also have a starter package at forty-nine dollars a month if that would suit you better. Want me to book a demo to find your fit?",
+        "pricing_test_drive": "Perfect. Our Test Drive plan is forty-nine dollars a month and includes fifty AI calls, call recordings, a basic dashboard, and CSV upload — great for getting started. You can upgrade anytime. Want me to book a quick demo so we can show you around?",
+        "pricing_byol_starter": "Great — since you have your own list, our BYOL Starter plan at one hundred ninety-nine dollars a month is built for that. You get two hundred fifty AI calls on the leads you upload, AI qualification, auto-booking, and seven-day recordings. One user seat. Want me to set up a quick demo?",
+        "pricing_byol_pro": "Perfect. Our BYOL Pro plan at four hundred forty-nine dollars a month gives you seven hundred fifty AI calls on your own list, full transcripts, thirty-day recordings, custom scripts, and three user seats. Want to book a demo to see it in action?",
+        "pricing_byol_scale": "Excellent. Our BYOL Scale plan at seven hundred ninety-nine dollars a month gives you fifteen hundred AI calls on your own list, sixty-day recordings, custom scripts, priority support, and five user seats. Want me to book a demo?",
         "how_it_works": "Here's how IntentBrain works... First, our AI discovers leads by finding businesses actively searching for services like yours. Second, our voice agents call these leads with natural, human-like conversations. Third, the AI qualifies leads based on your criteria. Fourth, qualified leads get booked directly into your calendar. You basically wake up to booked meetings! Would you like to see a demo?",
         "book_demo": "Perfect! I'd love to get you scheduled with one of our product specialists. They can give you a personalized walkthrough. Can you tell me your email address so I can send you a calendar invite?",
         "features": "IntentBrain has some powerful features. We offer AI lead discovery, natural voice conversations, voicemail drops, automatic call transcription, CRM integrations with HubSpot and Salesforce, and Calendly integration for auto-booking meetings. Our AI agents can even handle objections and qualify leads. What's most important to you?",
@@ -11234,7 +11239,7 @@ async def handle_inbound_response(request: Request):
     
     # Helper to detect approximate monthly volume from speech
     def detect_volume_tier(text: str) -> Optional[str]:
-        """Return 'starter', 'pro', 'elite', or None if unclear."""
+        """Return 'starter', 'pro', 'elite', 'vague', or None."""
         import re
         # Extract any numbers spoken (e.g., "1500", "fifteen hundred")
         nums = [int(n) for n in re.findall(r"\d+", text)]
@@ -11257,49 +11262,119 @@ async def handle_inbound_response(request: Request):
         elif max_num >= 100:
             return "starter"
         # Fallback: keyword cues
-        if any(w in text for w in ["small", "starting out", "just testing", "trying it"]):
-            return "starter"
+        if any(w in text for w in ["small", "starting out", "just testing", "trying it", "exploring", "not sure", "unsure", "depends"]):
+            return "vague"
         if any(w in text for w in ["large", "enterprise", "lots of", "ton of", "huge"]):
             return "elite"
         if any(w in text for w in ["medium", "growing", "scaling"]):
             return "pro"
         return None
     
+    # Helper to detect own-list vs need-discovery
+    def detect_byol_or_discovery(text: str) -> Optional[str]:
+        """Return 'byol' (has own list), 'discovery' (needs us to find), or None."""
+        if any(w in text for w in ["my own", "have a list", "own list", "have leads", "uploaded", "csv", "already have", "have my", "have our"]):
+            return "byol"
+        if any(w in text for w in ["find them", "need you to find", "need leads", "discover", "don't have", "no list", "don't have a list", "you find"]):
+            return "discovery"
+        return None
+    
     speech_lower = speech_result
     
-    # If we previously asked them volume, route to a specific tier recommendation
-    if last_stage == "awaiting_volume":
-        tier = detect_volume_tier(speech_lower)
-        if tier == "elite":
-            play_or_say("pricing_elite",
-                "For that volume, our Discovery Elite plan at $1,599 per month is the right fit. "
-                "You get 3,000 high-intent leads, 2,000 AI calls, 90-day recordings, priority support, and 5 user seats. "
-                "Want me to set up a demo with our team?"
+    # === STAGE: post_pricing — caller heard pricing and we offered Test Drive fallback ===
+    if last_stage == "post_pricing":
+        if any(w in speech_lower for w in ["walk me through", "starter", "forty-nine", "$49", "49 dollar", "smaller", "test drive", "yes", "sure", "show me that"]) and not any(w in speech_lower for w in ["demo", "schedule", "book", "specialist"]):
+            # They want the $49 starter
+            play_or_say("pricing_test_drive",
+                "Our Test Drive plan is $49 a month and includes 50 AI calls, call recordings, basic dashboard, and CSV upload. Want me to book a quick demo so we can show you around?"
             )
-        elif tier == "pro":
-            play_or_say("pricing_pro",
-                "Our Discovery Pro plan at $899 per month is our best value for that volume. "
-                "1,500 leads, 750 AI calls, full call transcripts, 30-day recordings, and 3 user seats. "
-                "Want me to book a demo so our team can show you everything?"
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "post_test_drive"}}
             )
-        elif tier == "starter":
+        elif any(w in speech_lower for w in ["demo", "schedule", "book", "specialist", "discovery", "the discovery", "main plan", "pro plan", "elite", "starter plan"]):
+            # They want the Discovery plan demo
+            play_or_say("book_demo",
+                "Perfect! I'd love to get you scheduled with one of our product specialists. Can you tell me your email so I can send you a calendar invite?"
+            )
+            gather = Gather(
+                input='speech',
+                timeout=10,
+                speech_timeout=2,
+                action='/api/twilio/inbound/capture-email',
+                method='POST'
+            )
+            response.append(gather)
+            return Response(content=str(response), media_type="application/xml")
+        else:
+            play_or_say("default",
+                "I'd be happy to help — would you like to book a demo, or hear about our $49 starter package?"
+            )
+    # === STAGE: awaiting_byol_or_discovery — we asked if they have own list ===
+    elif last_stage == "awaiting_byol_or_discovery":
+        path = detect_byol_or_discovery(speech_lower)
+        if path == "byol":
+            # Default to BYOL Starter for vague volume
+            play_or_say("pricing_byol_starter",
+                "Our BYOL Starter plan at $199 a month gives you 250 AI calls on the leads you upload, AI qualification, auto-booking, and 7-day recordings. Want me to set up a quick demo?"
+            )
+        elif path == "discovery":
             play_or_say("pricing_starter",
-                "Our Discovery Starter plan at $399 per month is a great fit. "
-                "500 leads, 250 AI calls, AI qualification, auto-booking, and 7-day recordings. "
-                "Want me to get you scheduled with a specialist?"
+                "Our Discovery Starter plan at $399 a month is a great fit. 500 high-intent prospects, 250 AI calls, AI qualification, auto-booking, and 7-day recordings. We also have a $49 starter package if that suits you better — want me to walk you through that, or schedule a demo for the Discovery plan?"
             )
         else:
-            # Couldn't detect — give the overview
             play_or_say("pricing_overview",
-                "We have three plans. Discovery Starter at $399 a month for 500 leads and 250 calls. "
-                "Discovery Pro at $899 for 1,500 leads and 750 calls — our best value. "
-                "And Discovery Elite at $1,599 for 3,000 leads and 2,000 calls. "
-                "Would you like me to book a quick demo to find your fit?"
+                "Sure — we have Discovery plans starting at $399 a month if you need us to find leads, and BYOL plans starting at $199 if you have your own list. We also have a $49 starter package. Want me to book a demo to find your fit?"
             )
         await db.inbound_calls.update_one(
             {"call_sid": call_sid},
             {"$set": {"conversation_stage": "post_pricing"}}
         )
+    # === STAGE: awaiting_volume — we asked how many leads/month ===
+    elif last_stage == "awaiting_volume":
+        tier = detect_volume_tier(speech_lower)
+        if tier == "vague":
+            # Vague answer → ask BYOL or Discovery
+            play_or_say("qualify_byol_or_discovery",
+                "Got it. Quick question — do you already have your own list of leads you want us to call, or do you need us to find them for you?"
+            )
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "awaiting_byol_or_discovery"}}
+            )
+        elif tier == "elite":
+            play_or_say("pricing_elite",
+                "For that volume, our Discovery Elite plan at $1,599 a month is the right fit. 3,000 high-intent prospects, 2,000 AI calls, 90-day recordings, priority support, and 5 user seats. We also have a $49 starter package if you'd rather start smaller — want me to walk you through that, or book a demo for Elite?"
+            )
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "post_pricing"}}
+            )
+        elif tier == "pro":
+            play_or_say("pricing_pro",
+                "Our Discovery Pro plan at $899 a month is our best value. 1,500 prospects, 750 AI calls, full transcripts, 30-day recordings, and 3 user seats. We also have a $49 starter package if that suits you better — want me to walk you through that, or book a demo for the Pro plan?"
+            )
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "post_pricing"}}
+            )
+        elif tier == "starter":
+            play_or_say("pricing_starter",
+                "Our Discovery Starter plan at $399 a month is a great fit. 500 high-intent prospects, 250 AI calls, AI qualification, auto-booking, and 7-day recordings. We also have a $49 starter package if that suits you better — want me to walk you through that, or schedule a demo for Discovery?"
+            )
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "post_pricing"}}
+            )
+        else:
+            # Couldn't detect — give the overview
+            play_or_say("pricing_overview",
+                "We have three Discovery plans. Starter at $399 for 500 prospects, Pro at $899 for 1,500, and Elite at $1,599 for 3,000. We also have a $49 starter package. Want me to book a demo?"
+            )
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "post_pricing"}}
+            )
     # Pricing questions — ASK qualifying question first
     elif any(word in speech_lower for word in ["price", "cost", "pricing", "how much", "expensive", "afford", "plans", "plan"]):
         play_or_say("qualify_volume",

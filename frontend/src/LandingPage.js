@@ -408,7 +408,7 @@ const LandingPage = () => {
       name: "Discovery Elite",
       price: "1,599",
       period: "/month",
-      description: "Enterprise lead gen",
+      description: "Enterprise outbound sales",
       features: [
         "3,000 intent leads/mo",
         "2,000 AI calls/month",
@@ -2200,7 +2200,7 @@ const LandingPage = () => {
                 </div>
                 <div>
                   <p className="text-white font-semibold">VP of Growth</p>
-                  <p className="text-gray-400 text-sm">Lead Generation Agency</p>
+                  <p className="text-gray-400 text-sm">B2B Sales Agency</p>
                 </div>
               </div>
             </div>

@@ -103,7 +103,9 @@ if stripe_api_key:
 # Twilio configuration
 twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
 twilio_auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
-twilio_phone_number = os.environ.get('TWILIO_PHONE_NUMBER')
+twilio_phone_number = os.environ.get('TWILIO_PHONE_NUMBER')  # Voice number (toll-free 888)
+# Separate SMS sender (10DLC local number, e.g. +14044676189). Falls back to voice number if not set.
+twilio_sms_number = os.environ.get('TWILIO_SMS_NUMBER') or twilio_phone_number
 twilio_client = TwilioClient(twilio_account_sid, twilio_auth_token) if twilio_account_sid and twilio_auth_token else None
 
 # Configure logging
@@ -3979,7 +3981,7 @@ async def send_phone_verification(request: PhoneVerificationRequest):
         try:
             twilio_client.messages.create(
                 body=f"Your IntentBrain.ai verification code is: {verification_code}. Valid for 10 minutes.",
-                from_=os.environ.get("TWILIO_PHONE_NUMBER"),
+                from_=twilio_sms_number,
                 to=phone
             )
             logger.info(f"Sent verification SMS to {phone}")
@@ -13014,7 +13016,7 @@ async def send_review_request(request: ReviewRequestCreate, user_id: str = Depen
     try:
         twilio_client.messages.create(
             body=message,
-            from_=os.environ.get("TWILIO_PHONE_NUMBER"),
+            from_=twilio_sms_number,
             to=request.patient_phone
         )
         
@@ -13061,7 +13063,7 @@ async def send_bulk_review_requests(request: ReviewRequestBulk, user_id: str = D
         try:
             twilio_client.messages.create(
                 body=message,
-                from_=os.environ.get("TWILIO_PHONE_NUMBER"),
+                from_=twilio_sms_number,
                 to=phone
             )
             
@@ -13109,7 +13111,7 @@ if USE_NEW_AUTH_ROUTES:
     from routes.auth import router as auth_router, set_twilio_client
     # Inject Twilio client into auth module
     if twilio_client:
-        set_twilio_client(twilio_client, twilio_phone_number)
+        set_twilio_client(twilio_client, twilio_phone_number, twilio_sms_number)
     # Mount auth router - NOTE: routes are /api/auth/* due to prefix in router
     app.include_router(auth_router, prefix="/api")
     logger.info("Using NEW modular auth routes (USE_NEW_AUTH_ROUTES=true)")

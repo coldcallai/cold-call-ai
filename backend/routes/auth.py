@@ -35,12 +35,14 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # Get Twilio client reference (will be injected from main app)
 _twilio_client = None
 _twilio_phone_number = None
+_twilio_sms_number = None
 
-def set_twilio_client(client, phone_number: str):
+def set_twilio_client(client, phone_number: str, sms_number: str = None):
     """Set Twilio client for SMS sending (called from main app)"""
-    global _twilio_client, _twilio_phone_number
+    global _twilio_client, _twilio_phone_number, _twilio_sms_number
     _twilio_client = client
     _twilio_phone_number = phone_number
+    _twilio_sms_number = sms_number or phone_number
 
 
 # ============== ENUMS ==============
@@ -132,7 +134,7 @@ async def send_phone_verification(request: PhoneVerificationRequest):
         try:
             _twilio_client.messages.create(
                 body=f"Your IntentBrain.ai verification code is: {verification_code}. Valid for 10 minutes.",
-                from_=_twilio_phone_number,
+                from_=_twilio_sms_number,
                 to=phone
             )
             logger.info(f"Sent verification SMS to {phone}")

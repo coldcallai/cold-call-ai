@@ -26,6 +26,7 @@ const Sidebar = () => {
     { path: "/app/analytics", icon: TrendingUp, label: "Analytics" },
     { path: "/app/integrations", icon: Database, label: "CRM Integrations" },
     { path: "/app/compliance", icon: Shield, label: "Compliance" },
+    { path: "/app/team", icon: Users, label: "Team" },
     { path: "/app/packs", icon: Package, label: "Credit Packs" },
     { path: "/app/settings", icon: Settings, label: "Settings" },
   ];

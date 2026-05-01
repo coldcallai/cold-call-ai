@@ -65,6 +65,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import ReviewRequestsPage from "@/pages/ReviewRequestsPage";
 import CreditPacks from "@/pages/CreditPacksPage";
 import ROICalculatorPage from "@/pages/ROICalculatorPage";
+import TeamsPage from "@/pages/TeamsPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -335,6 +336,7 @@ const AppRouter = () => {
                     <Route path="/packs" element={<CreditPacks />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/reviews" element={<ReviewRequestsPage />} />
+                    <Route path="/team" element={<TeamsPage />} />
                   </Routes>
                 </main>
                 

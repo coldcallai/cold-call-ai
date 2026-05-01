@@ -13068,6 +13068,8 @@ if USE_NEW_BILLING_ROUTES:
         get_tier_features_fn=get_tier_features
     )
     app.include_router(billing_router, prefix="/api")
+    from router_team import router as team_router
+    app.include_router(team_router, prefix="/api")
     logger.info("Using NEW modular billing routes (USE_NEW_BILLING_ROUTES=true)")
 else:
     logger.info("Using LEGACY inline billing routes (USE_NEW_BILLING_ROUTES=false)")
@@ -13140,3 +13142,123 @@ Anyway— I'll let you get back to it. Talk soon!"""
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+
+# ============================================================
+# Team Management Endpoints
+# ============================================================
+
+def _max_team_seats_for_plan(plan_name: str) -> int:
+    seats_map = {
+        "free": 1, "starter": 1, "growth": 1,
+        "professional": 5, "unlimited": 5, "enterprise": 3,
+    }
+    return seats_map.get(plan_name, 1)
+
+@app.get("/api/team")
+async def get_team(current_user: Dict = Depends(get_current_user)):
+    user_id = str(current_user["user_id"])
+    plan = current_user.get("plan", "free")
+    max_seats = _max_team_seats_for_plan(plan)
+    members = []
+    async for m in db.users.find({"team_owner_id": user_id}):
+        members.append({
+            "_id": str(m["_id"]),
+            "name": m.get("name", ""),
+            "email": m.get("email", ""),
+            "role": m.get("team_role", "member"),
+            "joined_at": m.get("created_at", ""),
+        })
+    owner = {
+        "_id": user_id,
+        "name": current_user.get("name", ""),
+        "email": current_user.get("email", ""),
+        "role": "owner",
+        "joined_at": current_user.get("created_at", ""),
+    }
+    pending = []
+    async for inv in db.team_invites.find({"owner_id": user_id, "status": "pending"}):
+        pending.append({
+            "_id": str(inv["_id"]),
+            "email": inv.get("email", ""),
+            "role": inv.get("role", "member"),
+            "invited_at": inv.get("invited_at", ""),
+        })
+    return {
+        "members": [owner] + members,
+        "pending_invites": pending,
+        "max_seats": max_seats,
+        "used_seats": 1 + len(members),
+    }
+
+@app.post("/api/team/invite")
+async def invite_team_member(request: Request, current_user: Dict = Depends(get_current_user)):
+    data = await request.json()
+    email = data.get("email", "").strip().lower()
+    role = data.get("role", "member")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if role not in ("admin", "member"):
+        raise HTTPException(status_code=400, detail="Invalid role")
+    user_id = str(current_user["user_id"])
+    plan = current_user.get("plan", "free")
+    max_seats = _max_team_seats_for_plan(plan)
+    current_count = await db.users.count_documents({"team_owner_id": user_id})
+    pending_count = await db.team_invites.count_documents({"owner_id": user_id, "status": "pending"})
+    if (1 + current_count + pending_count) >= max_seats:
+        raise HTTPException(status_code=400, detail="No available seats. Upgrade your plan to add more team members.")
+    if email == current_user.get("email", "").lower():
+        raise HTTPException(status_code=400, detail="You cannot invite yourself")
+    if await db.team_invites.find_one({"owner_id": user_id, "email": email, "status": "pending"}):
+        raise HTTPException(status_code=400, detail="An invitation has already been sent to this email")
+    if await db.users.find_one({"email": email, "team_owner_id": user_id}):
+        raise HTTPException(status_code=400, detail="This person is already on your team")
+    invite = {
+        "owner_id": user_id,
+        "email": email,
+        "role": role,
+        "status": "pending",
+        "invited_at": datetime.utcnow().isoformat(),
+        "token": str(uuid.uuid4()),
+    }
+    result = await db.team_invites.insert_one(invite)
+    return {"success": True, "invite_id": str(result.inserted_id)}
+
+@app.delete("/api/team/members/{member_id}")
+async def remove_team_member(member_id: str, current_user: Dict = Depends(get_current_user)):
+    user_id = str(current_user["user_id"])
+    member = await db.users.find_one({"_id": ObjectId(member_id), "team_owner_id": user_id})
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    await db.users.update_one(
+        {"_id": ObjectId(member_id)},
+        {"$unset": {"team_owner_id": "", "team_role": ""}}
+    )
+    return {"success": True}
+
+@app.put("/api/team/members/{member_id}/role")
+async def update_member_role(member_id: str, request: Request, current_user: Dict = Depends(get_current_user)):
+    data = await request.json()
+    new_role = data.get("role", "member")
+    if new_role not in ("admin", "member"):
+        raise HTTPException(status_code=400, detail="Invalid role")
+    user_id = str(current_user["user_id"])
+    member = await db.users.find_one({"_id": ObjectId(member_id), "team_owner_id": user_id})
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    await db.users.update_one(
+        {"_id": ObjectId(member_id)},
+        {"$set": {"team_role": new_role}}
+    )
+    return {"success": True}
+
+@app.delete("/api/team/invites/{invite_id}")
+async def cancel_team_invite(invite_id: str, current_user: Dict = Depends(get_current_user)):
+    user_id = str(current_user["user_id"])
+    result = await db.team_invites.delete_one({
+        "_id": ObjectId(invite_id),
+        "owner_id": user_id,
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    return {"success": True}

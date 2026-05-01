@@ -1,45 +1,31 @@
-"""Agent-related models"""
+from datetime import datetime
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
-import uuid
 
+AgentType = Literal["ai", "human"]
 
-class Agent(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: Optional[str] = None
+class AgentBase(BaseModel):
     name: str
-    email: str
-    phone: Optional[str] = None
-    calendly_link: str
-    calendly_api_token: Optional[str] = None
-    calendly_event_type_uri: Optional[str] = None
-    is_active: bool = True
-    max_daily_calls: int = 50
-    assigned_leads: int = 0
-    booked_meetings: int = 0
-    use_case: str = "sales_cold_calling"
-    system_prompt: Optional[str] = None
-    voice_type: str = "preset"
-    preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
-    cloned_voice_id: Optional[str] = None
-    cloned_voice_name: Optional[str] = None
-    voice_settings: Optional[Dict[str, Any]] = None
-    # Multi-language support
-    language: str = "en"  # ISO language code
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    agent_type: AgentType = "ai"
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+    active: bool = True
+    voice_id: Optional[str] = None
+    personality_profile: Optional[str] = None
 
+class AgentCreate(AgentBase):
+    pass
 
-class AgentCreate(BaseModel):
-    name: str
-    email: str
-    phone: Optional[str] = None
-    calendly_link: str
-    calendly_api_token: Optional[str] = None
-    max_daily_calls: int = 50
-    use_case: str = "sales_cold_calling"
-    system_prompt: Optional[str] = None
-    voice_type: str = "preset"
-    preset_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
-    voice_settings: Optional[Dict[str, Any]] = None
-    language: str = "en"
+class AgentUpdate(BaseModel):
+    name: Optional[str] = None
+    agent_type: Optional[AgentType] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+    active: Optional[bool] = None
+    voice_id: Optional[str] = None
+    personality_profile: Optional[str] = None
+
+class Agent(AgentBase):
+    id: str = Field(alias="_id")
+    created_at: datetime
+    updated_at: datetime

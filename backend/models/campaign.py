@@ -1,44 +1,31 @@
-"""Campaign-related models"""
+from datetime import datetime
+from typing import Optional, List
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
-import uuid
 
-from .enums import CampaignStatus
-
-
-class Campaign(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: Optional[str] = None
+class CampaignBase(BaseModel):
     name: str
     description: Optional[str] = None
-    ai_script: str
-    qualification_criteria: Dict[str, Any] = {}
-    status: CampaignStatus = CampaignStatus.DRAFT
-    calls_per_day: int = 100
-    total_calls: int = 0
-    successful_calls: int = 0
-    qualified_leads: int = 0
-    booked_meetings: int = 0
-    voicemail_enabled: bool = True
-    voicemail_message: Optional[str] = None
-    response_wait_seconds: int = 4
-    company_name: Optional[str] = None
-    icp_config: Optional[Dict[str, Any]] = None
-    min_icp_score: int = 0
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    agent_id: Optional[str] = None
+    script_id: Optional[str] = None
+    active: bool = True
+    lead_sources: Optional[List[str]] = None
+    daily_call_limit: Optional[int] = None
+    timezone: Optional[str] = None
 
+class CampaignCreate(CampaignBase):
+    pass
 
-class CampaignCreate(BaseModel):
-    name: str
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = None
     description: Optional[str] = None
-    ai_script: str
-    qualification_criteria: Dict[str, Any] = {}
-    calls_per_day: int = 100
-    voicemail_enabled: bool = True
-    voicemail_message: Optional[str] = None
-    response_wait_seconds: int = 4
-    company_name: Optional[str] = None
-    icp_config: Optional[Dict[str, Any]] = None
-    min_icp_score: int = 0
+    agent_id: Optional[str] = None
+    script_id: Optional[str] = None
+    active: Optional[bool] = None
+    lead_sources: Optional[List[str]] = None
+    daily_call_limit: Optional[int] = None
+    timezone: Optional[str] = None
+
+class Campaign(CampaignBase):
+    id: str = Field(alias="_id")
+    created_at: datetime
+    updated_at: datetime

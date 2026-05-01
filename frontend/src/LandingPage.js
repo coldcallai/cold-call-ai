@@ -535,7 +535,7 @@ const LandingPage = () => {
       {/* Announcement Bar */}
       <div className="bg-gradient-to-r from-purple-500 via-cyan-500 to-teal-500 py-2 px-4">
         <p className="text-center text-sm text-white font-medium">
-          Intent Leads + AI Personality Detection — Know your buyer before you speak →
+          👉 You show up to booked meetings — or take live transfers. AI handles everything before that —  →
         </p>
       </div>
 

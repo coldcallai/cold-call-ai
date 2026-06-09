@@ -91,3 +91,9 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && pm2 restart dialgenix-backend
 ```
+
+## Live Transfer (DONE 2026-06-09)
+- Inbound 888 agent now connects hot leads via `<Dial>` to `INBOUND_TRANSFER_PHONE`.
+- Number: +17065101969 (set in backend/.env).
+- Added `/api/twilio/inbound/transfer-result` callback: on `DialCallStatus=completed` ends call cleanly; on no-answer/busy/failed pivots caller to demo booking (fixes old fall-through that read the "team on another call" line even after a successful transfer).
+- VPS: add `INBOUND_TRANSFER_PHONE=+17065101969` to `/var/www/dialgenix/backend/.env` then `pm2 restart dialgenix-backend`.

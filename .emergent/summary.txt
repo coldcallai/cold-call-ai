@@ -1,154 +1,173 @@
-<analysis>**original_problem_statement**: 
-Question, could you build an Ai cold calling machine that calls businesses, quality them and then send to different agents for payment processing?
-PRODUCT REQUIREMENTS: A vertical-agnostic B2B SaaS platform (DialGenix.ai) that performs high-intent lead discovery via GPT-5.2, executes fully compliant AI cold calls to qualify leads, and books them via Calendly. Includes subscription tiers, a 15-minute free trial model, SMS trial abuse protection, inbound AI sales call handling, Twilio outbound dialing, and live Stripe payments.
+<analysis>**original_problem_statement**: Question, could you build an Ai cold calling machine that calls businesses, quality them and then send to different agents for payment processing?
+PRODUCT REQUIREMENTS: A vertical-agnostic B2B SaaS platform (IntentBrain.ai, rebranded from DialGenix) that performs high-intent lead discovery, executes fully compliant AI cold calls via GPT-5.2/Twilio/ElevenLabs (BYOK model), and books them via Calendly. Includes Stripe payments, SMS trial abuse protection, Inbound AI Receptionist, Live Transfers, Voice Cloning, Voice Tuning, DISC Personality Detection, Call Analytics, SMS Review Requests, and SEO marketing pages.
 
-**User's preferred language**: English (INSTRUCT NEXT AGENT: You MUST respond to the user in English only)
+**User's preferred language**: English (INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages and INSTRUCT next agent to respond in the user's preferred language only. Proceed in English.)
 
 **what currently exists?** 
-A production-ready full-stack AI Cold Calling SaaS platform (**DialGenix.ai**). Features include JWT/Google Auth with mandatory SMS phone verification for free trials, a 15-minute automated free trial system, LIVE Stripe subscriptions, and a Twilio/ElevenLabs/GPT-5.2 voice pipeline. The platform supports outbound cold calling and an inbound AI Sales Agent. It includes a highly optimized landing page with CSS dashboard mockups, Terms/Privacy pages, and automated VPS deployment scripts ().
+A LIVE, production-ready full-stack AI Cold Calling SaaS platform (IntentBrain.ai). Has a Next.js marketing site ( process) and a React Dashboard + FastAPI backend ( process). The core lead discovery-to-funnel pipeline is working. The Inbound AI Receptionist (888-513-1913) answers calls, qualifies leads based on volume, quotes pricing tiers (99/99/,599), and handles off-script deflection seamlessly. Twilio SMS capability has been separated to a local 10DLC number (+14044676189) due to TFN compliance blocks on SMS. 
 
 **Last working item**:
-- **Last item agent was working**: Implementing ElevenLabs Voice Cloning for AI Agents. The agent added backend endpoints () and DB schema fields (, ), and just created . 
-- **Status**: IN PROGRESS
-- **Agent Testing Done**: N
-- **Which testing method agent to use?**: both (Backend test via curl for file upload/API call, and frontend testing agent for the UI integration).
-- **User Testing Done**: N
+- **Last item agent was working**: Fixing a ghost text video overlay issue on the marketing homepage ( Next.js repo on user's VPS) and diagnosing the user's high Emergent credit burn. 
+- **Status**: USER VERIFICATION PENDING / IN PROGRESS
+- **Agent Testing Done**: Y (Verified CSS deployed on VPS via bash)
+- **Which testing method agent to use?**: manual testing by curl / bash on user's VPS
+- **User Testing Done**: Y (User noted the ghost text was still there; agent clarified it's the actual YouTube thumbnail image that needs swapping in YouTube Studio, not a code issue).
 
 **All Pending/In progress Issue list**: 
-Issue 1: Twilio Inbound Webhook Routing (P1)
-- Attempted fixes: The inbound sales agent was successfully created, but when the user called the 888 number, an application error occurred because their Twilio Webhook was pointing to  instead of the active preview environment URL. Agent instructed the user to fix this in Twilio.
-- Next debug checklist: Check if the user successfully updated their Twilio Webhook to the current preview URL and if the inbound call routes correctly to . Look at  webhook logs.
-- Why fix this issue and what will be achieved with the fix?: Ensures the user can test their own Inbound AI Sales Agent feature.
-- Status: USER VERIFICATION PENDING
-- Is recurring issue? N
-- Should Test frontend/backend/both after fix?: backend (via curl or user making a real phone call).
-- Blocked on other issue: None.
+  - Issue 1: Dashboard UI/UX and Functional Bugs (P0)
+     - Attempted fixes: None yet in this fork. User stated: Ive been waiting to run my own campaign for testing and onboard new users but the dashboard had bugs. I need to test those first."
+     - Next debug checklist: Wait for user to provide the list of bugs page by page. Address them iteratively. 
+     - Why fix this issue and what will be achieved with the fix?: Blocks user from onboarding real paying agency clients.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on other issue: None
+  - Issue 2: Live Transfer Number Missing (P1)
+     - Attempted fixes: Agent updated the inbound script to say "connect you live", but the `INBOUND_TRANSFER_PHONE` env var is missing.
+     - Next debug checklist: Ask user for the specific phone number to route live transfers to. Update backend `.env` on VPS.
+     - Why fix this issue and what will be achieved with the fix?: True live transfers are a major selling point for the SaaS.
+     - Status: BLOCKED (Waiting on user input)
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: backend
 
 **In progress Task List**: 
-Task 1: Voice Cloning Implementation (P0)
-- Where to resume:  was just created. You need to integrate this component into the  settings page ( around line 2265+). Ensure the file upload sends data to the new  endpoint correctly.
-- What will be achieved with this?: Parity with competitors (Synthflow/Bland AI) allowing users to upload 1-5 minutes of audio to clone their own voices via ElevenLabs.
-- Status: IN PROGRESS
-- Should Test frontend/backend/both after fix?: both
-- Blocked on something: None
+  - Task 1: Walkthrough Dashboard Bugs
+     - Where to resume: Ask the user to list the specific bugs they encountered on the dashboard so they can be fixed sequentially.
+     - What will be achieved with this?: Unblocks user campaign testing and client onboarding.
+     - Status: NOT STARTED
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on something: User providing the bug list.
 
-Task 2: Namecheap VPS Deployment & Domain Setup (P2)
-- Where to resume: Agent provided  and . User struggled with pasting root passwords into Windows PowerShell and stated they will try using PuTTY tomorrow. 
-- What will be achieved with this?: Takes the application live on a custom domain.
-- Status: BLOCKED (Waiting on user to try PuTTY and run the setup script).
-- Should Test frontend/backend/both after fix?: manual testing by user.
-- Blocked on something: User executing server commands via SSH.
+**Upcoming and Future Tasks**
+  - **(P0) Stripe payment flow end-to-end test**: Validate signup → Pricing "Get Started" → Stripe checkout → webhook → credits provisioned.
+  - **(P1) Add more Inbound FAQ responses**: Cache responses for the top 8-10 most common objections ("Are you actually AI?", "How long to set up?", "Does this work?") to prevent repetitive deflections.
+  - **(P2) Agency client onboarding flow**: Build a "create client workspace" or CSV import flow for faster onboarding.
+  - **(P2) Outbound call end-to-end test**: Run 5 test leads, listen to recordings, and refine the AI agent latency/scripting.
+  - **(P2) ElevenLabs credit cost optimization**: Switch outbound calls to `eleven_flash_v2` and cache the opening script (first 5-15 seconds) to disk.
+  - **(P3) Refactor Monoliths**: Break down `server.py` (>13,000 lines). Critical tech debt.
+  - **(P4) Calendly Webhook Sync**: Sync Calendly bookings back to the UI.
+  - **(P4) Predictive Dialer**: Simultaneous multiline dialing.
 
-**Upcoming and Future Tasks**:
-Upcoming Tasks:
-- **(P0) Complete Voice Cloning Integration**: Integrate  into the UI and test the full ElevenLabs cloning pipeline.
-- **(P1) Refactor Monoliths**: Break down  (>9600 lines) and  (>3800 lines) into modular files (routes, controllers, separate component files). *This is highly critical tech debt that is starting to impact context limits.*
+**Completed work in this session**
+- Fixed Lead Discovery → Funnel orphan-lead bug (Leads now save `user_id` and `campaign_id` correctly) (DONE)
+- Implemented Duplicate Lead Prevention & Cleanup (`/api/leads/deduplicate` endpoint + Funnel UI button) (DONE)
+- Added Keyword Template Packs and `exclude_industries` filter for improved Lead Discovery (DONE)
+- Fixed 888 Inbound Agent Pricing to correctly quote Discovery Starter ($399), Pro ($899), Elite ($1599) (DONE)
+- Added dynamic qualifying question ("How many leads or calls per month?") to Inbound Agent logic (DONE)
+- Added smart off-script deflection to Inbound Agent ("Ill show you how this works in under a minute...) (DONE)
+- Removed lead generation copy from public marketing pages to address Twilio TFN compliance rejection (30468) (DONE)
+- Configured  (+14044676189) globally to separate SMS traffic from voice traffic (DONE)
+- Cleared stale ElevenLabs inbound/demo cache on VPS to restore natural TTS voices (credits were exhausted but are now replenished) (DONE)
+- Applied CSS clipping fix to the Next.js  repository via SSH to hide YouTube's embedded title bar (DONE)
 
-Future Tasks:
-- **(P2) Multi-language Support**: Allow agents to call in 50+ languages.
-- **(P3) Team Seat Management**: Allow multi-user agency accounts.
+**Earlier issues found/mentioned but not fixed**
+   - Issue 1: High Emergent Credit Burn
+   - Debug checklist: User reported credits burning too fast. Agent advised user to contact support and fork the chat. Next agent should keep context light and utilize parallel tool calls aggressively.
+   - Why to solve this issue and what will be achieved with this?: Saves user platform credits.
+   - Should Test frontend/backend/both after fix: NA
+   - Is recurring issue? Y
 
-**Completed work in this session**:
-- 15-Minute Synthflow-style Free Trial logic & TrialBanner UI (DONE)
-- SMS Phone Verification via Twilio for Trial Abuse Prevention (Email & OAuth) (DONE)
-- Landing page text updates (15 free minutes, feature badges, trust logos) (DONE)
-- CSS-styled mockups for Sales Funnel, Lead Discovery, and Call History on the landing page (DONE)
-- Terms of Service () and Privacy Policy () (DONE)
-- Inbound AI Sales Agent configuration () and  webhook (DONE)
-- Deployment bash script creation () (DONE)
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: The user tests changes on their live VPS manually. After completing UI/Backend fixes, you MUST provide them with the exact deployment commands to run on their VPS.
+  - Recurrence count: 20+
+  - Status: IN PROGRESS
+  - Note for next agent: 
+    * User's Next.js frontend is running via PM2 as  (port 3000).
+    * User's FastAPI backend is running via PM2 as  (port 8001).
+    * ALWAYS provide the deployment commands when completing a task: .
 
-**Earlier issues found/mentioned but not fixed**:
-None.
+**Code Architecture**
+-  (FastAPI Monolith, >13k lines)
+-  (Modularized routes)
+-  (React Dashboard application)
+-  (Next.js public marketing site, hosted directly on the VPS, not in the standard  workspace environment).
 
-**Known issue recurrence from previous fork**:
-- Issue recurrence in previous fork: None
-- Recurrence count: 0
-- Status: NA
+**Key Technical Concepts**
+Frontend: React (Dashboard), Next.js (Marketing site)
+Backend: FastAPI, Motor (Async MongoDB)
+Integrations: Twilio (Voice/SMS), ElevenLabs (TTS), OpenAI GPT-5.2
 
-**Code Architecture**:
+**key DB schema**
+  - : {..., subscription_tier, setup_wizard_completed, demo_calls_used, password_hash}
+  - : {..., campaign_id, user_id, phone, business_name, status} 
 
+**changes in tech stack**
+  - SMS routing relies on  variable instead of the main  due to TFN restrictions.
 
-**Key Technical Concepts**:
-- **Backend**: FastAPI, Motor (Async MongoDB)
-- **Frontend**: React, Tailwind CSS, Shadcn UI
-- **Voice Pipeline**: Twilio Media Streams -> FastAPI WebSocket -> GPT-5.2 -> ElevenLabs TTS
-- **Security**: SMS-based Auth gating for Free Trial usage via Twilio SMS API.
-- **Inbound AI**: Twilio HTTP POST webhooks routing to ElevenLabs/OpenAI answering logic.
+**All files of reference** 
+  - 
+  - 
+  - 
+  - 
 
-**key DB schema**:
-- : {..., trial_minutes_total, trial_seconds_used, phone_verified, phone_number}
-- : {..., custom_voice_id, is_cloned_voice}
-- : {phone_number, verification_code, expires_at, is_used}
-- : Tracks calls to the Twilio 800 sales number.
+**Areas that need refactoring**: 
+  -  (>13,000 lines).
 
-**changes in tech stack**:
-None, but heavy utilization of file uploads will be required for the new Voice Cloning feature.
+**key api endpoints**
+  -  
+  - 
+  - 
 
-**All files of reference**:
-- : Contains trial logic, SMS verification, inbound sales webhook, and new voice cloning endpoint.
-- : Needs updates to display .
-- : Newly created component for uploading audio samples to ElevenLabs.
-- : Extensively modified with CSS mockups replacing stock images.
-- : Mandatory modal for OAuth users.
+**Critical Info for New Agent** 
+- **VPS DEPLOYMENT:** The user does not use standard preview deployments. They SSH into their VPS (). Always provide the precise SSH or bash command blocks when asking them to verify a fix.
+- **DASHBOARD BUG HUNT:** The user stated their immediate next priority is fixing dashboard bugs before onboarding users. Begin your first message by asking them to list the bugs page-by-page.
+- **VIDEO GHOST TEXT:** If the user brings up the ghost text on the video again, remind them nicely that the code fix is deployed, but they *must* replace the custom thumbnail inside their YouTube Studio account, as the text is baked into their JPG/PNG image.
 
-**Areas that need refactoring**:
--  (>9600 lines)
--  (>3800 lines)
+**documents and test reports created in this job** 
+  - 
+  - 
 
-**key api endpoints**:
--  & 
--  (Handles inbound calls to 800 number)
--  (New Voice Cloning endpoint)
-
-**Critical Info for New Agent**:
-- **Inbound Twilio Webhook**: The user recently set up an 800 number for inbound sales calls. The webhook MUST point to the *current* preview URL to test it. If the user complains about inbound calls failing, remind them to update their Twilio Webhook to the latest Emergent preview URL.
-- **Trial Abuse Prevention**: OAuth (Google) users and standard users are strictly blocked from using the platform until they verify a unique phone number via SMS.
-- **Voice Cloning State**: The agent queried the  for ElevenLabs voice cloning, set up the backend, and created the frontend component file, but context ran out before the component was imported into the application.
-
-**documents and test reports created in this job**:
-- 
-- 
-- [0;36m
-==============================================
-   DialGenix.ai Automated Deployment
-==============================================
-[0m
-[1;33mPlease provide the following information:[0m
-- 
-- 
-
-**Last 10 User Messages and any pending HUMAN messages**:
-1. (Latest) User: Does Synthflow and Bland have [voice cloning]? -> User: Yes [implement it]
-2. User: Question only...can agents clone their own voice
-3. User: Application error has occurred when answers [Regarding testing the inbound sales agent call]
-4. User: Yes I will call now but first give me a list of questions potential clients may have
-5. User: There is no toll free verification under management but there is toll free verification for messaging?
-6. User: Steps for twilio 800 number, instructions please
-7. User: Both [wants phone number on website AND inbound sales agent script]
-8. User: Question only do not implement There is contact on footer and dialgenix.ai phone symbol. Do you recommend having phone number?
-9. User: [Provided Terms of Service and Privacy Policy text]
-10. User: It's good, ty. Now I will create terms of service and privacy policy similar to Synthflow...
+**Last 10 User Messages and any pending HUMAN messages** 
+1. User: Showed screenshot proving ElevenLabs credits were available, asked why it was still playing the robotic voice.
+2. Agent: Provided bash commands to clear stale ElevenLabs  and  cache files and restart .
+3. User: Executed command, but  showed low memory.
+4. Agent: Realized the user has two pm2 processes ( and ) and guided user on which handles what.
+5. User: Ran diagnostic Active Internet connections (w/o servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State      
+tcp        0      0 agent-env-e0104208:8010 10.64.128.73:34612      ESTABLISHED
+tcp        0      0 agent-env-e0104208:8010 10.64.128.138:59492     ESTABLISHED
+Active UNIX domain sockets (w/o servers)
+Proto RefCnt Flags       Type       State         I-Node   Path
+unix  3      [ ]         STREAM     CONNECTED     971047   
+unix  3      [ ]         STREAM     CONNECTED     971046   
+unix  3      [ ]         STREAM     CONNECTED     972295   
+unix  3      [ ]         STREAM     CONNECTED     972294   
+unix  3      [ ]         STREAM     CONNECTED     969238   
+unix  3      [ ]         STREAM     CONNECTED     970117   
+unix  3      [ ]         STREAM     CONNECTED     969237   
+unix  3      [ ]         STREAM     CONNECTED     970118    and  commands showing ports and proxy rules.
+6. Agent: Confirmed  is correct. Pointed out  is the Next.js marketing site. Offered a quick bash fix for the YouTube video ghost text on the Next.js app.
+7. User: Searched for the YouTube ID in the  repo.
+8. Agent: Provided a python script snippet via SSH to surgically adjust the CSS of the Next.js iframe to clip the YouTube title bar.
+9. User: Ran the script successfully, but complained that ghost text was *still* there and that Emergent credits were burning too fast.
+10. Agent: Explained that the remaining ghost text is physically baked into the YouTube Thumbnail image itself (not a code issue). Drafted a support email for the user to report high credit usage, and advised the user to fork the chat and start tomorrow with the dashboard bug walkthrough.
 
 **Project Health Check:**
-- Broken:  is orphaned (created but not imported).
-- Mocked: Landing page dashboard/funnel images are pure CSS/HTML mockups.
+  - Broken: Dashboard bugs (waiting on user to list them).
+  - Mocked: None.
 
-**3rd Party Integrations**:
-- OpenAI GPT-5.2 (Conversations) — uses Emergent LLM Key
-- Twilio (Voice, Lookup, SMS Verification) — requires User API Key
-- ElevenLabs (TTS, Voice Cloning) — requires User API Key
-- Stripe (Payments) — requires User API Key (LIVE keys are active)
-- Calendly (Scheduling) — requires User API Key
+**3rd Party Integrations** 
+  - OpenAI GPT-5.2 (Conversations, Chat) — uses Emergent LLM Key
+  - Twilio (Voice, SMS) — Requires User API Key
+  - ElevenLabs (TTS) — Requires User API Key
+  - Stripe (Payments) — Requires User API Key
 
-**Testing status**:
-- Testing agent used after significant changes: YES (iteration 7 for trial logic).
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: None
-- Known regressions: None
+**Testing status**
+  - Testing agent used after significant changes: NO (Heavy manual SSH/VPS testing)
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: None
 
 **Credentials to test flow:**
-- Admin:  / 
-- Trial:  / 
+  -  / 
 
-**What agent forgot to execute**:
-The agent created  but ran out of tokens before importing it into  and testing the file upload to the new endpoint.</analysis>
+**What agent forgot to execute**
+The agent did not yet secure the  number from the user to finalize the Live Transfer routing logic. 
+
+**Debugging checklist for current issue**
+    Issue: Dashboard UI/UX Bugs
+    Next steps:
+    1. Await the user's detailed list of broken dashboard pages/buttons.
+    2. Reproduce locally on the preview environment.
+    3. Make code adjustments in React components ().
+    4. Provide the standard VPS deployment commands for the user to verify.</analysis>

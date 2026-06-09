@@ -11362,20 +11362,15 @@ async def handle_inbound_response(request: Request):
                     "Great, connecting you now. One moment please.",
                     voice='Polly.Joanna-Neural'
                 )
-                response.dial(transfer_phone, timeout=20, caller_id=twilio_phone_number)
-                # If dial fails or no answer, fall through to demo booking
-                response.say(
-                    "Looks like our team is on another call. Let me get you booked for a demo instead. What's your email?",
-                    voice='Polly.Joanna-Neural'
-                )
-                gather = Gather(
-                    input='speech',
-                    timeout=10,
-                    speech_timeout=2,
-                    action='/api/twilio/inbound/capture-email',
+                # Use action callback so the demo-fallback only fires when the
+                # transfer is NOT successfully completed (no answer / busy / failed).
+                response.dial(
+                    transfer_phone,
+                    timeout=20,
+                    caller_id=twilio_phone_number,
+                    action='/api/twilio/inbound/transfer-result',
                     method='POST'
                 )
-                response.append(gather)
             else:
                 # No transfer number configured — pivot to demo
                 response.say(
@@ -11629,10 +11624,57 @@ async def handle_inbound_response(request: Request):
     
     return Response(content=str(response), media_type="application/xml")
 
+@api_router.post("/twilio/inbound/transfer-result")
+async def inbound_transfer_result(request: Request):
+    """Handle the outcome of a live transfer Dial.
+
+    Twilio calls this with DialCallStatus once the <Dial> completes. If the
+    transfer connected ('completed'), we end the call cleanly. Otherwise
+    (no-answer/busy/failed/canceled) we pivot the caller to demo booking.
+    """
+    form_data = await request.form()
+    dial_status = form_data.get("DialCallStatus", "")
+    call_sid = form_data.get("CallSid", "")
+
+    logger.info(f"Inbound transfer result for {call_sid}: {dial_status}")
+
+    response = VoiceResponse()
+
+    if dial_status == "completed":
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {
+                "status": "completed",
+                "outcome": "transferred",
+                "ended_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+
+    # No-answer / busy / failed — fall back to demo booking
+    response.say(
+        "Looks like our team is on another call. Let me get you booked for a demo instead. What's your email?",
+        voice='Polly.Joanna-Neural'
+    )
+    gather = Gather(
+        input='speech',
+        timeout=10,
+        speech_timeout=2,
+        action='/api/twilio/inbound/capture-email',
+        method='POST'
+    )
+    response.append(gather)
+    await db.inbound_calls.update_one(
+        {"call_sid": call_sid},
+        {"$set": {"conversation_stage": "transfer_failed_demo_fallback"}}
+    )
+    return Response(content=str(response), media_type="application/xml")
+
+
 @api_router.post("/twilio/inbound/capture-email")
 async def capture_caller_email(request: Request):
     """Capture caller's email for demo booking."""
-    form_data = await request.form()
     speech_result = form_data.get("SpeechResult", "")
     call_sid = form_data.get("CallSid", "")
     caller = form_data.get("From", "Unknown")

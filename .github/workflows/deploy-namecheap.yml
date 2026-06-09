@@ -50,18 +50,19 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
 
-      - name: Install SFTP client
+      - name: Install FTP client
         run: |
           sudo apt-get update
           sudo apt-get install -y lftp
 
-      - name: Upload static export to Namecheap over SFTP
+      - name: Upload static export to Namecheap over FTP
         run: |
-          port="${FTP_PORT:-22}"
-          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$port" "sftp://$FTP_SERVER" <<EOF
+          port="${FTP_PORT:-21}"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$port" "ftp://$FTP_SERVER" <<EOF
           set net:max-retries 2
           set net:timeout 30
-          set sftp:auto-confirm yes
+          set ftp:ssl-allow true
+          set ftp:passive-mode true
           mirror --reverse --verbose --parallel=2 ./out/ "$FTP_SERVER_DIR"
           bye
           EOF

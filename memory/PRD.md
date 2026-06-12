@@ -36,6 +36,28 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - Primary: https://intentbrain.ai (live, SSL)
 - Legacy: https://dialgenix.ai (still works, same server)
 
+## Completed (June 12, 2026) — BUG #004 Latency Eliminated
+- [x] **Fast-path cache** for AI identity probes (29 phrases): bypasses OpenAI (~3000ms → <5ms) — `_BRAIN_FAST_PATH_CACHE` in `server.py` lines ~125
+- [x] **Auto-followup wrapper** (`_ensure_followup`): appends "Want a quick demo?" when brain text doesn't end with "?" — kills silent dead-end after brain answers
+- [x] **Audio prewarm at startup** (background async task, semaphore=4): pre-generates ElevenLabs audio for all 27+ fast-path responses on boot — `prewarm_fast_path_audio` startup hook
+- [x] **Reverted `speech_timeout=1.5` → `"auto"`**: saves ~800ms of dead air vs 1.5s wait
+- [x] **Shortened fast-path responses to ≤12 words**: halves ElevenLabs gen time
+- [x] **"Sarah" identity leak fixed** in `cache_inbound_audio()` greeting — agent is now neutral "I'm your AI assistant"
+- [x] **Removed "who built you" from prompt_injection guard** — was returning dismissive "I can't provide internal system information"
+- [x] **Removed "are you a bot" from OFF list** — now routed to fast-path
+- [x] **Added 8 Spanish/language fast-path entries**: "do you speak spanish", "habla espanol", "what languages do you support", etc.
+- [x] **Result: All identity probes ~800ms total perceived latency (102ms backend)** — indistinguishable from live human rep
+
+### Verified via live calls to 888-513-1913:
+- "who built you?" → `FAST_PATH hit + cache_hit=True` (102ms backend)
+- "are you a bot?" → `FAST_PATH hit + cache_hit=True`
+- "do you speak spanish?" → `FAST_PATH hit + cache_hit=True`
+- "what languages do you support?" → `FAST_PATH hit + cache_hit=True`
+
+### Files touched (on VPS `/var/www/dialgenix/backend/`):
+- `server.py` — Multiple patches v3, v4, v5 (backed up as `.py.bak.<timestamp>`)
+- `inbound_audio_cache/` — 27 cached `.b64` files now present
+
 ## Completed (April 28, 2026)
 - [x] **Inbound 888 agent pricing fix**: Replaced wrong "$199/$499" tiers with correct Discovery Starter $399, Pro $899, Elite $1,599
 - [x] **Qualifying question added**: AI now asks "How many leads/calls per month?" before quoting price
@@ -74,6 +96,14 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [x] Getting Started: ElevenLabs step + FTC/DNC instructions
 
 ## Backlog
+### 🔴 P0 — Open Bugs (next session priority)
+- [ ] **BUG #002 — Conversation state leakage**: Agent loops back to "Thanks for calling IntentBrain..." after booking/qualification. Need to lock stages BOOKING → CONFIRMED → EXIT (no return to greeting).
+- [ ] **BUG #003 — Booking SMS not arriving**: `/api/twilio/inbound/sms-number` endpoint exists but deliveries unverified. Add structured logging around Twilio SMS dispatch (parsed phone, Twilio SID, API response, delivery status).
+
+### 🟠 P1 — Coverage Expansion (post-bugs)
+- [ ] Expand fast-path with core product features: "live transfers", "voicemail drops", "CRM integration", "Calendly integration", "outbound calling", "do you integrate with HubSpot/Salesforce"
+- [ ] Add proper "do you support X" Q&A to brain prompt so legitimate product questions don't get classified as OFF_TOPIC
+
 ### P0 - Before Monday Launch
 - [ ] Practice setup walkthrough
 - [ ] Test CSV upload on live

@@ -1,6 +1,6 @@
 # IntentBrain Implementation Roadmap
 
-**Last updated:** June 15, 2026
+**Last updated:** June 15, 2026 (Phase 1 scaffold + MerchantBrain V1 content shipped to /app; awaiting VPS deploy + Gatekeeper V1 resend)
 **Format:** Implementation-ready. Each phase lists the exact files to touch, the patch approach, and the VPS commands. PRD.md remains the spec/why; this is the how/when.
 
 ---

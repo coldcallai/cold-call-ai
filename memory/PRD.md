@@ -36,6 +36,37 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - Primary: https://intentbrain.ai (live, SSL)
 - Legacy: https://dialgenix.ai (still works, same server)
 
+## Completed (June 15, 2026) — Phase 1: UniversalBrain Refactor + MerchantBrain V1 (4 of 5 libraries)
+- [x] **Schema locked** (`universal/contracts/{trigger,discovery,transfer,jargon,playbook}.py`):
+      - `Trigger -> Objective -> Variations` (reactive, 1-5 variations, ≤30 words)
+      - `DiscoveryQuestion` (proactive, primary + variations + softer_version + capture_slots + captures_enum)
+      - `TransferDecision` (score-banded), `TransferSignal` (phrase → intent_delta)
+      - `playbook_tags` field added everywhere (per founder request)
+- [x] **10 Universal engines scaffolded** (`universal/engines/*.py`): Gatekeeper, Discovery, Objection, Qualification, IntentScoring, Callback, Appointment, Transfer, Memory, FollowUp — behavior-only, zero industry strings in conditionals
+- [x] **ConversationState** with state-machine guard (`universal/state/conversation_state.py`) — fixes BUG #002 path: CONFIRMED/EXIT are terminal, illegal transitions raise
+- [x] **Orchestrator** (`universal/orchestrator.py`) — feature-flagged via `UNIVERSAL_BRAIN_ENABLED=false`, does NOT touch existing server.py inline brain yet
+- [x] **MerchantBrain V1 content modules** (`playbooks/merchant_brain/`):
+      - Decision Maker V1: 8 triggers
+      - Workflow Discovery V1: 10 questions
+      - Funding Discovery V1: 10 questions
+      - Qualification V1: 8 questions
+      - Transfer Logic V1: 3 score bands (0-59 Nurture / 60-79 Appointment / 80+ Live Transfer) + 13 signal boosts
+      - Jargon Map V1: 25 entries (settlement_timing → "how quickly deposits hit your account", etc)
+      - **Gatekeeper V1: STUBBED** (founder's V1 content was lost in handoff; awaiting resend)
+- [x] **4 health tests** (`tests/universal/`, `tests/playbooks/`): schema_lock, deletion_independence, no_industry_logic, merchant_brain_content. All PASS locally.
+- [x] **Deploy bundle**: `/app/universal_brain_phase1.b64` (30 KB) + `/app/UNIVERSAL_BRAIN_PHASE1_DEPLOY.md` — non-breaking additive deploy to VPS
+
+### Architectural achievements verified by tests:
+- ✅ Universal engines run with NoopPlaybook (no MerchantBrain required)
+- ✅ No vertical nouns appear in `if/elif/match` statements anywhere in `universal/`
+- ✅ Locked schemas detect drift (added/removed fields fail the test)
+- ✅ Zero jargon in spoken phrasings (Funding V1 rule enforced)
+
+### Pending before Orchestrator can replace inline brain:
+- [ ] Founder resends Gatekeeper V1 content (15 triggers from earlier session)
+- [ ] Phase 2: wire `server.py` `/api/twilio/inbound/respond` to call `Orchestrator.handle_turn()` when `UNIVERSAL_BRAIN_ENABLED=true`
+- [ ] Live-call regression against 888-513-1913
+
 ## Completed (June 12, 2026) — BUG #004 Latency Eliminated
 - [x] **Fast-path cache** for AI identity probes (29 phrases): bypasses OpenAI (~3000ms → <5ms) — `_BRAIN_FAST_PATH_CACHE` in `server.py` lines ~125
 - [x] **Auto-followup wrapper** (`_ensure_followup`): appends "Want a quick demo?" when brain text doesn't end with "?" — kills silent dead-end after brain answers

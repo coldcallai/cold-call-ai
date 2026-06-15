@@ -155,6 +155,9 @@ e.g. MerchantBrain → David's Account → Dental Campaign (dental-specific obje
 3. **Account Customization** — per-ISO/per-agent offer copy, processor preferences, pricing anchors
 4. **Campaign Override** — per-campaign sub-vertical targeting within an account (e.g., dental vs. restaurant vs. auto repair, all running under one MerchantBrain account)
 
+#### 🚦 PR Review Rule (added June 15, 2026)
+Every pull request must answer exactly ONE of: **UniversalBrain / Playbook / Account / Campaign**. No "A + B". No multi-layer answers. If it can't be answered in one letter, the change is wrong.
+
 #### 🚨 Binding Architectural Rule: "UniversalBrain owns behavior. Playbooks own domain knowledge."
 
 **Refined June 13, 2026** (from prior wording "no industry nouns" — too strict, since industry strings can legitimately appear as *data*):

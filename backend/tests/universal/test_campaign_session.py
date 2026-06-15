@@ -13,6 +13,42 @@ def test_session_picks_ranktrust_when_eligible():
     assert session.opener_text in session.campaign.opening_variants
 
 
+def test_force_variant_d_for_day1_validation():
+    """Day-1 experiment pins all RankTrust calls to Variant D."""
+    session = CampaignSession.start_forced(
+        lead_id="dental-test-001",
+        lead_attrs={"gbp_rank": 8, "niche": "dental"},
+        campaign_id="ranktrust_local_growth",
+        variant_index=3,  # Variant D
+    )
+    assert session.campaign.id == "ranktrust_local_growth"
+    assert session.variant_index == 3
+    assert "Google Maps but not consistently near the top" in session.opener_text
+
+
+def test_force_variant_rejects_invalid_index():
+    import pytest
+    try:
+        CampaignSession.start_forced(
+            lead_id="x", lead_attrs={"gbp_rank": 8},
+            campaign_id="ranktrust_local_growth", variant_index=99,
+        )
+        assert False, "should have raised ValueError"
+    except ValueError:
+        pass
+
+
+def test_control_opener_matches_brian_wording():
+    """Day-1 Control opener is exactly Brian's authored line."""
+    session = CampaignSession.start_forced(
+        lead_id="control-test-001",
+        lead_attrs={},
+        campaign_id="merchant_services_default",
+        variant_index=0,
+    )
+    assert session.opener_text == "Who handles payment processing?"
+
+
 def test_session_falls_back_to_merchant_default_when_gbp_missing():
     session = CampaignSession.start("lead-no-gbp-001", {})
     assert session.campaign.id == "merchant_services_default"

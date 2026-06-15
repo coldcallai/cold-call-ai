@@ -14,12 +14,14 @@ MERCHANT_SERVICES_DEFAULT = Campaign(
     eligibility=EligibilityCriteria(rules=()),  # no eligibility filter
     playbook_id="merchant_brain",
     opening_variants=(
-        # Single variant — matches the legacy production opener intent.
-        # Add more variants once you have baseline conversation-rate data.
-        "Hi, I'm calling about payment processing and a couple of quick workflow questions. Is the owner or office manager available?",
+        # Single variant pinned to Brian's exact Control wording for the
+        # Day-1 validation experiment. Add more variants later once the
+        # baseline conversation rate is known.
+        "Who handles payment processing?",
     ),
     metadata={
         "version": "v1",
         "role": "control",
+        "experiment": "ranktrust_validation_day_1",
     },
 )

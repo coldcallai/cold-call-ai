@@ -68,6 +68,27 @@ class CampaignSession:
             started_at=datetime.now(timezone.utc),
         )
 
+    @classmethod
+    def start_forced(cls, *, lead_id: str, lead_attrs: dict, campaign_id: str,
+                     variant_index: int, router: Optional[CampaignRouter] = None) -> "CampaignSession":
+        """Force a specific campaign + variant. Used for controlled experiments
+        (e.g. Day-1 RankTrust validation pinning all calls to Variant D)."""
+        router = router or default_router()
+        c = router.get(campaign_id)
+        if c is None:
+            raise KeyError(f"Unknown campaign {campaign_id!r}")
+        opener = router.variant_at(campaign_id, variant_index)
+        if opener is None:
+            raise ValueError(f"Campaign {campaign_id!r} has no variant {variant_index}")
+        return cls(
+            campaign=c,
+            variant_index=variant_index,
+            opener_text=opener,
+            lead_id=lead_id,
+            lead_attrs=lead_attrs,
+            started_at=datetime.now(timezone.utc),
+        )
+
     # -------- Integration point #2: per-turn optional intercept --------
     def check_objection(self, caller_said: str) -> Optional[str]:
         """If the caller said something the campaign has a canned response for,

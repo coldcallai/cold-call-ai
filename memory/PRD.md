@@ -161,25 +161,43 @@ e.g. MerchantBrain → David's Account → Dental Campaign (dental-specific obje
 
 **Canonical schema per trigger (objection/deflection/statement):**
 ```yaml
-trigger: "We handle that internally"
+trigger: "We already have a processor"
 possible_meanings:
   - SCREENING
   - INTERNAL_MANAGEMENT
+  - GENUINE_INCUMBENT
   - BRUSH_OFF
 objectives:
-  IDENTIFY_DECISION_MAKER:
-    response: "That makes sense. Out of curiosity, who typically oversees that internally?"
+  DECISION_MAKER_DISCOVERY:
     intent_delta: 0
     next_state: DECISION_MAKER_DISCOVERY
-  IDENTIFY_PROCESS:
-    response: "Got it. How do you typically handle reviewing rates internally?"
-    intent_delta: +5
-    next_state: PROCESS_DISCOVERY
-  IDENTIFY_PAIN:
-    response: "Sure. When was the last time you reviewed pricing?"
+    variations:
+      - "That makes sense. Who typically oversees that relationship?"
+      - "Got it. Is that something the owner handles personally?"
+      - "Who usually evaluates those options when they come up?"
+  PAIN_DISCOVERY:
     intent_delta: +10
     next_state: PAIN_DISCOVERY
+    variations:
+      - "What do you think they like most about the current setup?"
+      - "Has that arrangement been working about the way they'd hoped?"
+  CALLBACK:
+    intent_delta: +5
+    next_state: CALLBACK_SCHEDULED
+    variations:
+      - "When is usually the best time to catch them?"
+      - "What's the best way to reach them?"
+  TRANSFER:
+    intent_delta: +50
+    next_state: TRANSFERRING
+    variations:
+      - "Is there a chance I could get 60 seconds with them now?"
+      - "Would it help if I held while you check?"
 ```
+
+**Rule:** 2-3 natural variations per objective. NOT 20. The AI picks the **objective** from state; within the objective, it picks one variation (round-robin or random) to avoid sounding scripted.
+
+**Why 2-3, not 20:** Elite reps don't memorize 300 objections × 20 responses. They think *"What do I need next?"* — pick objective → speak naturally. The library should mirror that, not become an unmaintainable spreadsheet.
 
 **Selection logic (UniversalBrain — owns the behavior):**
 ```

@@ -45,14 +45,14 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [x] **10 Universal engines scaffolded** (`universal/engines/*.py`): Gatekeeper, Discovery, Objection, Qualification, IntentScoring, Callback, Appointment, Transfer, Memory, FollowUp — behavior-only, zero industry strings in conditionals
 - [x] **ConversationState** with state-machine guard (`universal/state/conversation_state.py`) — fixes BUG #002 path: CONFIRMED/EXIT are terminal, illegal transitions raise
 - [x] **Orchestrator** (`universal/orchestrator.py`) — feature-flagged via `UNIVERSAL_BRAIN_ENABLED=false`, does NOT touch existing server.py inline brain yet
-- [x] **MerchantBrain V1 content modules** (`playbooks/merchant_brain/`):
+- [x] **MerchantBrain V1 content modules** (`playbooks/merchant_brain/`) — **ALL 5 LIBRARIES SHIPPED (June 15, 2026)**:
+      - Gatekeeper V1: **15 triggers** (What's this regarding? / We already have a processor / We handle that internally / Owner isn't available / Take a message / Just send an email / Sales call? / No sales calls / Call back later / Happy with processor / Who are you? / Who referred you? / Too busy / What do you want? / Not interested)
       - Decision Maker V1: 8 triggers
       - Workflow Discovery V1: 10 questions
       - Funding Discovery V1: 10 questions
       - Qualification V1: 8 questions
       - Transfer Logic V1: 3 score bands (0-59 Nurture / 60-79 Appointment / 80+ Live Transfer) + 13 signal boosts
       - Jargon Map V1: 25 entries (settlement_timing → "how quickly deposits hit your account", etc)
-      - **Gatekeeper V1: STUBBED** (founder's V1 content was lost in handoff; awaiting resend)
 - [x] **4 health tests** (`tests/universal/`, `tests/playbooks/`): schema_lock, deletion_independence, no_industry_logic, merchant_brain_content. All PASS locally.
 - [x] **Deploy bundle**: `/app/universal_brain_phase1.b64` (30 KB) + `/app/UNIVERSAL_BRAIN_PHASE1_DEPLOY.md` — non-breaking additive deploy to VPS
 
@@ -63,9 +63,9 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - ✅ Zero jargon in spoken phrasings (Funding V1 rule enforced)
 
 ### Pending before Orchestrator can replace inline brain:
-- [ ] Founder resends Gatekeeper V1 content (15 triggers from earlier session)
 - [ ] Phase 2: wire `server.py` `/api/twilio/inbound/respond` to call `Orchestrator.handle_turn()` when `UNIVERSAL_BRAIN_ENABLED=true`
 - [ ] Live-call regression against 888-513-1913
+- [ ] Phase 3 prep: Account-layer substitution for `{agent_name}` / `{company_name}` (currently hard-coded as "Sarah" / "ABC Merchant Solutions" in `GK_WHO_ARE_YOU`)
 
 ## Completed (June 12, 2026) — BUG #004 Latency Eliminated
 - [x] **Fast-path cache** for AI identity probes (29 phrases): bypasses OpenAI (~3000ms → <5ms) — `_BRAIN_FAST_PATH_CACHE` in `server.py` lines ~125

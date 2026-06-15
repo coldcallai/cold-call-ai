@@ -34,7 +34,7 @@ EXPECTED OUTPUT (all 4 suites must report PASS):
     PASS: test_no_industry_in_conditionals
     PASS: test_decision_maker_count_v1
     PASS: test_funding_question_count_v1
-    PASS: test_gatekeeper_stubbed
+    PASS: test_gatekeeper_shipped
     PASS: test_jargon_map_present
     PASS: test_no_jargon_in_caller_facing_phrasings
     PASS: test_qualification_question_count_v1
@@ -64,13 +64,13 @@ WHAT IS NOW LIVE-DEPLOYABLE
 ---------------------------
 1. /var/www/dialgenix/backend/universal/                  — 10 engines + contracts
 2. /var/www/dialgenix/backend/playbooks/merchant_brain/   — V1 content
-       Decision Maker V1  : 8 triggers   [SHIPPED]
-       Gatekeeper V1      : empty stub   [AWAITING CONTENT]
-       Workflow V1        : 10 questions [SHIPPED]
-       Funding V1         : 10 questions [SHIPPED]
-       Qualification V1   : 8 questions  [SHIPPED]
+       Decision Maker V1  : 8 triggers     [SHIPPED]
+       Gatekeeper V1      : 15 triggers    [SHIPPED]
+       Workflow V1        : 10 questions   [SHIPPED]
+       Funding V1         : 10 questions   [SHIPPED]
+       Qualification V1   : 8 questions    [SHIPPED]
        Transfer V1        : 3 bands + 13 signals [SHIPPED]
-       Jargon Map         : 25 entries   [SHIPPED]
+       Jargon Map         : 25 entries     [SHIPPED]
 3. /var/www/dialgenix/backend/tests/                      — 4 test suites
 
 

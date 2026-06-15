@@ -34,10 +34,10 @@ def test_qualification_question_count_v1():
     assert len(mb.get_questions(LIB_QUALIFICATION)) == 8
 
 
-def test_gatekeeper_stubbed():
-    assert GATEKEEPER_STATUS == "AWAITING_V1_CONTENT"
+def test_gatekeeper_shipped():
+    assert GATEKEEPER_STATUS == "V1_SHIPPED"
     gk = [t for t in mb.get_triggers() if "gatekeeper" in t.playbook_tags]
-    assert gk == [], "Gatekeeper triggers should still be empty stub"
+    assert len(gk) == 15, f"Expected 15 Gatekeeper V1 triggers, got {len(gk)}"
 
 
 def test_transfer_bands_contiguous():

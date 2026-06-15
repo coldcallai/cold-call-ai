@@ -107,6 +107,37 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 ### 🟠 P1 — Gatekeeper / Callback Flow (NEW — added June 13, 2026)
 **Renamed June 13: Deflection Intelligence Engine** — core IntentBrain infrastructure that every vertical playbook will inherit.
 
+---
+
+#### Agent Brain Rules (binding — drive every implementation decision)
+
+**Rule #1 — Reframe the gatekeeper:**
+The gatekeeper's primary job is to **protect time**, NOT to reject merchant services. Every prompt, classifier, and pivot script must treat the gatekeeper as a *time guardian*, not an obstacle.
+
+**Rule #2 — Never try to "close" a gatekeeper.**
+The goal of any gatekeeper interaction is intelligence capture. Any ONE of the following is a WIN:
+- Decision-maker name
+- Decision-maker title
+- Best callback time
+- Direct extension / email
+- Transfer to DM
+
+The AI must NEVER pitch product/pricing to a gatekeeper. If pitched at, defer back to intelligence questions.
+
+**Rule #3 — Score every gatekeeper interaction.**
+After every gatekeeper turn, the call must be re-scored. The score feeds the Merchant Services Intent Score (and every future vertical's intent score):
+
+| Signal | Points |
+|--------|--------|
+| Decision-maker name obtained | +15 |
+| Direct extension obtained | +25 |
+| Email obtained | +15 |
+| Best callback time | +10 |
+| Transferred to DM | +50 |
+| Hard block (no info captured) | -20 |
+
+---
+
 **Philosophy:** The gold isn't the callback — it's the *information*. Even a "rejected" call can score 65 if we extract the right intel.
 
 **Pipeline:**

@@ -37,6 +37,10 @@ class Campaign:
     playbook_id: str                         # "merchant_brain" — the downstream brain
     opening_variants: tuple[str, ...]        # exactly the spoken-line variants
     metadata: dict = field(default_factory=dict)
+    # Campaign-owned objection responses — checked BEFORE MerchantBrain hands off.
+    # Substring match (case-insensitive) on caller_said.
+    # Examples for RankTrust: "how did you find my ranking" -> canned response.
+    objection_responses: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.opening_variants:

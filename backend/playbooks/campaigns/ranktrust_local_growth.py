@@ -43,4 +43,23 @@ RANKTRUST_LOCAL_GROWTH = Campaign(
         "lead_source_module": "ranktrust.io",
         "hypothesis": "growth-oriented opener > payment-processing opener for GBP 4-20",
     },
+    # Campaign-level objection responses — fired BEFORE handing off to MerchantBrain.
+    # Substring match on caller speech (case-insensitive).
+    objection_responses=(
+        (
+            "how did you find my ranking",
+            "We use public Google Maps data to identify businesses that may have "
+            "opportunities to improve visibility. Your business came up during that review.",
+        ),
+        (
+            "where did you get my number",
+            "Your number is published on your Google business listing. We reached out "
+            "directly to ask one quick question about visibility — no list, no purchase.",
+        ),
+        (
+            "is this a robocall",
+            "No — I'm an AI assistant calling with one quick question about Google visibility. "
+            "I'll keep it short. Do you have a minute?",
+        ),
+    ),
 )

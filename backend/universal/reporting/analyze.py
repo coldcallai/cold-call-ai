@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from .analytics import summary, load_all_reports, by_campaign, variant_performance, filter_by_campaign
+from .analytics import summary, load_all_reports, by_campaign, variant_performance, filter_by_campaign, top_caller_phrases, top_objection_phrases
 
 
 def _fmt_row(rows, fmt="{0:>4}  {1}"):
@@ -45,6 +45,10 @@ def _print_report(s: dict) -> None:
     print(_fmt_row(s["most_confusing_funding_questions"]))
     print("\nHighest Transfer Drivers:")
     print(_fmt_row(s["highest_transfer_drivers"]))
+    print("\nTop Merchant Phrases (post-opener):")
+    print(_fmt_row(s.get("top_caller_phrases", [])))
+    print("\nTop Objection Phrases:")
+    print(_fmt_row(s.get("top_objection_phrases", [])))
     print()
 
 

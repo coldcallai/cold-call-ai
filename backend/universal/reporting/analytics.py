@@ -104,7 +104,39 @@ def summary(reports: list[dict]) -> dict:
         "highest_workflow_engagement": workflow_engagement(reports),
         "most_confusing_funding_questions": funding_confusion(reports),
         "highest_transfer_drivers": transfer_drivers(reports),
+        "top_caller_phrases": top_caller_phrases(reports),
+        "top_objection_phrases": top_objection_phrases(reports),
     }
+
+
+def top_caller_phrases(reports: list[dict], n: int = 10, min_words: int = 3) -> list[tuple[str, int]]:
+    """Q6 — what are merchants actually SAYING? Counts most common caller_said
+    across all post-opener turns (turn_index > 1). Filters trivial replies."""
+    c = Counter()
+    for r in _iter_reports(reports):
+        turns = r.get("turns") or []
+        for t in turns[1:]:  # skip the opener turn
+            phrase = (t.get("caller_said") or "").strip().lower().rstrip("?.!,")
+            if phrase and len(phrase.split()) >= min_words:
+                c[phrase] += 1
+    return c.most_common(n)
+
+
+def top_objection_phrases(reports: list[dict], n: int = 10) -> list[tuple[str, int]]:
+    """Q7 — what objections are most common?
+    Heuristic: caller phrases on turns whose trigger_id starts with DM_ or that
+    produced intent_delta == 0 / negative (pushback)."""
+    c = Counter()
+    for r in _iter_reports(reports):
+        for t in r.get("turns") or []:
+            tid = (t.get("trigger_id") or "")
+            delta = t.get("intent_delta", 0)
+            phrase = (t.get("caller_said") or "").strip().lower().rstrip("?.!,")
+            if not phrase:
+                continue
+            if tid.startswith("DM_") or delta <= 0:
+                c[phrase] += 1
+    return c.most_common(n)
 
 
 # ---- async DB variants ----

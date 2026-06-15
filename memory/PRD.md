@@ -155,7 +155,55 @@ e.g. MerchantBrain → David's Account → Dental Campaign (dental-specific obje
 3. **Account Customization** — per-ISO/per-agent offer copy, processor preferences, pricing anchors
 4. **Campaign Override** — per-campaign sub-vertical targeting within an account (e.g., dental vs. restaurant vs. auto repair, all running under one MerchantBrain account)
 
-#### 🚦 PR Review Rule (added June 15, 2026)
+#### 📝 MerchantBrain Content Schema (added June 15, 2026)
+
+**The N responses per trigger are NOT alternatives — they are objective-paths.** MerchantBrain selects which response to use by inspecting `conversation_state` and choosing the objective that fills the highest-priority missing field.
+
+**Canonical schema per trigger (objection/deflection/statement):**
+```yaml
+trigger: "We handle that internally"
+possible_meanings:
+  - SCREENING
+  - INTERNAL_MANAGEMENT
+  - BRUSH_OFF
+objectives:
+  IDENTIFY_DECISION_MAKER:
+    response: "That makes sense. Out of curiosity, who typically oversees that internally?"
+    intent_delta: 0
+    next_state: DECISION_MAKER_DISCOVERY
+  IDENTIFY_PROCESS:
+    response: "Got it. How do you typically handle reviewing rates internally?"
+    intent_delta: +5
+    next_state: PROCESS_DISCOVERY
+  IDENTIFY_PAIN:
+    response: "Sure. When was the last time you reviewed pricing?"
+    intent_delta: +10
+    next_state: PAIN_DISCOVERY
+```
+
+**Selection logic (UniversalBrain — owns the behavior):**
+```
+1. Read current conversation_state (e.g. {decision_maker_known: false, pain_known: false, ...})
+2. Match trigger from playbook
+3. Pick the objective that fills the highest-priority missing slot
+4. Emit the response for that objective
+5. Update state + intent_score per objective's metadata
+```
+
+**Forbidden pattern (do not implement):**
+```python
+random.choice(responses)   # ❌ AI script reader, not Agent Brain
+```
+
+**Required pattern:**
+```python
+objective = decide_objective(state, trigger.objectives)   # ✅ Agent Brain
+response = trigger.objectives[objective].response
+```
+
+When founder ships the 10-response sets, **each response will be tagged with the objective it serves**, not just listed as alternatives.
+
+
 Every pull request must answer exactly ONE of: **UniversalBrain / Playbook / Account / Campaign**. No "A + B". No multi-layer answers. If it can't be answered in one letter, the change is wrong.
 
 #### 🚨 Binding Architectural Rule: "UniversalBrain owns behavior. Playbooks own domain knowledge."

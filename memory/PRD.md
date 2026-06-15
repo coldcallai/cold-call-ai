@@ -104,6 +104,22 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [ ] Expand fast-path with core product features: "live transfers", "voicemail drops", "CRM integration", "Calendly integration", "outbound calling", "do you integrate with HubSpot/Salesforce"
 - [ ] Add proper "do you support X" Q&A to brain prompt so legitimate product questions don't get classified as OFF_TOPIC
 
+### 🟠 P1 — Vertical Playbooks (template + niche)
+**Architectural principle (added June 13, 2026):** Playbooks are structured as **universal templates** with **niche overrides**. The Deflection Intelligence Engine, Agent Brain Rules, and gatekeeper handling are shared infrastructure. Only the vertical-specific copy (industry framing, decision-maker title, pain points, pricing anchors) changes per niche.
+
+- [ ] **MerchantBrain** (Merchant Services) — IN PROGRESS by founder, all agent responses being authored/edited manually before code import
+- [ ] AgencyBrain (Agencies) — future
+- [ ] RoofingBrain (Roofing) — future
+- [ ] InsuranceBrain (Insurance) — future
+- [ ] DentalBrain (Dental practices) — future
+
+**Each playbook will include:**
+- Discovery script (opener + qualifying questions)
+- Qualification logic (BANT / pain matrix)
+- Objection handlers (price, timing, incumbent provider, no budget, etc.)
+- Gatekeeper deflection responses (uses universal engine)
+- Vertical-specific intent score weights
+
 ### 🟠 P1 — Gatekeeper / Callback Flow (NEW — added June 13, 2026)
 **Renamed June 13: Deflection Intelligence Engine** — core IntentBrain infrastructure that every vertical playbook will inherit.
 

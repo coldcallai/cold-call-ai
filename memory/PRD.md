@@ -110,7 +110,7 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 #### 🏗️ Canonical Architecture (locked June 13, 2026)
 
 ```
-IntentBrain Core (Universal Agent Brain)
+IntentBrain Core (Universal Agent Brain)       ← Layer 1
 ├─ Gatekeeper Engine
 ├─ Discovery Engine
 ├─ Objection Engine
@@ -124,7 +124,7 @@ IntentBrain Core (Universal Agent Brain)
 
          ↓ inherits ↓
 
-Playbook Layer (Vertical Overrides)
+Playbook Layer (Vertical Overrides)            ← Layer 2
 ├─ MerchantBrain
 ├─ RoofingBrain
 ├─ InsuranceBrain
@@ -134,13 +134,56 @@ Playbook Layer (Vertical Overrides)
 
          ↓ inherits ↓
 
-Account Customization Layer
-(per-ISO / per-agent overrides — different offers, processors, pricing under the same playbook)
-e.g. Universal → MerchantBrain → David's Merchant Playbook
-     Universal → MerchantBrain → Agent Smith's Merchant Playbook
+Account Customization Layer                    ← Layer 3
+(per-ISO / per-agent overrides — different offers, processors, pricing under same playbook)
+e.g. MerchantBrain → David's Account (uses Priority, Paysafe, Shift4)
+     MerchantBrain → Agent Smith's Account (uses Fiserv, Clearent, NMI)
+
+         ↓ inherits ↓
+
+Campaign Override Layer                        ← Layer 4 (added June 13, 2026)
+(per-campaign sub-vertical targeting within an account)
+e.g. MerchantBrain → David's Account → Dental Campaign (dental-specific objections, average ticket size)
+     MerchantBrain → David's Account → Restaurant Campaign (tip handling, late-night surcharges)
+     MerchantBrain → David's Account → Auto Repair Campaign (B2B mix, parts vs. labor pricing)
+     MerchantBrain → David's Account → Retail Campaign (high card-present %, holiday surge)
 ```
 
-**Three-Layer Inheritance Model:**
+**Four-Layer Inheritance Model:**
+1. **Universal Brain** — built once, shared by all (10 engines, *behavior only, zero industry nouns*)
+2. **Playbook Brain** (e.g., MerchantBrain) — industry knowledge, industry objections, industry qualification, industry scoring weights
+3. **Account Customization** — per-ISO/per-agent offer copy, processor preferences, pricing anchors
+4. **Campaign Override** — per-campaign sub-vertical targeting within an account (e.g., dental vs. restaurant vs. auto repair, all running under one MerchantBrain account)
+
+#### 🚨 Binding Architectural Test: "No Industry Nouns in UniversalBrain"
+
+**Rule:** UniversalBrain code MUST NEVER contain industry nouns.
+
+Forbidden in `/universal/` codebase:
+- ❌ Clover, Square, Toast, Fiserv, Paysafe, Shift4, NMI, Clearent, Priority
+- ❌ Roofing, storm damage, shingles, supplier
+- ❌ Insurance, premium, policy, underwriting
+- ❌ Google Ads, agencies, retainer, campaign performance
+- ❌ Cash discounting, dual pricing, Schedule A, residuals (merchant-specific)
+- ❌ Any vertical-specific noun
+
+**Enforcement (CI test idea):** A lint check that greps the `/universal/` directory for any term in a known industry-noun dictionary and fails the build if found. If an industry noun appears, it belongs in the Playbook layer.
+
+**Why this rule is non-negotiable:** It's the single cleanest test for whether the architecture is correctly layered. If Clover sneaks into UniversalBrain, every future vertical inherits merchant-services bias. The rule forces clean separation by design.
+
+#### Refactor-First Decision (confirmed June 13, 2026)
+> "Architecture mistakes are cheap to fix before content and expensive to fix after content."
+
+**Sequencing:**
+1. ✅ **FIRST:** Extract existing inline brain logic from `server.py` lines ~11648-11720 into the 10 universal engines
+2. ✅ **THEN:** Build MerchantBrain as the first playbook on the clean architecture
+3. ✅ **THEN:** Import all manually-authored MerchantBrain responses
+4. ✅ **THEN:** Add Account Customization layer
+5. ✅ **THEN:** Add Campaign Override layer (or stub it in advance as a placeholder, even if unused for v1)
+
+**Rationale:** Importing 5,000 lines of MerchantBrain content into the current monolithic structure would hardwire merchant logic into core logic. Six months later, RoofingBrain / InsuranceBrain / AgencyBrain would each require ripping that out. The refactor is 2-3 days of work that saves 2-3 weeks per future vertical.
+
+#### Three-Layer Inheritance Model (DEPRECATED — superseded by 4-layer above):
 1. **Universal Brain** — built once, shared by all
 2. **Playbook Brain** (e.g., MerchantBrain) — industry knowledge, industry objections, industry qualification, industry scoring weights
 3. **Account Customization** — per-ISO/per-agent offer copy, processor preferences, pricing anchors

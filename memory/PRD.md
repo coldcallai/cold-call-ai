@@ -155,21 +155,53 @@ e.g. MerchantBrain → David's Account → Dental Campaign (dental-specific obje
 3. **Account Customization** — per-ISO/per-agent offer copy, processor preferences, pricing anchors
 4. **Campaign Override** — per-campaign sub-vertical targeting within an account (e.g., dental vs. restaurant vs. auto repair, all running under one MerchantBrain account)
 
-#### 🚨 Binding Architectural Test: "No Industry Nouns in UniversalBrain"
+#### 🚨 Binding Architectural Rule: "UniversalBrain owns behavior. Playbooks own domain knowledge."
 
-**Rule:** UniversalBrain code MUST NEVER contain industry nouns.
+**Refined June 13, 2026** (from prior wording "no industry nouns" — too strict, since industry strings can legitimately appear as *data*):
 
-Forbidden in `/universal/` codebase:
-- ❌ Clover, Square, Toast, Fiserv, Paysafe, Shift4, NMI, Clearent, Priority
-- ❌ Roofing, storm damage, shingles, supplier
-- ❌ Insurance, premium, policy, underwriting
-- ❌ Google Ads, agencies, retainer, campaign performance
-- ❌ Cash discounting, dual pricing, Schedule A, residuals (merchant-specific)
-- ❌ Any vertical-specific noun
+UniversalBrain MUST NOT contain industry-specific **business logic**. Industry strings appearing as *data* are fine; industry strings appearing in *conditionals* are violations.
 
-**Enforcement (CI test idea):** A lint check that greps the `/universal/` directory for any term in a known industry-noun dictionary and fails the build if found. If an industry noun appears, it belongs in the Playbook layer.
+**✅ Allowed in UniversalBrain** (industry as data):
+```python
+lead = {"industry": "merchant_services"}   # Data — OK
+def score(lead, weights): ...              # Behavior — OK
+```
 
-**Why this rule is non-negotiable:** It's the single cleanest test for whether the architecture is correctly layered. If Clover sneaks into UniversalBrain, every future vertical inherits merchant-services bias. The rule forces clean separation by design.
+**❌ Forbidden in UniversalBrain** (industry as logic):
+```python
+if processor == "Square":          # ❌ belongs in MerchantBrain
+    increase_intent_score()
+
+if industry == "roofing":          # ❌ belongs in RoofingBrain
+    ask_storm_question()
+
+if vertical == "dental":           # ❌ belongs in DentalBrain
+    ask_insurance_acceptance()
+```
+
+**Why the wording matters:** "No industry nouns" would forbid even harmless data tagging. The real boundary is **behavior vs. domain knowledge**:
+- UniversalBrain owns: state machines, scoring math, callback scheduling, transfer logic, memory I/O, prompt orchestration
+- Playbooks own: industry questions, industry objections, industry scoring weights, industry-specific response copy
+
+#### 🧪 Future Architectural Health Test
+
+**Six months from now, ask:** *"Could you delete MerchantBrain entirely and have IntentBrain still run?"*
+
+- ✅ **Healthy architecture:** Yes. It would still call, qualify, schedule, transfer, remember, and follow up — just without any merchant-services-specific knowledge. Generic placeholders ("Hi, I'm calling to learn about your business") would fill in.
+- ❌ **Leaky architecture:** No. Core calling logic breaks because merchant logic leaked into UniversalBrain.
+
+If a future code change ever causes core engines to fail when a playbook is removed → the boundary has been violated and needs immediate refactoring before the next vertical is added.
+
+#### Why MerchantBrain is *content*, not *code* (architectural goal)
+
+If MerchantBrain v1 ships as a collection of:
+- Questions (qualifying / discovery prompts)
+- Responses (objection handlers, deflection pivots)
+- Scoring rules (weights per signal)
+- Industry knowledge (processor names, terminology, pricing models)
+- Transfer rules (when to escalate to human)
+
+…stored as **structured data** (JSON / Markdown / DB rows) rather than custom Python code, then every subsequent playbook (RoofingBrain, InsuranceBrain, etc.) becomes a *content authoring job*, not an engineering job. That's the 10x leverage win.
 
 #### Refactor-First Decision (confirmed June 13, 2026)
 > "Architecture mistakes are cheap to fix before content and expensive to fix after content."

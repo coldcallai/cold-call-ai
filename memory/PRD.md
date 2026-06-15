@@ -105,12 +105,91 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [ ] Add proper "do you support X" Q&A to brain prompt so legitimate product questions don't get classified as OFF_TOPIC
 
 ### 🟠 P1 — Gatekeeper / Callback Flow (NEW — added June 13, 2026)
-- [ ] Detect gatekeeper deflection responses ("just tell me what you want", "what's this about", "we don't take cold calls")
-- [ ] Respond with diplomatic pivot: "Fair question. I'm trying to identify who handles payment processing decisions and whether it makes sense to have a brief conversation."
-- [ ] If gatekeeper offers to take info: capture **contact name** (STT) + **best callback day/time** (datetime parser)
-- [ ] Schedule outbound callback: persist to MongoDB `scheduled_callbacks` collection {lead_id, contact_name, callback_at_iso, callback_phone, status}
-- [ ] Background worker (every 5 min) checks for due callbacks → triggers Twilio outbound dial
-- [ ] Estimated effort: ~half day (state machine + name STT cleanup + datetime parser + worker + tests)
+**Renamed June 13: Deflection Intelligence Engine** — core IntentBrain infrastructure that every vertical playbook will inherit.
+
+**Philosophy:** The gold isn't the callback — it's the *information*. Even a "rejected" call can score 65 if we extract the right intel.
+
+**Pipeline:**
+```
+Detect Deflection → Classify Type → Capture Intelligence → Score Intent → Schedule Next Best Action
+```
+
+**Deflection Categories (enum):**
+- `OWNER_BUSY` — try callback at suggested time
+- `OWNER_UNAVAILABLE` — capture best time + decision-maker name
+- `NO_COLD_CALLS` — pivot to ask for decision-maker name, best time, processor name
+- `SEND_EMAIL` — capture email recipient name + their direct phone, schedule SEND_EMAIL_AND_CALL with waitDays=2
+- `GATEKEEPER_BLOCK` — capture as much intel as possible before hangup
+- `CALL_BACK_LATER` — schedule callback at requested time
+- `SCREENING` ("just tell me what you want") — pivot, then capture decision maker / title / email
+- `NOT_INTERESTED` — capture WHY (current processor, contract end date, pain points)
+- `ALREADY_HAVE_PROCESSOR` — capture processor name, contract end date, satisfaction level (high-value lead nurture pipeline)
+- `UNKNOWN` — fallback to brain freeform
+
+**Intelligence Capture Schema (`call_intelligence` collection):**
+```json
+{
+  "call_sid": "...",
+  "lead_id": "...",
+  "deflection_type": "NO_COLD_CALLS",
+  "decision_maker_name": "Tom",
+  "decision_maker_title": "Owner",
+  "decision_maker_email": "tom@business.com",
+  "decision_maker_direct_phone": "+1...",
+  "best_callback_time": "Tuesday 10:00",
+  "current_processor": "Square",
+  "contract_end_date": "2026-12-01",
+  "next_action": "CALL_BACK",
+  "next_action_at": "2026-06-17T15:00:00Z",
+  "wait_days": 0,
+  "gatekeeper_first_name": "Susan"   // for next-call name-drop ("Susan suggested...")
+}
+```
+
+**Intent Score Points:**
+| Signal | Points |
+|--------|--------|
+| Decision maker name | +15 |
+| Email obtained | +10 |
+| Best callback time | +10 |
+| Direct extension/phone | +25 |
+| Email request from gatekeeper | +15 |
+| Transferred to DM | +50 |
+| Current processor mentioned | +10 |
+| Contract end date | +20 |
+| Hard block (no info captured) | -20 |
+
+**Gatekeeper Success Score** (boolean checklist tracked per call):
+- `decision_maker_name_obtained`
+- `email_obtained`
+- `best_time_obtained`
+- `processor_mentioned`
+- `gatekeeper_name_obtained` (for warm follow-up)
+
+→ A call that didn't book a demo can still be a *successful* call.
+
+**Next Best Action Engine (rules table):**
+| Deflection Type | Next Action | Default Wait |
+|----|----|----|
+| OWNER_BUSY | CALL_BACK | 1 day |
+| OWNER_UNAVAILABLE | CALL_BACK | use captured best_callback_time |
+| NO_COLD_CALLS | SEND_EMAIL_AND_CALL | 3 days |
+| SEND_EMAIL | SEND_EMAIL_AND_CALL | 2 days |
+| GATEKEEPER_BLOCK | CALL_BACK | 5 days (different time of day) |
+| CALL_BACK_LATER | CALL_BACK | use captured time |
+| SCREENING | EMAIL_THEN_CALL | 1 day |
+| NOT_INTERESTED | NURTURE_DRIP | 30 days |
+| ALREADY_HAVE_PROCESSOR | NURTURE_DRIP | until contract_end_date - 60 days |
+
+**Next-call Name-drop Logic:**
+On callback, if `gatekeeper_first_name` AND `decision_maker_name` exist, opening line becomes:
+> *"Hi [DM_name], this is [AI_name]. I was speaking with [Gatekeeper_name] earlier and she suggested [best_time] would be the best time to reach you."*
+
+**Estimated effort:** 1-2 days (was half-day for basic callback)
+- Day 1: Deflection classifier (LLM-driven w/ structured output), intelligence capture state machine, MongoDB collection + indexes, intent score function
+- Day 2: Next Best Action engine, background scheduler/dialer worker, name-drop on outbound, dashboard UI for call_intelligence
+
+**Why P1 priority:** Core IntentBrain infrastructure. Every future vertical playbook (merchant services, roofing, insurance, agencies, dental) inherits the same engine. Building this once = 10x leverage.
 
 ### P0 - Before Monday Launch
 - [ ] Practice setup walkthrough

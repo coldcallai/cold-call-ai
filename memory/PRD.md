@@ -104,6 +104,14 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 - [ ] Expand fast-path with core product features: "live transfers", "voicemail drops", "CRM integration", "Calendly integration", "outbound calling", "do you integrate with HubSpot/Salesforce"
 - [ ] Add proper "do you support X" Q&A to brain prompt so legitimate product questions don't get classified as OFF_TOPIC
 
+### 🟠 P1 — Gatekeeper / Callback Flow (NEW — added June 13, 2026)
+- [ ] Detect gatekeeper deflection responses ("just tell me what you want", "what's this about", "we don't take cold calls")
+- [ ] Respond with diplomatic pivot: "Fair question. I'm trying to identify who handles payment processing decisions and whether it makes sense to have a brief conversation."
+- [ ] If gatekeeper offers to take info: capture **contact name** (STT) + **best callback day/time** (datetime parser)
+- [ ] Schedule outbound callback: persist to MongoDB `scheduled_callbacks` collection {lead_id, contact_name, callback_at_iso, callback_phone, status}
+- [ ] Background worker (every 5 min) checks for due callbacks → triggers Twilio outbound dial
+- [ ] Estimated effort: ~half day (state machine + name STT cleanup + datetime parser + worker + tests)
+
 ### P0 - Before Monday Launch
 - [ ] Practice setup walkthrough
 - [ ] Test CSV upload on live

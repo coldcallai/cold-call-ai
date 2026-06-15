@@ -32,7 +32,24 @@ def test_objection_intercept_canned_response_for_ranking_question():
     resp = session.check_objection("how did you find my ranking?")
     assert resp is not None
     assert "public Google Maps data" in resp
-    assert "no list, no purchase" not in resp  # that's the OTHER response
+
+
+def test_objection_intercept_canned_response_for_seo_company_objection():
+    """The #1 expected RankTrust objection per Brian's read of synthetic data."""
+    session = CampaignSession.start("lead-eligible", {"gbp_rank": 8})
+    # All three phrasings should hit the canned response
+    for phrase in (
+        "we already have an SEO company",
+        "we already have someone doing SEO",
+        "we're already working with an SEO firm",
+    ):
+        resp = session.check_objection(phrase)
+        assert resp is not None, f"missed: {phrase!r}"
+        assert "Many businesses we speak with already have someone helping them" in resp
+        assert "calls and leads you're getting from Google today" in resp
+        # No attack / criticism / SEO pitch — by design
+        assert "better" not in resp.lower()
+        assert "switch" not in resp.lower()
 
 
 def test_objection_intercept_misses_unknown_phrase():

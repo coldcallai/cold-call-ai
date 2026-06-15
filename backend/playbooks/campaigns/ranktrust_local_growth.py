@@ -52,6 +52,21 @@ RANKTRUST_LOCAL_GROWTH = Campaign(
             "opportunities to improve visibility. Your business came up during that review.",
         ),
         (
+            "already have an seo",
+            "That makes sense. Many businesses we speak with already have someone helping them. "
+            "I'm curious — are you happy with the number of calls and leads you're getting from Google today?",
+        ),
+        (
+            "already have someone doing seo",
+            "That makes sense. Many businesses we speak with already have someone helping them. "
+            "I'm curious — are you happy with the number of calls and leads you're getting from Google today?",
+        ),
+        (
+            "already working with an seo",
+            "That makes sense. Many businesses we speak with already have someone helping them. "
+            "I'm curious — are you happy with the number of calls and leads you're getting from Google today?",
+        ),
+        (
             "where did you get my number",
             "Your number is published on your Google business listing. We reached out "
             "directly to ask one quick question about visibility — no list, no purchase.",

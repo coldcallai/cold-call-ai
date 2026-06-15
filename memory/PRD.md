@@ -107,18 +107,92 @@ Build an AI cold calling machine that calls businesses, qualifies them, and rout
 ### 🟠 P1 — Vertical Playbooks (template + niche)
 **Architectural principle (added June 13, 2026):** Playbooks are structured as **universal templates** with **niche overrides**. The Deflection Intelligence Engine, Agent Brain Rules, and gatekeeper handling are shared infrastructure. Only the vertical-specific copy (industry framing, decision-maker title, pain points, pricing anchors) changes per niche.
 
-- [ ] **MerchantBrain** (Merchant Services) — IN PROGRESS by founder, all agent responses being authored/edited manually before code import
+#### 🏗️ Canonical Architecture (locked June 13, 2026)
+
+```
+IntentBrain Core (Universal Agent Brain)
+├─ Gatekeeper Engine
+├─ Discovery Engine
+├─ Objection Engine
+├─ Qualification Engine
+├─ Intent Scoring Engine
+├─ Callback Engine
+├─ Appointment Engine
+├─ Transfer Engine
+├─ CRM Memory Engine
+└─ Follow-Up Engine
+
+         ↓ inherits ↓
+
+Playbook Layer (Vertical Overrides)
+├─ MerchantBrain
+├─ RoofingBrain
+├─ InsuranceBrain
+├─ AgencyBrain
+├─ DentalBrain
+└─ SaaSBrain
+
+         ↓ inherits ↓
+
+Account Customization Layer
+(per-ISO / per-agent overrides — different offers, processors, pricing under the same playbook)
+e.g. Universal → MerchantBrain → David's Merchant Playbook
+     Universal → MerchantBrain → Agent Smith's Merchant Playbook
+```
+
+**Three-Layer Inheritance Model:**
+1. **Universal Brain** — built once, shared by all
+2. **Playbook Brain** (e.g., MerchantBrain) — industry knowledge, industry objections, industry qualification, industry scoring weights
+3. **Account Customization** — per-ISO/per-agent offer copy, processor preferences, pricing anchors
+
+#### What stays UNIVERSAL (never vertical-specific):
+- ✅ Deflection Detection
+- ✅ Callback Scheduling
+- ✅ Gatekeeper Classification
+- ✅ Decision-Maker Identification
+- ✅ CRM Memory
+- ✅ Follow-Up Logic
+- ✅ Conversation Summaries
+- ✅ Intent Scoring Framework (the math; the weights per signal are universal)
+- ✅ Transfer Framework
+
+#### What a Playbook contains (and ONLY this):
+| Layer | Example: MerchantBrain |
+|---|---|
+| Industry Knowledge | Clover, Square, Toast, Fiserv, Paysafe, Shift4, NMI, Cash Discounting, Dual Pricing, Level 2/3, Funding, Residuals, Schedule A |
+| Industry Objections | "Already have a processor", "Friend handles processing", "We already reviewed rates", "We use Square/Clover" |
+| Industry Qualification | Monthly volume, Average ticket, Max ticket, Card-present %, Current processor |
+| Industry Scoring | Intent Score, Savings Score, Workflow Score, Funding Score |
+
+Universal engine asks the question. Playbook supplies the *content* of the question/response. Example:
+- Universal Gatekeeper Engine detects: "We already have a processor"
+- MerchantBrain override response: industry-specific pivot referencing rate comparisons / Schedule A
+- RoofingBrain override response: industry-specific pivot referencing storm season / supplier pricing
+- AgencyBrain override response: industry-specific pivot referencing campaign performance
+
+**Same framework. Different responses.**
+
+#### Naming conventions
+- **Internal (code)**: `UniversalBrain`, `MerchantBrain`, `RoofingBrain`, `InsuranceBrain`, `AgencyBrain`, `DentalBrain`, `SaaSBrain`
+- **External (customer-facing)**: "IntentBrain Merchant Services **Playbook**" — *"Playbook"* reads better to customers than *"Brain"*
+
+#### Why this matters
+Building five separate vertical systems = five separate maintenance nightmares, five prompt trees, five qualification engines, five duplicate gatekeeper logics that drift apart over time. Build the engines once → 10x leverage on every future vertical → consistent quality across all niches → faster vertical rollout (a new vertical becomes ~2 days of *content* work, not 2 weeks of engineering).
+
+#### Playbook Roadmap
+- [ ] **MerchantBrain** (Merchant Services) — 🔨 IN PROGRESS by founder, all agent responses being authored/edited manually before code import
 - [ ] AgencyBrain (Agencies) — future
 - [ ] RoofingBrain (Roofing) — future
 - [ ] InsuranceBrain (Insurance) — future
 - [ ] DentalBrain (Dental practices) — future
+- [ ] SaaSBrain (SaaS sales) — future
 
 **Each playbook will include:**
-- Discovery script (opener + qualifying questions)
-- Qualification logic (BANT / pain matrix)
-- Objection handlers (price, timing, incumbent provider, no budget, etc.)
-- Gatekeeper deflection responses (uses universal engine)
-- Vertical-specific intent score weights
+- Discovery script (opener + qualifying questions) — *industry-specific copy only*
+- Qualification logic (BANT / pain matrix) — *industry-specific fields only*
+- Objection handlers — *industry-specific copy only*
+- Gatekeeper deflection responses (uses universal engine, supplies industry-specific pivot copy)
+- Vertical-specific intent score weights (e.g., MerchantBrain weights "monthly volume" heavily; RoofingBrain weights "storm damage" heavily)
 
 ### 🟠 P1 — Gatekeeper / Callback Flow (NEW — added June 13, 2026)
 **Renamed June 13: Deflection Intelligence Engine** — core IntentBrain infrastructure that every vertical playbook will inherit.

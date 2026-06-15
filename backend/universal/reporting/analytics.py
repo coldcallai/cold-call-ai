@@ -114,3 +114,64 @@ async def load_all_reports(collection, limit: int = 1000) -> list[dict]:
         return []
     cursor = collection.find({}, {"_id": 0}).sort("generated_at", -1).limit(limit)
     return await cursor.to_list(length=limit)
+
+
+# ---- Campaign analytics (Layer 4) ----
+
+def filter_by_campaign(reports: list[dict], campaign_id: str) -> list[dict]:
+    return [r for r in (reports or []) if r.get("campaign_id") == campaign_id]
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return (numerator / denominator) if denominator else 0.0
+
+
+def _outcome_rate(reports: list[dict], outcome: str) -> float:
+    n = len(reports)
+    if not n:
+        return 0.0
+    return _rate(sum(1 for r in reports if r.get("outcome") == outcome), n)
+
+
+def campaign_kpis(reports: list[dict]) -> dict:
+    """The 5 success metrics:
+        - Conversation Rate (engaged past opener)
+        - Decision Maker Rate
+        - Transfer Rate (LIVE_TRANSFER outcome)
+        - Appointment Rate (APPOINTMENT outcome)
+        - Avg Call Duration (seconds)
+    """
+    n = len(reports or [])
+    if not n:
+        return {
+            "calls": 0, "conversation_rate": 0.0, "decision_maker_rate": 0.0,
+            "transfer_rate": 0.0, "appointment_rate": 0.0, "avg_duration_sec": 0.0,
+        }
+    durations = [r.get("duration_seconds") for r in reports if r.get("duration_seconds") is not None]
+    return {
+        "calls": n,
+        "conversation_rate": _rate(sum(1 for r in reports if r.get("engaged_past_opener")), n),
+        "decision_maker_rate": _rate(sum(1 for r in reports if r.get("decision_maker_reached")), n),
+        "transfer_rate": _outcome_rate(reports, "LIVE_TRANSFER"),
+        "appointment_rate": _outcome_rate(reports, "APPOINTMENT"),
+        "avg_duration_sec": (sum(durations) / len(durations)) if durations else 0.0,
+    }
+
+
+def by_campaign(reports: list[dict]) -> dict[str, dict]:
+    """Group reports by campaign_id -> KPI dict. The A/B comparison view."""
+    groups: dict[str, list[dict]] = {}
+    for r in (reports or []):
+        cid = r.get("campaign_id") or "_uncategorized"
+        groups.setdefault(cid, []).append(r)
+    return {cid: campaign_kpis(rs) for cid, rs in groups.items()}
+
+
+def variant_performance(reports: list[dict], campaign_id: Optional[str] = None) -> dict[int, dict]:
+    """Per-variant KPI breakdown within a campaign. Used to find the winning variant."""
+    src = filter_by_campaign(reports, campaign_id) if campaign_id else (reports or [])
+    by_variant: dict[int, list[dict]] = {}
+    for r in src:
+        idx = r.get("campaign_variant_index", -1)
+        by_variant.setdefault(idx, []).append(r)
+    return {idx: campaign_kpis(rs) for idx, rs in by_variant.items()}

@@ -21,9 +21,16 @@ class CallReport:
     generated_at: str
     duration_seconds: Optional[int] = None
     turns: list = field(default_factory=list)
+    # campaign attribution (Layer 4)
+    campaign_id: Optional[str] = None
+    campaign_variant_index: int = -1
+    campaign_variant_text: Optional[str] = None
+    lead_source: Optional[str] = None
+    # gatekeeper
     gatekeeper_trigger: Optional[str] = None
     gatekeeper_objective: Optional[str] = None
     gatekeeper_variant_index: int = -1
+    # captured intel
     decision_maker_reached: bool = False
     decision_maker_name: Optional[str] = None
     current_processor: Optional[str] = None
@@ -34,6 +41,8 @@ class CallReport:
     outcome: str = "UNKNOWN"          # APPOINTMENT | LIVE_TRANSFER | FOLLOW_UP | NURTURE | UNKNOWN
     next_action: Optional[str] = None
     next_action_at: Optional[str] = None
+    # "Conversation rate" signal — did the caller engage past the opener?
+    engaged_past_opener: bool = False
     jargon_hits: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -45,7 +54,11 @@ WORKFLOW_TAGS = ("workflow_discovery",)
 FUNDING_TAGS = ("funding_discovery",)
 
 
-def build_report(state, turn_log: list, playbook=None) -> CallReport:
+def build_report(state, turn_log: list, playbook=None, *,
+                 campaign_id: Optional[str] = None,
+                 campaign_variant_index: int = -1,
+                 campaign_variant_text: Optional[str] = None,
+                 lead_source: Optional[str] = None) -> CallReport:
     """Roll up a ConversationState + raw turn_log into a CallReport."""
     report = CallReport(
         call_sid=state.call_sid,
@@ -58,7 +71,17 @@ def build_report(state, turn_log: list, playbook=None) -> CallReport:
         current_processor=state.current_processor,
         next_action=state.next_action,
         next_action_at=state.next_action_at,
+        campaign_id=campaign_id,
+        campaign_variant_index=campaign_variant_index,
+        campaign_variant_text=campaign_variant_text,
+        lead_source=lead_source,
     )
+
+    # "Engaged past opener" = caller produced at least 1 non-empty post-opener turn
+    if turn_log and len(turn_log) >= 2:
+        report.engaged_past_opener = any(
+            (t.get("caller_said") or "").strip() for t in turn_log[1:]
+        )
 
     # Find first gatekeeper turn
     for t in (turn_log or []):

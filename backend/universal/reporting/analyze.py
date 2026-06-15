@@ -12,8 +12,9 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
-from .analytics import summary, load_all_reports
+from .analytics import summary, load_all_reports, by_campaign, variant_performance, filter_by_campaign
 
 
 def _fmt_row(rows, fmt="{0:>4}  {1}"):
@@ -47,6 +48,39 @@ def _print_report(s: dict) -> None:
     print()
 
 
+def _print_kpis(label: str, k: dict) -> None:
+    print(f"\n  {label}")
+    print(f"    Calls               : {k['calls']}")
+    print(f"    Conversation Rate   : {k['conversation_rate']*100:>5.1f}%")
+    print(f"    Decision Maker Rate : {k['decision_maker_rate']*100:>5.1f}%")
+    print(f"    Transfer Rate       : {k['transfer_rate']*100:>5.1f}%")
+    print(f"    Appointment Rate    : {k['appointment_rate']*100:>5.1f}%")
+    print(f"    Avg Duration (sec)  : {k['avg_duration_sec']:>5.1f}")
+
+
+def _print_campaign_section(reports: list[dict], focus_campaign: Optional[str] = None) -> None:
+    print("\n" + "=" * 60)
+    print("  Campaign A/B Comparison (Layer 4)")
+    print("=" * 60)
+    groups = by_campaign(reports)
+    if not groups:
+        print("  (no campaign-tagged calls yet)")
+        return
+    for cid, k in sorted(groups.items(), key=lambda kv: -kv[1]["calls"]):
+        _print_kpis(cid, k)
+    if focus_campaign:
+        print("\n" + "=" * 60)
+        print(f"  Variant Performance — {focus_campaign}")
+        print("=" * 60)
+        variants = variant_performance(reports, focus_campaign)
+        if not variants:
+            print(f"  (no calls for campaign {focus_campaign!r})")
+            return
+        for idx, k in sorted(variants.items()):
+            label = f"Variant {chr(65 + idx) if idx >= 0 else '?'}"
+            _print_kpis(label, k)
+
+
 async def _run_async(args):
     reports: list[dict] = []
     if args.jsonl and Path(args.jsonl).exists():
@@ -60,13 +94,17 @@ async def _run_async(args):
     else:
         print("No data source. Pass --jsonl <path> or set MONGO_URL.")
         return
+    if args.campaign:
+        reports = filter_by_campaign(reports, args.campaign)
     _print_report(summary(reports))
+    _print_campaign_section(reports, focus_campaign=args.campaign)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="MerchantBrain Call Review report")
     ap.add_argument("--jsonl", help="Path to JSONL of CallReports", default=None)
     ap.add_argument("--limit", type=int, default=500, help="Max reports to load from DB")
+    ap.add_argument("--campaign", help="Filter + variant-breakdown for one campaign_id", default=None)
     args = ap.parse_args()
     asyncio.run(_run_async(args))
 

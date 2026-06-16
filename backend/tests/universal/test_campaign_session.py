@@ -27,7 +27,6 @@ def test_force_variant_d_for_day1_validation():
 
 
 def test_force_variant_rejects_invalid_index():
-    import pytest
     try:
         CampaignSession.start_forced(
             lead_id="x", lead_attrs={"gbp_rank": 8},

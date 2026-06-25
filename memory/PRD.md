@@ -552,8 +552,49 @@ PYTHONPATH=$PWD python3 scripts/outbound_selftest.py --dial     # also dials 888
 # exit 0 → safe to dial prospects; exit 1 → DO NOT DIAL
 ```
 
+## Completed (Feb 25, 2026) — Deploy-Time Safety Gate ✅
+**Purpose:** Make it IMPOSSIBLE to accidentally redeploy a version where the outbound gate is broken. Three layers:
+
+**1. Runtime kill switch (`routes/twilio_outbound.py`)**
+- New: `is_outbound_disabled()` reads a sentinel file (default `<backend>/OUTBOUND_DISABLED`, overridable via env `OUTBOUND_KILL_SWITCH`).
+- `place_outbound_call()` checks it FIRST. If present → returns `{"ok": False, "blocked": "outbound_disabled"}`. **Zero Twilio/ElevenLabs spend** while disabled.
+- New regression test `test_10_kill_switch_blocks_outbound` proves it (now 11 tests total).
+
+**2. Deploy preflight wrapper (`backend/scripts/deploy_preflight.sh`)**
+- Runs `scripts/outbound_selftest.py` (structural only, never `--dial`).
+- Exit 0 → removes `OUTBOUND_DISABLED`, prints `OUTBOUND SELF-TEST PASSED — live dialing allowed`.
+- Exit 1 → writes `OUTBOUND_DISABLED` with `selftest_failed`/`exit_code`/`at` timestamp, prints the EXACT mandated banner: `OUTBOUND SELF-TEST FAILED — LIVE DIALING DISABLED`, exits 1.
+- **No secrets ever printed.** `set -u` only — no `set -x`. No `cat`/`echo`/`grep`/`printenv` on .env.
+- Fail-closed if selftest script itself is missing.
+- Operator escape hatch: `FORCE_ENABLE=1 bash scripts/deploy_preflight.sh` (loud, still surfaces exit 1).
+
+**3. GitHub Action (`.github/workflows/outbound_preflight.yml`)**
+- Triggers on push/PR touching outbound surface.
+- Runs `pytest tests/test_twilio_outbound_gate.py` then `bash scripts/deploy_preflight.sh`.
+- Uses **mongomock fallback** when `MONGO_URL` unset → hermetic CI, no production DB access.
+- **No secrets referenced** in `env:` blocks (no `secrets.TWILIO_*`, no `secrets.ELEVENLABS_*`).
+- Uploads `/tmp/outbound_selftest_report.json` as artifact on every run.
+
+**Verified by testing agent (iteration_22):**
+- ✅ 11/11 pytest pass
+- ✅ PASS path: exit 0, kill switch removed, "PASSED" banner
+- ✅ FAIL path: exit 1, kill switch written with timestamp, EXACT banner "OUTBOUND SELF-TEST FAILED — LIVE DIALING DISABLED"
+- ✅ Runtime enforcement: with sentinel present, `place_outbound_call` returns blocked with zero API calls
+- ✅ mongomock fallback works when MONGO_URL unset (verified by moving .env aside)
+- ✅ No secrets leaked (no `set -x`, no `--dial` anywhere, no `secrets.*` in YAML)
+- ✅ Legacy `/api/twilio/inbound*` endpoints still at server.py:11226+ — untouched
+- ✅ Idempotency: 3 consecutive deploy_preflight runs exit 0, zero DNC residue
+
+**Operator usage on VPS post-deploy:**
+```
+cd /var/www/dialgenix/backend
+bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
+# If structural fails, OUTBOUND_DISABLED is written and the dialer refuses every dial
+# until the sentinel is removed (auto by next successful preflight, or manually after fix).
+```
+
 ## VPS Deployment
 ```
-cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && pm2 restart dialgenix-backend
+cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
 ```
 

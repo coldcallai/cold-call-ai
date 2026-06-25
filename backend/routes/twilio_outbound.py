@@ -48,6 +48,9 @@ class _State:
     # when it passes. This makes it impossible to accidentally ship a version
     # where the human-greeting gate is broken.
     kill_switch_path: str = ""
+    # Path to the most recent self-test report (written by scripts/outbound_selftest.py).
+    # Read-only metadata source for the /api/admin/outbound-status endpoint.
+    selftest_report_path: str = ""
     # In-memory audio store: {audio_id: mp3_bytes}.
     # Production note: cleared on process restart; calls in flight will fail
     # gracefully (we hang up rather than fall back to robotic <Say>).
@@ -67,6 +70,7 @@ def setup_dependencies(
     backend_url: str,
     from_number: str,
     kill_switch_path: Optional[str] = None,
+    selftest_report_path: Optional[str] = None,
 ) -> None:
     """Wire production clients into the outbound router. Idempotent."""
     _state.db = db
@@ -84,6 +88,11 @@ def setup_dependencies(
                          "OUTBOUND_DISABLED"),
         )
     _state.kill_switch_path = kill_switch_path
+    if selftest_report_path is None:
+        selftest_report_path = os.environ.get(
+            "OUTBOUND_SELFTEST_REPORT", "/tmp/outbound_selftest_report.json"
+        )
+    _state.selftest_report_path = selftest_report_path
 
 
 def is_outbound_disabled() -> bool:
@@ -524,3 +533,86 @@ async def get_tts_audio(audio_id: str) -> Response:
         media_type="audio/mpeg",
         headers={"Cache-Control": "public, max-age=3600"},
     )
+
+
+# ============================================================
+# Admin status router  (mounted at /api → /api/admin/outbound-status)
+# Surfaces safe metadata about the dialer's safety state. NO secrets.
+# ============================================================
+admin_router = APIRouter(prefix="/admin", tags=["admin_outbound"])
+
+
+def _read_selftest_report_safely(path: str) -> Dict[str, Any]:
+    """Read only safe metadata from the self-test report. Never returns:
+       - audio URLs (could leak the backend host),
+       - phone numbers,
+       - the structural sweep detail (could leak per-run setup phones).
+       Only returns: passed, mode, finished_at/started_at, structural_passed.
+    """
+    import json
+    safe: Dict[str, Any] = {
+        "passed": None,
+        "finished_at": None,
+        "mode": None,
+    }
+    try:
+        if not os.path.isfile(path):
+            return safe
+        with open(path, "r") as f:
+            raw = json.load(f)
+        # Whitelist only top-level scalars we can vouch for.
+        if isinstance(raw, dict):
+            if isinstance(raw.get("passed"), bool):
+                safe["passed"] = raw["passed"]
+            for key in ("finished_at", "started_at", "mode"):
+                v = raw.get(key)
+                if isinstance(v, str):
+                    safe[key] = v
+            # Prefer finished_at, fall back to started_at
+            if safe.get("finished_at") is None and isinstance(safe.get("started_at"), str):
+                safe["finished_at"] = safe["started_at"]
+    except (OSError, ValueError):
+        # Malformed or unreadable report — treat as unknown.
+        pass
+    safe.pop("started_at", None)
+    return safe
+
+
+@admin_router.get("/outbound-status")
+async def outbound_status_admin() -> Dict[str, Any]:
+    """Return safe metadata about whether outbound dialing is currently allowed.
+
+    Read-only. Never exposes API keys, backend URLs with tokens, or raw
+    provider responses. Designed for an admin dashboard / uptime monitor.
+    """
+    kill_path = _state.kill_switch_path or ""
+    report_path = _state.selftest_report_path or ""
+    kill_switch_present = bool(kill_path) and os.path.isfile(kill_path)
+
+    report = _read_selftest_report_safely(report_path)
+    last_passed = report.get("passed")  # True / False / None
+    last_at = report.get("finished_at")
+
+    # Decision matrix
+    if kill_switch_present:
+        can_live_dial = False
+        reason = "OUTBOUND_DISABLED sentinel present — last deploy pre-flight failed."
+    elif last_passed is None:
+        can_live_dial = False
+        reason = "No self-test report found — run scripts/deploy_preflight.sh first."
+    elif last_passed is False:
+        can_live_dial = False
+        reason = "Last self-test reported passed=false — fix the regression and re-run."
+    else:
+        can_live_dial = True
+        reason = "Self-test passed and no kill switch present — outbound dialing allowed."
+
+    return {
+        "kill_switch_present": kill_switch_present,
+        "outbound_disabled": kill_switch_present,
+        "last_selftest_at": last_at,
+        "last_selftest_passed": last_passed,
+        "last_selftest_report_path": report_path,
+        "can_live_dial": can_live_dial,
+        "reason": reason,
+    }

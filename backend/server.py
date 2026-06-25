@@ -13248,6 +13248,7 @@ try:
     )
     app.include_router(_twilio_outbound.router, prefix="/api")
     app.include_router(_twilio_outbound.tts_router, prefix="/api")
+    app.include_router(_twilio_outbound.admin_router, prefix="/api")
     logger.info(
         "Mounted Outbound Human-Greeting Gate at /api/twilio/outbound/* "
         f"(backend_url={'set' if _outbound_backend_url else 'MISSING'}, "

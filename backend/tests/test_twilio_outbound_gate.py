@@ -492,3 +492,133 @@ async def test_10_kill_switch_blocks_outbound(tmp_path, db, fake_twilio, fake_el
 def test_classify_speech_human_vs_machine_DUPLICATE_GUARD():
     # Sentinel — ensures the file order didn't get jumbled by an edit.
     assert callable(twilio_outbound.classify_speech)
+
+
+# ============================================================
+# TEST 11 — /api/admin/outbound-status: 3 scenarios.
+# (a) sentinel present → can_live_dial=False
+# (b) passing report + no sentinel → can_live_dial=True
+# (c) missing report → can_live_dial=False
+# Never exposes API keys / secrets / phone numbers / audio URLs.
+# ============================================================
+import json as _json
+
+def _mount_admin_only_app(tmp_kill: str, tmp_report: str):
+    """Build a tiny FastAPI app with ONLY the admin router mounted, wired to
+    the given kill-switch and report paths."""
+    from fastapi import FastAPI
+    twilio_outbound.setup_dependencies(
+        db=object(),                          # admin endpoint never touches db
+        twilio_client=object(),
+        eleven_client=object(),
+        synthesize_fn=lambda t, v: b"x",
+        voice_id="X",
+        backend_url="https://x.example.com",
+        from_number="+15005550006",
+        kill_switch_path=tmp_kill,
+        selftest_report_path=tmp_report,
+    )
+    app = FastAPI()
+    app.include_router(twilio_outbound.admin_router, prefix="/api")
+    return TestClient(app)
+
+
+def test_11a_admin_status_sentinel_blocks_live_dial(tmp_path):
+    kill = tmp_path / "OUTBOUND_DISABLED"
+    kill.write_text("selftest_failed\nexit_code=1\nat=2026-02-25T19:00:00Z\n")
+    report = tmp_path / "report.json"
+    report.write_text(_json.dumps({
+        "passed": True,  # even if report says pass, sentinel wins
+        "finished_at": "2026-02-25T18:55:00Z",
+        "mode": "structural_only",
+    }))
+    client = _mount_admin_only_app(str(kill), str(report))
+
+    r = client.get("/api/admin/outbound-status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["kill_switch_present"] is True
+    assert body["outbound_disabled"] is True
+    assert body["can_live_dial"] is False
+    assert "sentinel" in body["reason"].lower()
+    assert body["last_selftest_passed"] is True  # report intact
+    assert body["last_selftest_at"] == "2026-02-25T18:55:00Z"
+    # No secret leakage
+    for key in body:
+        v = body[key]
+        if isinstance(v, str):
+            assert "api_key" not in v.lower()
+            assert "token" not in v.lower()
+            assert "+1" not in v  # no phone numbers
+
+
+def test_11b_admin_status_passing_report_allows_live_dial(tmp_path):
+    kill = tmp_path / "OUTBOUND_DISABLED"  # does not exist
+    report = tmp_path / "report.json"
+    report.write_text(_json.dumps({
+        "passed": True,
+        "finished_at": "2026-02-25T20:00:00Z",
+        "mode": "structural_only",
+        # These fields SHOULD be filtered out by the safe reader:
+        "phone": "+18885131913",
+        "checks": {"structural": [{"elevenlabs_audio_url": "http://internal:8001/api/tts/audio/abc"}]},
+    }))
+    client = _mount_admin_only_app(str(kill), str(report))
+
+    r = client.get("/api/admin/outbound-status")
+    body = r.json()
+    assert body["kill_switch_present"] is False
+    assert body["outbound_disabled"] is False
+    assert body["last_selftest_passed"] is True
+    assert body["last_selftest_at"] == "2026-02-25T20:00:00Z"
+    assert body["can_live_dial"] is True
+    # CRITICAL: ensure none of the filtered-out raw report fields leaked through
+    flat = _json.dumps(body)
+    assert "+18885131913" not in flat
+    assert "audio_url" not in flat
+    assert "internal:8001" not in flat
+
+
+def test_11c_admin_status_missing_report_blocks_live_dial(tmp_path):
+    kill = tmp_path / "OUTBOUND_DISABLED"  # does not exist
+    report = tmp_path / "report.json"     # does not exist
+    client = _mount_admin_only_app(str(kill), str(report))
+
+    r = client.get("/api/admin/outbound-status")
+    body = r.json()
+    assert body["kill_switch_present"] is False
+    assert body["outbound_disabled"] is False
+    assert body["last_selftest_passed"] is None
+    assert body["last_selftest_at"] is None
+    assert body["can_live_dial"] is False
+    assert "no self-test report" in body["reason"].lower()
+
+
+def test_11d_admin_status_failing_report_blocks_live_dial(tmp_path):
+    kill = tmp_path / "OUTBOUND_DISABLED"  # does not exist
+    report = tmp_path / "report.json"
+    report.write_text(_json.dumps({
+        "passed": False,
+        "finished_at": "2026-02-25T21:00:00Z",
+        "mode": "structural_only",
+    }))
+    client = _mount_admin_only_app(str(kill), str(report))
+
+    r = client.get("/api/admin/outbound-status")
+    body = r.json()
+    assert body["kill_switch_present"] is False
+    assert body["last_selftest_passed"] is False
+    assert body["can_live_dial"] is False
+    assert "passed=false" in body["reason"].lower() or "regression" in body["reason"].lower()
+
+
+def test_11e_admin_status_malformed_report_treated_as_unknown(tmp_path):
+    kill = tmp_path / "OUTBOUND_DISABLED"
+    report = tmp_path / "report.json"
+    report.write_text("not valid json {{{")
+    client = _mount_admin_only_app(str(kill), str(report))
+
+    r = client.get("/api/admin/outbound-status")
+    body = r.json()
+    assert body["last_selftest_passed"] is None
+    assert body["can_live_dial"] is False

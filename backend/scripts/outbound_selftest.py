@@ -169,22 +169,29 @@ async def run_structural_checks(report: Dict[str, Any]) -> bool:
     )
 
     transport = ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://selftest") as client:
-        results = await _structural_checks_inner(client, db, fake_twilio, fake_eleven_invocations)
+    # Use a unique throwaway phone per run so check-6's "Remove me from your list"
+    # sweep can never leak DNC state across invocations.
+    setup_phone = f"+1555111{uuid.uuid4().int % 10000000:07d}"
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://selftest") as client:
+            results = await _structural_checks_inner(client, db, fake_twilio, fake_eleven_invocations, setup_phone)
+        report["checks"]["structural"] = results
+        report["structural_passed"] = all(r["passed"] for r in results)
+        return report["structural_passed"]
+    finally:
+        # Cleanup ALL state the self-test could have touched, so re-runs are idempotent.
+        await db.outbound_sessions.delete_many({"experiment": "selftest_structural"})
+        await db.dnc_list.delete_many({"phone_number": {"$in": [DNC_SENTINEL, setup_phone]}})
+        # Best-effort sweep of any +1555111xxxxxxx phones from prior buggy runs.
+        await db.dnc_list.delete_many({"phone_number": {"$regex": r"^\+1555111\d{7}$"}})
 
-    report["checks"]["structural"] = results
-    report["structural_passed"] = all(r["passed"] for r in results)
-    # Cleanup structural test session docs to keep the collection tidy
-    await db.outbound_sessions.delete_many({"experiment": "selftest_structural"})
-    return report["structural_passed"]
 
-
-async def _structural_checks_inner(client, db, fake_twilio, fake_eleven_invocations) -> List["CheckResult"]:
+async def _structural_checks_inner(client, db, fake_twilio, fake_eleven_invocations, setup_phone: str) -> List["CheckResult"]:
     results: List[CheckResult] = []
 
     # --- Setup: place a structural call (fake Twilio so no spend) ---
     result = await twilio_outbound.place_outbound_call(
-        to_number="+15551112222",  # never dialed for real — fake client
+        to_number=setup_phone,  # unique per-run throwaway, never collides across runs
         lead_id="selftest-structural",
         campaign_id="ranktrust_local_growth",
         variant_index=3,

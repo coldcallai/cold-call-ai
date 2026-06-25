@@ -1,0 +1,44 @@
+{
+  "summary": "RE-VERIFIED the iteration_20 idempotency fix. Ran scripts/outbound_selftest.py THREE consecutive times — all three exited 0 with all 10/10 structural checks ✓. Post-run DB residue check: db.dnc_list rows matching ^\\+1555(0000000|111\\d{7})$ = 0; db.outbound_sessions{experiment:'selftest_structural'} = 0. Single-run /tmp/outbound_selftest_report.json validated: passed=true, mode='structural_only', phone='+18885131913', exact_opener matches founder phrasing byte-for-byte (with em-dash), check 4 has /api/tts/audio/{id} URL, check 5b has /api/tts/audio/{id} URL, check 8 disposition='DNC', say_detected=false on every check. pytest tests/test_twilio_outbound_gate.py = 9 passed in 0.37s. Code review of run_structural_checks (lines 171-186) confirms cleanup is inside finally: with broader delete_many of DNC_SENTINEL, setup_phone, and any leftover +1555111\\d{7} from prior buggy runs. run_dental_experiment.py imports cleanly and exposes dial_one. Legacy /api/twilio/inbound* endpoints in server.py untouched (still defined at lines 11226+).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/scripts/outbound_selftest.py",
+    "/app/backend/tests/test_twilio_outbound_gate.py",
+    "/tmp/outbound_selftest_report.json"
+  ],
+  "verification_matrix": {
+    "run_1_exit_0_10_checks": "PASS — all 10 ✓, exit 0",
+    "run_2_exit_0_10_checks": "PASS — all 10 ✓, exit 0 (idempotency confirmed)",
+    "run_3_exit_0_10_checks": "PASS — all 10 ✓, exit 0 (idempotency confirmed twice)",
+    "db_dnc_list_residue_post_run3": "0 rows matching ^\\+1555(0000000|111\\d{7})$ ✓",
+    "db_outbound_sessions_residue": "0 rows with experiment='selftest_structural' ✓",
+    "json_report_passed_true": "PASS",
+    "json_report_mode": "structural_only ✓",
+    "json_report_phone": "+18885131913 ✓",
+    "json_report_exact_opener": "matches EXACT_OPENER byte-for-byte (em-dash preserved) ✓",
+    "json_check4_audio_url": "http://localhost:8001/api/tts/audio/{id} ✓",
+    "json_check5b_audio_url": "/api/tts/audio/{id} ✓",
+    "json_check8_disposition": "DNC ✓",
+    "say_detected_everywhere": "false on all 10 checks ✓",
+    "try_finally_guard": "PASS — _structural_checks_inner call wrapped in try:, cleanup in finally: (lines 175-186). Cleanup deletes outbound_sessions{experiment:selftest_structural}, dnc_list{$in:[DNC_SENTINEL, setup_phone]}, AND dnc_list{$regex:^\\+1555111\\d{7}$}. Setup phone is uuid-randomized per run (line 174: f'+1555111{uuid.uuid4().int % 10000000:07d}').",
+    "pytest_test_twilio_outbound_gate": "PASS — 9 passed in 0.37s",
+    "run_dental_experiment_untouched": "PASS — module imports, dial_one attribute present",
+    "legacy_inbound_endpoints_untouched": "PASS — /api/twilio/inbound, /api/twilio/inbound/respond, /api/twilio/inbound/capture-email all still defined in /app/backend/server.py (lines 11226, 11280, etc.)"
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Idempotency fix is correctly implemented. Three layered defenses: (1) unique per-run setup_phone via uuid prevents collision; (2) try/finally ensures cleanup runs even on mid-script assertion failure; (3) regex sweep cleans residue from prior buggy runs. This is defensive and correct.",
+    "Minor: line 186 regex r'^\\+1555111\\d{7}$' assumes setup_phone is ALWAYS +1555111 + 7 digits. The generator on line 174 uses %07d formatting on uuid.uuid4().int % 10000000, which guarantees exactly 7 digits. Consistent, no risk.",
+    "Minor: DNC_SENTINEL +15550000000 is still hardcoded — fine since it's not generated, just a fixed test sentinel.",
+    "No other regressions detected. /api/twilio/inbound* surface, run_dental_experiment.dial_one, and pytest suite are all green."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (3/3 consecutive runs exit 0, 10/10 checks each; 0 DB residue; pytest 9/9)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "none required (uses MONGO_URL from /app/backend/.env; Twilio and ElevenLabs are stubbed via FakeTwilio + _stub_synth)",
+  "seed_data_creation": "Self-test creates and CLEANS db.outbound_sessions{experiment:'selftest_structural'} and db.dnc_list rows {DNC_SENTINEL, per-run setup_phone, +1555111xxxxxxx residue}. Verified zero residue after 3 consecutive runs.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iteration_20 idempotency bug is FIXED and verified across 3 consecutive runs with zero DB residue. Script is regression-safe. Live --dial mode remains intentionally out of scope. If future iterations modify routes/twilio_outbound.py or the script, re-verify by: (1) clean DB; (2) run script 3x back-to-back — all must exit 0; (3) `db.dnc_list.count_documents({phone_number:{$regex:'^\\+1555(0000000|111\\d{7})$'}}) == 0`; (4) `python3 -m pytest tests/test_twilio_outbound_gate.py -q` must remain 9 passed.",
+  "rca of the issue": "N/A — iteration_20 root cause (DNC residue on +15551112222) has been resolved by (a) randomizing setup_phone per run, (b) wrapping the run in try/finally, and (c) sweeping the +1555111xxxxxxx range on every cleanup. All three defenses present and verified."
+}

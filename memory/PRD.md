@@ -530,6 +530,28 @@ On callback, if `gatekeeper_first_name` AND `decision_maker_name` exist, opening
 **Open follow-up (non-blocking):**
 - Set `BACKEND_URL` in `/app/backend/.env` (or VPS .env) so `<Play>` URLs are absolute — currently empty, mount log shows `backend_url=MISSING`. Twilio still resolves relative paths against the webhook host.
 
+## Completed (Feb 25, 2026) — Outbound Pre-flight Self-Test ✅
+**Purpose:** Regression-safe pre-flight before every prospect batch. Verifies all 9 hard rules of the gate without burning Twilio minutes or ElevenLabs credits.
+
+**Shipped:**
+- `backend/scripts/outbound_selftest.py` — single-file pre-flight. Runs in two modes:
+  - **Structural (default):** Fakes Twilio + ElevenLabs. Exercises every outbound endpoint via `httpx.AsyncClient` + `ASGITransport` against the real router code. Validates TwiML structure, classifier, DNC write+skip, opener exact phrasing. 10 checks total.
+  - **`--dial` (live):** Places ONE real Twilio call to `888-513-1913` (or `--phone`). Pins the opener to: `Hi, this is Sarah. Quick question — who handles patient payment workflows for the practice?`. Polls `db.outbound_sessions` for opener_played / final disposition.
+- **Hard rule enforced in script:** if structural checks fail, the script REFUSES to place a live dial (`Structural checks FAILED — refusing to place live dial.`).
+- **Report:** Console pass/fail + `/tmp/outbound_selftest_report.json` with call SID, endpoint path, disposition, ElevenLabs audio URL per check, and `say_detected` flag per check.
+- **Idempotent:** unique per-run setup phone (`+1555111{uuid}`), try/finally cleanup, and broader regex sweep of any `+1555111\d{7}` residue from prior runs. Verified across 3 consecutive runs with zero DB residue (iteration_21).
+- `routes/twilio_outbound.py::place_outbound_call()` — added `opener_text_override` kwarg so the self-test can pin the founder phrasing without going through CampaignSession.
+
+**Verified by testing agent (iteration_21):** 3/3 consecutive runs exit 0, 10/10 checks each, pytest 9/9, legacy inbound endpoints still defined.
+
+**Operator usage on VPS:**
+```
+cd /var/www/dialgenix/backend
+PYTHONPATH=$PWD python3 scripts/outbound_selftest.py            # structural only
+PYTHONPATH=$PWD python3 scripts/outbound_selftest.py --dial     # also dials 888-513-1913
+# exit 0 → safe to dial prospects; exit 1 → DO NOT DIAL
+```
+
 ## VPS Deployment
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && pm2 restart dialgenix-backend

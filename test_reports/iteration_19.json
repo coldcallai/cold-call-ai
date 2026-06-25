@@ -1,0 +1,55 @@
+{
+  "summary": "Verified the Outbound Human-Greeting Gate (Phases A-E). All 9 contract tests + classifier unit test in /app/backend/tests/test_twilio_outbound_gate.py pass. Live HTTP smoke checks against REACT_APP_BACKEND_URL confirm the 9 hard rules hold: /answer redirects silently for humans and hangs up silently for AMD machine_*; /greeting emits a silent <Gather input='speech' speechTimeout='auto'> with no Say/Play children; /api/tts/audio/{id} returns 404 for unknown ids; legacy /api/twilio/inbound* endpoints remain reachable (200). Mount log 'Mounted Outbound Human-Greeting Gate at /api/twilio/outbound/*' is present in backend supervisor logs. server.py mount block (lines 13230-13257) is additive and does not modify legacy routes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "server.py mount block", "issue": "backend_url=MISSING in mount log because neither BACKEND_URL nor REACT_APP_BACKEND_URL is set in /app/backend/.env. <Play> URLs are still served correctly as relative paths (Twilio resolves against webhook host) and the gate works, but setting BACKEND_URL would emit absolute URLs and make TwiML self-contained."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_twilio_outbound_gate.py"
+  ],
+  "pytest_results": {
+    "collected": 9,
+    "passed": 9,
+    "failed": 0,
+    "tests": [
+      "test_1_call_creation_uses_url_callback_not_inline_twiml PASSED",
+      "test_2_no_opener_in_initial_call_request PASSED",
+      "test_3_and_4_answer_does_not_speak PASSED",
+      "test_5_and_6a_greeting_silent_gather_no_say PASSED",
+      "test_6b_respond_plays_elevenlabs_never_says PASSED",
+      "test_7_voicemail_and_ivr_do_not_start_conversation PASSED",
+      "test_8_dnc_request_writes_to_dnc_list PASSED",
+      "test_9_dialer_skips_dnc_numbers PASSED",
+      "test_classify_speech_human_vs_machine PASSED"
+    ]
+  },
+  "live_smoke_checks": {
+    "POST /api/twilio/outbound/answer?session_id=nonexistent (AnsweredBy=human)": "200 — <Response><Redirect>/api/twilio/outbound/greeting?session_id=nonexistent</Redirect></Response>. No <Say>, no <Play>. PASS",
+    "POST /api/twilio/outbound/answer?session_id=nonexistent (AnsweredBy=machine_end_beep)": "200 — <Response><Hangup/></Response>. No speech. PASS",
+    "POST /api/twilio/outbound/greeting?session_id=nonexistent": "200 — <Gather action='/api/twilio/outbound/respond?...' input='speech' method='POST' speechTimeout='auto' timeout='8'/><Hangup/>. No Say/Play children inside Gather. PASS",
+    "GET /api/tts/audio/non-existent-id": "404 PASS",
+    "POST /api/twilio/inbound (legacy untouched)": "200 PASS",
+    "POST /api/twilio/inbound/respond (legacy untouched)": "200 PASS"
+  },
+  "action_items": [
+    "OPTIONAL: Set BACKEND_URL (or rely on REACT_APP_BACKEND_URL) in /app/backend/.env so the outbound mount log shows backend_url=set and <Play> URLs emit as absolute URLs. Non-blocking — TwiML works with relative paths."
+  ],
+  "critical_code_review_comments": [
+    "Mount block in server.py is correctly additive (try/except wrapped, placed after app.include_router(api_router)). It does NOT touch legacy inbound routes — confirmed.",
+    "Outbound router enforces ElevenLabs <Play> for AI voice and Twilio <Say> is absent from /answer, /greeting, and /respond responses (verified by both XML assertions in pytest and curl smoke tests).",
+    "DNC gating happens in place_outbound_call BEFORE any twilio_client.create() or eleven_client.synthesize() invocation (test_9 confirms zero side-effects on DNC).",
+    "Backend server (server.py) is now ~13.3k lines — well past the 700-line guideline. The new outbound logic was correctly placed in /app/backend/routes/twilio_outbound.py (good), but the legacy monolith is still a maintainability risk. Out of scope for this fix.",
+    "Minor: backend_url falls back to empty string when env vars missing — consider failing loudly at startup in production-only mode if absolute URLs are required for cross-region Twilio media fetch."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "none required for this regression",
+  "seed_data_creation": "none — tests use mongomock_motor in-memory DB; live smoke tests used session_id=nonexistent (graceful path)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Outbound Human-Greeting Gate ships clean. Regression file at /app/backend/tests/test_twilio_outbound_gate.py is the contract — run `cd /app/backend && python3 -m pytest tests/test_twilio_outbound_gate.py -v`. Pre-existing failure in tests/universal/test_campaign_session.py::test_control_opener_matches_brian_wording is unrelated and OUT OF SCOPE.",
+  "rca of the issue": "Not applicable — feature verification, not bug RCA. The previous P0 (dialer speaking before human, falling back to Twilio <Say>) is structurally prevented by: (a) place_outbound_call sends url= callback, never inline twiml; (b) /answer never emits Say/Play and only Redirects to /greeting on human or Hangs up on machine_*; (c) /greeting emits a silent <Gather> with no audio children; (d) only after human SpeechResult does /respond render <Play>/api/tts/audio/{id}; (e) DNC check short-circuits before any Twilio/ElevenLabs API call."
+}

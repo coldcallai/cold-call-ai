@@ -13227,6 +13227,35 @@ else:
 # Include main api_router (legacy routes)
 app.include_router(api_router)
 
+# ============================================================
+# Outbound Human-Greeting Gate (additive — does NOT touch inbound)
+# ============================================================
+try:
+    from routes import twilio_outbound as _twilio_outbound
+
+    _outbound_voice_id = os.environ.get("ELEVENLABS_VOICE_ID") or "21m00Tcm4TlvDq8ikWAM"  # Rachel default
+    _outbound_backend_url = (os.environ.get("BACKEND_URL") or os.environ.get("REACT_APP_BACKEND_URL") or "").rstrip("/")
+    _outbound_from = os.environ.get("TWILIO_OUTBOUND_FROM") or twilio_phone_number or ""
+
+    _twilio_outbound.setup_dependencies(
+        db=db,
+        twilio_client=twilio_client,
+        eleven_client=eleven_client,
+        synthesize_fn=None,  # use default ElevenLabs path
+        voice_id=_outbound_voice_id,
+        backend_url=_outbound_backend_url,
+        from_number=_outbound_from,
+    )
+    app.include_router(_twilio_outbound.router, prefix="/api")
+    app.include_router(_twilio_outbound.tts_router, prefix="/api")
+    logger.info(
+        "Mounted Outbound Human-Greeting Gate at /api/twilio/outbound/* "
+        f"(backend_url={'set' if _outbound_backend_url else 'MISSING'}, "
+        f"voice_id={_outbound_voice_id}, from={'set' if _outbound_from else 'MISSING'})"
+    )
+except Exception as _outbound_err:
+    logger.error(f"Failed to mount outbound router: {_outbound_err}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

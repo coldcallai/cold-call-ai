@@ -500,7 +500,38 @@ On callback, if `gatekeeper_first_name` AND `decision_maker_name` exist, opening
 - [ ] Calendly Webhook Sync
 - [ ] Payment Overlay Platform
 
+## Completed (Feb 25, 2026) — Outbound Human-Greeting Gate (Phases A-E) ✅
+**Fix:** Outbound AI was speaking before the human said "hello" and was sometimes falling back to robotic Twilio `<Say>`. Now structurally impossible.
+
+**Shipped:**
+- `backend/routes/twilio_outbound.py` — NEW router with 5 endpoints:
+  - `POST /api/twilio/outbound/answer` — AMD `AnsweredBy` gate. Silent `<Redirect>` for human/unknown, silent `<Hangup/>` for machine_*/fax. **Never emits Say/Play.**
+  - `POST /api/twilio/outbound/greeting` — Silent `<Gather input="speech" speechTimeout="auto">`. **Empty Gather body** — no Say/Play children.
+  - `POST /api/twilio/outbound/respond` — Classifies first utterance (`classify_speech`). Voicemail/IVR → silent hangup. DNC request → write `db.dnc_list` + optional ElevenLabs ack via `<Play>` + hangup. Human → emit `<Play>{backend_url}/api/tts/audio/{id}</Play>` (opener) then handoff `<Gather action="/api/twilio/inbound/respond">`.
+  - `POST /api/twilio/outbound/status` — Final disposition writer.
+  - `GET /api/tts/audio/{id}` — Streams ElevenLabs MP3 bytes from in-memory `audio_store` (media_type=audio/mpeg).
+- `backend/routes/twilio_outbound.py::place_outbound_call()` — Dialer entry point. Checks `db.dnc_list` BEFORE generating TTS/dialing. Creates Twilio call with `url=` callback (NEVER inline TwiML), `machine_detection="Enable"`, async_amd="false". Persists session in `db.outbound_sessions`.
+- `backend/tests/test_twilio_outbound_gate.py` — 9 regression tests + 1 classifier unit test. **All 10 pass.** Tests enforce:
+  1. URL callback, not inline TwiML
+  2. Opener never in initial create() payload
+  3. /answer never speaks
+  4. /answer only redirects silently
+  5. /greeting waits for human speech (silent Gather)
+  6. ElevenLabs `<Play>` is used; Twilio `<Say>` never used for AI voice
+  7. Voicemail/IVR classified → silent hangup, opener NOT played
+  8. DNC request writes to `db.dnc_list`
+  9. Dialer skips DNC numbers BEFORE Twilio/ElevenLabs calls
+- `backend/server.py` — additive mount block after `app.include_router(api_router)`. **Legacy inbound brain untouched.**
+- `backend/run_dental_experiment.py` — rewritten to use `twilio_outbound.place_outbound_call()`. Inline TwiML eliminated.
+- `backend/conftest.py` + `backend/tests/__init__.py` — pytest path setup so `universal/` resolves correctly.
+
+**Verified by testing agent (iteration_19):** 9/9 pytest, 6/6 live HTTP smoke checks, legacy inbound endpoints still 200.
+
+**Open follow-up (non-blocking):**
+- Set `BACKEND_URL` in `/app/backend/.env` (or VPS .env) so `<Play>` URLs are absolute — currently empty, mount log shows `backend_url=MISSING`. Twilio still resolves relative paths against the webhook host.
+
 ## VPS Deployment
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && pm2 restart dialgenix-backend
 ```
+

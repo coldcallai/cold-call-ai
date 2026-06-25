@@ -17,7 +17,7 @@ MERCHANT_SERVICES_DEFAULT = Campaign(
         # Single variant pinned to Brian's exact Control wording for the
         # Day-1 validation experiment. Add more variants later once the
         # baseline conversation rate is known.
-        "Who handles payment processing?",
+        "Who handles patient payment workflows for the practice?",
     ),
     metadata={
         "version": "v1",

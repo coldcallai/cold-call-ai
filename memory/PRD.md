@@ -598,3 +598,39 @@ bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
 ```
 
+## Completed (Feb 25, 2026) — Admin Status Endpoint ✅
+**`GET /api/admin/outbound-status`** — surfaces the outbound dialer's safety state for the admin UI / uptime monitors. No SSH required.
+
+**Response shape (7 keys, no secrets):**
+```json
+{
+  "kill_switch_present": true,
+  "outbound_disabled": true,
+  "last_selftest_at": "2026-02-25T19:43:37Z",
+  "last_selftest_passed": true,
+  "last_selftest_report_path": "/tmp/outbound_selftest_report.json",
+  "can_live_dial": false,
+  "reason": "OUTBOUND_DISABLED sentinel present — last deploy pre-flight failed."
+}
+```
+
+**Hard-coded leak guards (verified by tests + by hand-crafted leak curl):**
+- Whitelist reader pulls ONLY `passed`, `finished_at`, `mode` from the report.
+- Strips: `checks`, `phone`, `elevenlabs_audio_url`, all raw provider data.
+- Never reads `.env`, never exposes API keys / URLs with tokens.
+
+**Decision matrix:**
+| State | `can_live_dial` |
+|---|---|
+| Sentinel present | **false** (sentinel wins regardless of report) |
+| No report file | **false** |
+| Report passed=false | **false** |
+| Report missing/malformed | **false** |
+| Report passed=true + no sentinel | **true** |
+
+**Tests:** 5 new (`test_11a..e`) — sentinel blocks, passing allows, missing blocks, failing blocks, malformed treated as unknown. Total suite now **16/16 passing**.
+
+**Verified by testing agent (iteration_23):** All 5 live scenarios curl-verified, hand-crafted leak test passes (phone numbers, API keys, BACKEND_URL, raw provider response, audio URLs, checks array — none leak through), runtime-state consistency confirmed.
+
+**Operator note:** endpoint is intentionally unauthenticated (read-only metadata, no secrets). In production, reverse-proxy auth layer fronts the admin surface.
+

@@ -1,0 +1,35 @@
+{
+  "summary": "Validated the deploy-time safety gate for the outbound dialer. All 11 pytest regression tests pass (including new test_10_kill_switch_blocks_outbound). deploy_preflight.sh PASS path exits 0, removes OUTBOUND_DISABLED, banner reads 'OUTBOUND SELF-TEST PASSED'. FAIL path (stubbed selftest=sys.exit(1)) exits 1, writes OUTBOUND_DISABLED with selftest_failed/exit_code=1/at=<UTC timestamp>, and prints the EXACT mandated banner 'OUTBOUND SELF-TEST FAILED — LIVE DIALING DISABLED'. Selftest restoration re-runs PASS and removes the sentinel. Runtime enforcement: with OUTBOUND_DISABLED present, twilio_outbound.is_outbound_disabled() returns True. mongomock fallback: with MONGO_URL truly unset (also moved /app/backend/.env aside) selftest exits 0 with db_kind='mongomock' and 10/10 structural checks ✓. No-secrets / no-dial guarantees verified by static review: set -u present, set -x absent, no cat/echo/printenv on .env, no --dial flag passed anywhere in deploy_preflight.sh or the GitHub Action YAML. GH Action YAML parses cleanly (name='Outbound Dialer Pre-flight', ubuntu-latest, python 3.11, runs pytest then deploy_preflight.sh, env only sets DB_NAME=intentbrain_ci, no secrets.* refs, uploads /tmp/outbound_selftest_report.json artifact). Legacy inbound endpoints still defined at server.py:11226 (POST /twilio/inbound) and 11280 (POST /twilio/inbound/respond) — untouched. Idempotency: 3 consecutive deploy_preflight.sh runs all exit 0 and leave no OUTBOUND_DISABLED file; DNC residue matching ^\\+1555(0000000|111\\d{7})$ in production db.dnc_list = 0.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_twilio_outbound_gate.py",
+    "/app/test_reports/pytest/pytest_outbound_gate.xml",
+    "/app/backend/scripts/deploy_preflight.sh",
+    "/app/backend/scripts/outbound_selftest.py",
+    "/app/.github/workflows/outbound_preflight.yml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "deploy_preflight.sh correctly uses `set -u` only (no `set -x`), so no Twilio/ElevenLabs creds can leak via shell tracing.",
+    "outbound_selftest.py uses an isolated kill_switch_path='/tmp/outbound_selftest_kill_switch_DOES_NOT_EXIST' in structural mode so the selftest can never block ITSELF — correct separation of concerns from deploy_preflight.sh which owns the real /app/backend/OUTBOUND_DISABLED file.",
+    "outbound_selftest.py calls load_dotenv(BACKEND_ROOT/'.env') early; this means even if the operator unsets MONGO_URL before running locally, the .env value is still picked up. In real GitHub Actions CI there is no .env file checked in, so mongomock fallback correctly engages there (verified by moving .env aside locally). Worth a one-line comment in the selftest to document this for future operators.",
+    "Live backend (supervisor process) was started before kill_switch_path arg existed in setup_dependencies — main agent noted this; a `sudo supervisorctl restart backend` is required on the live host for the runtime kill switch path arg to take effect. Default code path still reads /app/backend/OUTBOUND_DISABLED, which works for the supervisor process as-is.",
+    "deploy_preflight.sh fail-closed behaviour also writes the kill switch when the selftest script itself is missing (not just when it exits non-zero) — this is correct defensive behaviour."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "N/A"},
+  "test_credentials": "N/A — structural mode uses FakeTwilio + stub ElevenLabs; no live credentials touched.",
+  "seed_data_creation": "None. Selftest cleans up its own +1555111xxxxxxx throwaway sessions and +15550000000 DNC sentinel after each run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Outbound deploy gate is now fully wired: (1) pytest tests/test_twilio_outbound_gate.py — 11 tests, must always be green. (2) bash backend/scripts/deploy_preflight.sh — exit 0 removes /app/backend/OUTBOUND_DISABLED, exit 1 writes it with banner. (3) routes/twilio_outbound.py::is_outbound_disabled() is the runtime read; place_outbound_call short-circuits to {ok:false, blocked:'outbound_disabled'} when sentinel exists. (4) .github/workflows/outbound_preflight.yml runs the same gate on push/PR with mongomock fallback. To regression-test in future iterations, run those three commands plus the static greps for `set -x`, `--dial`, and `secrets.` — all must remain absent in deploy_preflight.sh and the workflow YAML.",
+  "rca of the issue": "N/A — no bugs found. All review_request criteria verified passing."
+}

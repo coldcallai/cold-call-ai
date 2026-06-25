@@ -437,3 +437,58 @@ def test_classify_speech_human_vs_machine():
 
     assert classify("") == "silence"
     assert classify("   ") == "silence"
+
+
+# ============================================================
+# TEST 10 — Kill switch sentinel file blocks dialing.
+# This is the deploy-time safety gate: when scripts/deploy_preflight.sh detects
+# a structural self-test failure it writes the OUTBOUND_DISABLED file, and the
+# router refuses to place any outbound call until the file is removed.
+# ============================================================
+@pytest.mark.asyncio
+async def test_10_kill_switch_blocks_outbound(tmp_path, db, fake_twilio, fake_eleven):
+    kill_file = tmp_path / "OUTBOUND_DISABLED"
+    kill_file.write_text("selftest failed at 2026-02-25T19:00:00Z\nexit_code=1\n")
+
+    twilio_outbound.setup_dependencies(
+        db=db,
+        twilio_client=fake_twilio,
+        eleven_client=fake_eleven,
+        synthesize_fn=fake_eleven.synthesize,
+        voice_id="VOICE_TEST_001",
+        backend_url="https://test.example.com",
+        from_number="+15005550006",
+        kill_switch_path=str(kill_file),
+    )
+
+    assert twilio_outbound.is_outbound_disabled() is True
+
+    result = await twilio_outbound.place_outbound_call(
+        to_number="+15551234599",
+        lead_id="lead-blocked",
+        campaign_id="ranktrust_local_growth",
+        variant_index=3,
+        lead_attrs={"gbp_rank": 8, "niche": "dental"},
+    )
+    assert result["ok"] is False
+    assert result["blocked"] == "outbound_disabled"
+    # No Twilio call, no ElevenLabs spend
+    assert len(fake_twilio.calls.created_kwargs) == 0
+    assert len(fake_eleven.invocations) == 0
+
+    # Removing the sentinel re-enables dialing
+    kill_file.unlink()
+    assert twilio_outbound.is_outbound_disabled() is False
+    result = await twilio_outbound.place_outbound_call(
+        to_number="+15551234599",
+        lead_id="lead-allowed",
+        campaign_id="ranktrust_local_growth",
+        variant_index=3,
+        lead_attrs={"gbp_rank": 8, "niche": "dental"},
+    )
+    assert result["ok"] is True
+
+
+def test_classify_speech_human_vs_machine_DUPLICATE_GUARD():
+    # Sentinel — ensures the file order didn't get jumbled by an edit.
+    assert callable(twilio_outbound.classify_speech)

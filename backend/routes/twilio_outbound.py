@@ -19,6 +19,7 @@ hands off to /api/twilio/inbound/respond via the next <Gather>.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -41,6 +42,12 @@ class _State:
     voice_id: str = ""
     backend_url: str = ""
     from_number: str = ""
+    # Path to a "kill switch" sentinel file. If this file exists on disk,
+    # place_outbound_call() refuses to dial. Managed by scripts/deploy_preflight.sh
+    # — the file is created when the structural self-test fails and removed
+    # when it passes. This makes it impossible to accidentally ship a version
+    # where the human-greeting gate is broken.
+    kill_switch_path: str = ""
     # In-memory audio store: {audio_id: mp3_bytes}.
     # Production note: cleared on process restart; calls in flight will fail
     # gracefully (we hang up rather than fall back to robotic <Say>).
@@ -59,6 +66,7 @@ def setup_dependencies(
     voice_id: str,
     backend_url: str,
     from_number: str,
+    kill_switch_path: Optional[str] = None,
 ) -> None:
     """Wire production clients into the outbound router. Idempotent."""
     _state.db = db
@@ -68,6 +76,19 @@ def setup_dependencies(
     _state.voice_id = voice_id
     _state.backend_url = backend_url.rstrip("/")
     _state.from_number = from_number
+    # Default kill switch location: <backend_root>/OUTBOUND_DISABLED
+    if kill_switch_path is None:
+        kill_switch_path = os.environ.get(
+            "OUTBOUND_KILL_SWITCH",
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "OUTBOUND_DISABLED"),
+        )
+    _state.kill_switch_path = kill_switch_path
+
+
+def is_outbound_disabled() -> bool:
+    """True when the OUTBOUND_DISABLED sentinel file exists on disk."""
+    return bool(_state.kill_switch_path) and os.path.isfile(_state.kill_switch_path)
 
 
 def _default_eleven_synthesize(text: str, voice_id: str) -> bytes:
@@ -196,6 +217,15 @@ async def place_outbound_call(
     """
     if _state.db is None or _state.twilio_client is None:
         raise RuntimeError("Outbound router not initialized — call setup_dependencies() first")
+
+    # Hard safety gate — refuses to dial when the deploy pre-flight has marked
+    # the system as broken. Created/removed by scripts/deploy_preflight.sh.
+    if is_outbound_disabled():
+        logger.error(
+            f"[outbound] REFUSING to dial — kill switch present at {_state.kill_switch_path}. "
+            "Run scripts/outbound_selftest.py and ensure exit 0 before re-enabling."
+        )
+        return {"ok": False, "blocked": "outbound_disabled", "kill_switch": _state.kill_switch_path}
 
     # Rule #9 — Skip DNC numbers BEFORE any TTS or Twilio spend
     if await is_on_dnc(_state.db, to_number):

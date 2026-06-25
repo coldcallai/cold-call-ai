@@ -111,17 +111,29 @@ def _build_app_for_selftest():
 
     For --dial runs we also wire the REAL Twilio + ElevenLabs clients.
     For structural runs we wire fakes so no Twilio minute / ElevenLabs credit
-    is spent. Both paths use the REAL Mongo so DNC writes are visible
-    end-to-end and we exercise indices.
+    is spent. The Mongo client is real if MONGO_URL is set (e.g. VPS deploy
+    pre-flight) so DNC writes are observable end-to-end; otherwise we fall
+    back to an in-memory mongomock_motor instance (e.g. GitHub Actions CI).
     """
     from fastapi import FastAPI
 
     mongo_url = os.environ.get("MONGO_URL")
     db_name = os.environ.get("DB_NAME", "intentbrain")
-    if not mongo_url:
-        raise SystemExit("Missing MONGO_URL in environment.")
-
-    db = AsyncIOMotorClient(mongo_url)[db_name]
+    if mongo_url:
+        db = AsyncIOMotorClient(mongo_url)[db_name]
+        db_kind = "motor"
+    else:
+        # CI / hermetic fallback — never touches a real Mongo.
+        try:
+            from mongomock_motor import AsyncMongoMockClient  # type: ignore
+        except ImportError as e:
+            raise SystemExit(
+                "MONGO_URL not set and mongomock_motor is not installed. "
+                "Either set MONGO_URL or `pip install mongomock-motor`."
+            ) from e
+        db = AsyncMongoMockClient()[db_name]
+        db_kind = "mongomock"
+        log.info("MONGO_URL not set — using in-memory mongomock for hermetic pre-flight.")
 
     voice_id = os.environ.get("ELEVENLABS_VOICE_ID") or "21m00Tcm4TlvDq8ikWAM"
     backend_url = (
@@ -135,7 +147,7 @@ def _build_app_for_selftest():
     app.include_router(twilio_outbound.router, prefix="/api")
     app.include_router(twilio_outbound.tts_router, prefix="/api")
 
-    return app, db, voice_id, backend_url, from_number
+    return app, db, voice_id, backend_url, from_number, db_kind
 
 
 # ============================================================
@@ -143,7 +155,8 @@ def _build_app_for_selftest():
 # ============================================================
 async def run_structural_checks(report: Dict[str, Any]) -> bool:
     log.info("== Structural checks (no live dial) ==")
-    app, db, voice_id, backend_url, from_number = _build_app_for_selftest()
+    app, db, voice_id, backend_url, from_number, db_kind = _build_app_for_selftest()
+    report["db_kind"] = db_kind
 
     # Wire FAKE Twilio + a stub ElevenLabs synthesizer so no credit is spent.
     class _FakeCalls:
@@ -166,6 +179,10 @@ async def run_structural_checks(report: Dict[str, Any]) -> bool:
         db=db, twilio_client=fake_twilio, eleven_client=object(),
         synthesize_fn=_stub_synth, voice_id=voice_id,
         backend_url=backend_url, from_number=from_number or "+15005550006",
+        # Use an isolated, non-existent kill-switch path so the self-test
+        # ITSELF is never blocked by production state. The deploy_preflight.sh
+        # wrapper owns the real kill switch lifecycle.
+        kill_switch_path="/tmp/outbound_selftest_kill_switch_DOES_NOT_EXIST",
     )
 
     transport = ASGITransport(app=app)
@@ -473,7 +490,7 @@ async def _structural_checks_inner(client, db, fake_twilio, fake_eleven_invocati
 # ============================================================
 async def run_live_dial(report: Dict[str, Any], phone: str) -> bool:
     log.info(f"== Live dial to {phone} ==")
-    _app, db, voice_id, backend_url, from_number = _build_app_for_selftest()
+    _app, db, voice_id, backend_url, from_number, _db_kind = _build_app_for_selftest()
 
     if not from_number:
         report["checks"]["live_dial"] = [CheckResult(
@@ -504,6 +521,8 @@ async def run_live_dial(report: Dict[str, Any], phone: str) -> bool:
         voice_id=voice_id,
         backend_url=backend_url,
         from_number=from_number,
+        # Live dial respects the production kill switch — if structural failed
+        # and left the sentinel in place, this dial must also refuse.
     )
 
     # Place the call with the exact opener phrasing locked in

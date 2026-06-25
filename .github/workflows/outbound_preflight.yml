@@ -1,0 +1,107 @@
+name: Outbound Dialer Pre-flight
+
+# This workflow GUARDS the outbound dialer. Every push that touches the
+# outbound surface must pass the structural self-test before the PR can be
+# merged.  The exact same script also runs on the VPS post-deploy
+# (scripts/deploy_preflight.sh) and writes a kill-switch file when it fails,
+# which the runtime router checks on every dial.
+#
+# Hard rules:
+#   * Never runs --dial. Structural only.
+#   * Never prints .env values or secrets.
+#   * Uses an in-memory mongomock — does NOT touch any real production DB.
+#   * On failure, the PR check turns red AND the mandated banner is printed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/routes/twilio_outbound.py"
+      - "backend/scripts/outbound_selftest.py"
+      - "backend/scripts/deploy_preflight.sh"
+      - "backend/tests/test_twilio_outbound_gate.py"
+      - "backend/run_dental_experiment.py"
+      - "backend/universal/**"
+      - "backend/playbooks/campaigns/**"
+      - ".github/workflows/outbound_preflight.yml"
+  pull_request:
+    paths:
+      - "backend/routes/twilio_outbound.py"
+      - "backend/scripts/outbound_selftest.py"
+      - "backend/scripts/deploy_preflight.sh"
+      - "backend/tests/test_twilio_outbound_gate.py"
+      - "backend/run_dental_experiment.py"
+      - "backend/universal/**"
+      - "backend/playbooks/campaigns/**"
+      - ".github/workflows/outbound_preflight.yml"
+  workflow_dispatch:
+
+jobs:
+  outbound_preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    # Explicitly enumerate environment — NO secrets are needed for structural mode.
+    # The self-test falls back to mongomock when MONGO_URL is unset, and uses
+    # FakeTwilio + stub ElevenLabs synthesizer when --dial is not passed.
+    env:
+      DB_NAME: intentbrain_ci
+      # Do NOT pass --dial. Do NOT inject TWILIO_*, ELEVENLABS_*, MONGO_URL.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install minimal deps (no secrets needed)
+        working-directory: backend
+        run: |
+          python3 -m pip install --upgrade pip
+          # Only the libs the gate + selftest need. Avoids installing the full
+          # backend so CI stays fast and hermetic.
+          pip install \
+            fastapi==0.110.1 \
+            httpx==0.28.1 \
+            "twilio>=8.10,<10" \
+            "elevenlabs>=1.0,<2" \
+            python-dotenv \
+            python-multipart \
+            motor \
+            mongomock-motor \
+            pytest \
+            pytest-asyncio
+
+      - name: Run pytest regression suite (11 tests)
+        working-directory: backend
+        run: |
+          python3 -m pytest tests/test_twilio_outbound_gate.py -v --tb=short
+
+      - name: Run structural self-test via deploy_preflight.sh
+        working-directory: backend
+        run: |
+          # Run the EXACT same script that runs on the VPS. If it exits non-zero
+          # it will print the mandated "OUTBOUND SELF-TEST FAILED — LIVE DIALING
+          # DISABLED" banner and create scripts/../OUTBOUND_DISABLED. Either way
+          # we propagate the exit code.
+          bash scripts/deploy_preflight.sh
+
+      - name: Upload self-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outbound-selftest-report
+          path: /tmp/outbound_selftest_report.json
+          if-no-files-found: warn
+
+      - name: Surface kill-switch file (if present)
+        if: failure()
+        working-directory: backend
+        run: |
+          if [ -f OUTBOUND_DISABLED ]; then
+            echo "::error::OUTBOUND_DISABLED sentinel written by deploy_preflight.sh"
+            cat OUTBOUND_DISABLED
+          fi

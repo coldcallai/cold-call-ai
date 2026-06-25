@@ -182,6 +182,7 @@ async def place_outbound_call(
     lead_attrs: Optional[Dict[str, Any]] = None,
     business_name: Optional[str] = None,
     experiment_tag: Optional[str] = None,
+    opener_text_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Place an outbound call through the human-greeting gate.
 
@@ -189,6 +190,9 @@ async def place_outbound_call(
       {"ok": True, "session_id": ..., "call_sid": ..., "opener_text": ...}
       {"ok": False, "skipped": "dnc"}                          # number on DNC
       {"ok": False, "error": "tts_failed"}                     # ElevenLabs unavailable
+
+    If `opener_text_override` is provided, that exact string is used as the
+    opener (no campaign session lookup). Used by the self-test script.
     """
     if _state.db is None or _state.twilio_client is None:
         raise RuntimeError("Outbound router not initialized — call setup_dependencies() first")
@@ -198,15 +202,27 @@ async def place_outbound_call(
         logger.info(f"[outbound] skipping {to_number} — on DNC list")
         return {"ok": False, "skipped": "dnc", "phone": to_number}
 
-    # Build the campaign session (opener text)
-    from universal.engines.campaign_session import CampaignSession  # local import
-    session = CampaignSession.start_forced(
-        lead_id=lead_id,
-        lead_attrs=lead_attrs or {},
-        campaign_id=campaign_id,
-        variant_index=variant_index,
-    )
-    opener_text = session.opener_text
+    if opener_text_override is not None:
+        opener_text = opener_text_override
+        session_context = {
+            "campaign_id": campaign_id,
+            "campaign_variant_index": variant_index,
+            "campaign_variant_text": opener_text,
+            "lead_source": "selftest",
+            "lead_id": lead_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+    else:
+        # Build the campaign session (opener text)
+        from universal.engines.campaign_session import CampaignSession  # local import
+        session = CampaignSession.start_forced(
+            lead_id=lead_id,
+            lead_attrs=lead_attrs or {},
+            campaign_id=campaign_id,
+            variant_index=variant_index,
+        )
+        opener_text = session.opener_text
+        session_context = session.session_context()
 
     # Pre-generate ElevenLabs MP3 for opener
     opener_bytes = _state.synthesize_fn(opener_text, _state.voice_id)
@@ -261,7 +277,7 @@ async def place_outbound_call(
         "disposition": "PENDING",
         "started_at": datetime.now(timezone.utc).isoformat(),
         "experiment": experiment_tag,
-        "campaign_session": session.session_context(),
+        "campaign_session": session_context,
     })
 
     logger.info(

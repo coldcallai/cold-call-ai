@@ -1,0 +1,52 @@
+{
+  "summary": "Verified scripts/outbound_selftest.py pre-flight. On a CLEAN DB the script PASSES all 10 structural checks (1, 2, 3, 4, 5, 5b, 6, 7, 8, 9), exits 0, writes /tmp/outbound_selftest_report.json with passed=true, mode='structural_only', phone='+18885131913', exact_opener matching founder phrasing exactly, check 4 and 5b populated with /api/tts/audio/{id} URLs, others None, check 8 disposition='DNC', say_detected=false everywhere. Pytest tests/test_twilio_outbound_gate.py = 9 passed. run_dental_experiment imports cleanly with dial_one attribute. Hard-rule guards verified: --dial defaults False (action='store_true'), amain() refuses live dial when structural fails ('Structural checks FAILED — refusing to place live dial.'), EXACT_OPENER constant matches exactly. HOWEVER the idempotency requirement (run script twice, both exit 0) FAILS: on the 2nd run checks 1, 4, 5, 5b fail because the setup-call phone +15551112222 was added to db.dnc_list during check 6's sweep and is never cleaned up.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "scripts/outbound_selftest.py — _structural_checks_inner cleanup",
+        "issue": "IDEMPOTENCY BUG: Check 6 sweep at line 333 sends SpeechResult='Remove me from your list' to the original setup session whose phone is +15551112222. /respond classifies as dnc_request and writes +15551112222 to db.dnc_list. Cleanup at line 449 only removes DNC_SENTINEL (+15550000000), so +15551112222 persists across runs. Next invocation: setup place_outbound_call('+15551112222') returns {ok:false, skipped:'dnc'} → session_id=None → checks 1, 4, 5, 5b all fail → exit code 1. Reproduced 2/2 times.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/scripts/outbound_selftest.py",
+    "/app/backend/tests/test_twilio_outbound_gate.py",
+    "/tmp/outbound_selftest_report.json"
+  ],
+  "verification_matrix": {
+    "structural_run_on_clean_db": "PASS — exit 0, 10/10 checks ✓",
+    "json_report_top_level": "passed=true, mode='structural_only', phone='+18885131913', exact_opener matches founder phrasing exactly",
+    "json_report_per_check_fields": "All entries have name, passed=true, endpoint, say_detected=false, detail. elevenlabs_audio_url populated for check 4 (http://localhost:8001/api/tts/audio/{id}) and 5b (/api/tts/audio/{id}); None for others. Check 8 disposition='DNC' ✓",
+    "no_real_twilio_call_in_structural_mode": "PASS — uses _FakeTwilio, no twilio.rest.Client instantiated in structural path. fake_twilio.calls.created tracks invocations only.",
+    "no_real_elevenlabs_in_structural_mode": "PASS — _stub_synth returns dummy ID3 MP3 bytes; no elevenlabs.ElevenLabs imported in structural path.",
+    "idempotency_2nd_run_exit_0": "FAIL — 2nd run exits 1 due to leftover DNC row for +15551112222 (see critical issue)",
+    "hard_rule_dial_default_false": "PASS — argparse action='store_true' means default is False",
+    "hard_rule_refusing_log_line": "PASS — amain line 593: log.error('Structural checks FAILED — refusing to place live dial.') guards live_dial",
+    "hard_rule_exact_opener_constant": "PASS — line 70-72 EXACT_OPENER matches founder phrasing byte-for-byte (with em-dash)",
+    "pytest_test_twilio_outbound_gate": "PASS — 9 passed in 0.37s",
+    "run_dental_experiment_import": "PASS — prints 'OK True'"
+  },
+  "action_items": [
+    "CRITICAL FIX for idempotency: in scripts/outbound_selftest.py, ensure the setup-call phone (+15551112222) is also removed from db.dnc_list at the end of run_structural_checks. Recommended: change the cleanup block (around line 449 / 178) to `await db.dnc_list.delete_many({'phone_number': {'$in': [DNC_SENTINEL, '+15551112222']}})`. Alternative: generate a unique per-run setup phone (e.g., +15551112{uuid hex}) so it can never collide with persistent state. Without this fix, the script is NOT regression-safe across invocations — the very next pre-flight check after the first run will refuse to place a live dial.",
+    "Consider also cleaning the leftover db.outbound_sessions for experiment='selftest_structural' at the END (current code does this at the START of run_structural_checks at line 178, which is fine, but cleanup-on-exit is more defensive).",
+    "Optional: extract the cleanup logic into a try/finally block so a partial failure mid-run still cleans up DNC rows."
+  ],
+  "critical_code_review_comments": [
+    "Idempotency cleanup gap is the only meaningful defect — the script's intent is regression-safe pre-flight, but it leaves DB state that breaks its own next run. This violates the script's own stated purpose.",
+    "Check 4 audio URL is http://localhost:8001/api/tts/audio/{id} because BACKEND_URL/REACT_APP_BACKEND_URL is unset in /app/backend/.env (same minor as iteration_19). In production env this would be the real backend URL — fine.",
+    "Type annotation on _structural_checks_inner uses forward-ref string 'CheckResult' in -> List[\"CheckResult\"] but CheckResult is defined in the same module. Cosmetic.",
+    "place_outbound_call signature uses opener_text_override kwarg correctly; backward compat preserved (None default keeps legacy CampaignSession path). Good additive change.",
+    "Live-dial path (run_live_dial) is correctly gated by structural pass and credentials check; not exercised in this iteration per scope."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "90% (10/10 structural checks pass on clean DB; idempotency requirement fails)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "none required (uses MONGO_URL from /app/backend/.env, Twilio + ElevenLabs are stubbed)",
+  "seed_data_creation": "Self-test creates+cleans db.outbound_sessions{experiment:'selftest_structural'} and db.dnc_list{+15550000000}. Leaks db.dnc_list{+15551112222} on every run — see critical issue. Test agent manually cleaned this row post-run.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent applies the cleanup fix (delete +15551112222 from db.dnc_list at end of run_structural_checks), re-verify by: (1) Run `cd /app/backend && PYTHONPATH=/app/backend python3 scripts/outbound_selftest.py` — must exit 0. (2) Immediately run it again with no manual cleanup — must ALSO exit 0. (3) After both runs, confirm `db.dnc_list.find({phone_number: {$in: ['+15551112222', '+15550000000']}}).count() == 0`. Existing regression: `python3 -m pytest tests/test_twilio_outbound_gate.py -q` must remain 9 passed. Live --dial mode is intentionally OUT OF SCOPE — user runs that manually against 888-513-1913.",
+  "rca of the issue": "ROOT CAUSE: scripts/outbound_selftest.py::_structural_checks_inner reuses the setup-call session (phone=+15551112222) for Check 6's endpoint sweep. One of the sweep_cases (line 333) posts SpeechResult='Remove me from your list' to /respond, which the classifier flags as dnc_request, causing routes/twilio_outbound.py::outbound_respond to call add_to_dnc(db, '+15551112222', reason='caller_requested'). The cleanup block at line 449 only removes DNC_SENTINEL (+15550000000). REPRODUCTION: (a) clean db: `db.dnc_list.delete_many({phone_number:{$in:['+15551112222','+15550000000']}})`; (b) run script — exits 0; (c) run script again with no cleanup — exits 1 with checks 1/4/5/5b failing. MITIGATION (main agent to apply): expand the cleanup at end of run_structural_checks to include both phone numbers OR use a unique throwaway setup phone per run (e.g., +1555{uuid.uuid4().hex[:7]})."
+}

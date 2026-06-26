@@ -16,11 +16,13 @@
  * Each one plugs in by exporting a component that renders <StatusCard ... />.
  */
 import OutboundDialerStatusCard from "@/components/cards/OutboundDialerStatusCard";
+import ElevenLabsStatusCard from "@/components/cards/ElevenLabsStatusCard";
 import { Activity } from "lucide-react";
 
 const OpsCenterPage = () => {
   const cards = [
-    { key: "outbound", el: <OutboundDialerStatusCard /> },
+    { key: "outbound",   el: <OutboundDialerStatusCard /> },
+    { key: "elevenlabs", el: <ElevenLabsStatusCard /> },
     // Future cards land here — no other layout changes required.
   ];
 

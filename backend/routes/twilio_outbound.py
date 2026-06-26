@@ -105,7 +105,10 @@ def _default_eleven_synthesize(text: str, voice_id: str) -> bytes:
     client = _state.eleven_client
     if client is None:
         logger.error("ElevenLabs client not configured — cannot synthesize")
+        _record_synth_event(success=False, latency_ms=0, error="client_not_configured")
         return b""
+    import time as _time
+    started = _time.monotonic()
     try:
         from elevenlabs.types import VoiceSettings  # type: ignore
         gen = client.text_to_speech.convert(
@@ -117,10 +120,85 @@ def _default_eleven_synthesize(text: str, voice_id: str) -> bytes:
         out = b""
         for chunk in gen:
             out += chunk
+        elapsed_ms = int((_time.monotonic() - started) * 1000)
+        _record_synth_event(success=True, latency_ms=elapsed_ms, error=None)
         return out
     except Exception as e:  # pragma: no cover - network path
+        elapsed_ms = int((_time.monotonic() - started) * 1000)
         logger.error(f"ElevenLabs synthesis failed: {e}")
+        _record_synth_event(success=False, latency_ms=elapsed_ms, error=str(e)[:120])
         return b""
+
+
+# ============================================================
+# ElevenLabs health cache (in-memory; updated by every synth + light ping)
+# ============================================================
+class _ElevenHealth:
+    last_synth_at: Optional[str] = None              # any attempt
+    last_synth_latency_ms: int = 0
+    last_synth_success: Optional[bool] = None
+    last_successful_synth_at: Optional[str] = None
+    last_error: Optional[str] = None
+    last_ping_at: Optional[float] = None             # monotonic timestamp
+    last_ping_reachable: Optional[bool] = None
+
+
+_eleven_health = _ElevenHealth()
+_MIN_PING_INTERVAL_SECONDS = 600   # 10 minutes — never hit ElevenLabs more than that from the status endpoint
+_PING_TIMEOUT_SECONDS = 4
+
+
+def _record_synth_event(*, success: bool, latency_ms: int, error: Optional[str]) -> None:
+    """Called by _default_eleven_synthesize after every synth attempt."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    _eleven_health.last_synth_at = now_iso
+    _eleven_health.last_synth_latency_ms = int(latency_ms or 0)
+    _eleven_health.last_synth_success = bool(success)
+    _eleven_health.last_error = error
+    if success:
+        _eleven_health.last_successful_synth_at = now_iso
+        _eleven_health.last_ping_reachable = True
+
+
+def _maybe_live_ping_elevenlabs() -> Optional[bool]:
+    """Lightweight, rate-limited reachability check. Returns True/False or None
+    if a recent successful synth event already proves reachability (no ping
+    needed). NEVER does a synthesis — this is just a cheap voices.get_all() call.
+    """
+    import time as _time
+    # If we had a successful synth in the last 10 minutes, the ElevenLabs API
+    # is by definition reachable — skip the ping entirely.
+    if _eleven_health.last_successful_synth_at:
+        try:
+            last_ok_dt = datetime.fromisoformat(_eleven_health.last_successful_synth_at)
+            age = (datetime.now(timezone.utc) - last_ok_dt).total_seconds()
+            if age < _MIN_PING_INTERVAL_SECONDS:
+                return True
+        except (TypeError, ValueError):
+            pass
+
+    # Rate-limit our own ping
+    now_mono = _time.monotonic()
+    if _eleven_health.last_ping_at is not None:
+        if (now_mono - _eleven_health.last_ping_at) < _MIN_PING_INTERVAL_SECONDS:
+            return _eleven_health.last_ping_reachable
+
+    if _state.eleven_client is None:
+        _eleven_health.last_ping_at = now_mono
+        _eleven_health.last_ping_reachable = False
+        return False
+
+    try:
+        # voices.get_all is a tiny GET — no synthesis, no audio bytes
+        _ = _state.eleven_client.voices.get_all()
+        reachable = True
+    except Exception as e:  # pragma: no cover — network
+        logger.warning(f"ElevenLabs live ping failed: {e}")
+        reachable = False
+
+    _eleven_health.last_ping_at = now_mono
+    _eleven_health.last_ping_reachable = reachable
+    return reachable
 
 
 # ============================================================
@@ -614,5 +692,63 @@ async def outbound_status_admin() -> Dict[str, Any]:
         "last_selftest_passed": last_passed,
         "last_selftest_report_path": report_path,
         "can_live_dial": can_live_dial,
+        "reason": reason,
+    }
+
+
+# ----- ElevenLabs status (cached metadata, rate-limited optional ping) -----
+_LATENCY_WARN_MS = 3000
+_STALE_SUCCESS_WARN_SECONDS = 3600  # 1 hour
+
+
+@admin_router.get("/elevenlabs-status")
+async def elevenlabs_status_admin() -> Dict[str, Any]:
+    """Return safe metadata about ElevenLabs health.
+
+    Strategy:
+      1. Primary signal — cached metadata from real production synth calls
+         (`_default_eleven_synthesize` updates the cache on every attempt).
+      2. Fallback signal — lightweight `voices.get_all()` ping, RATE-LIMITED to
+         once per 10 minutes. NEVER triggers a synth.
+
+    NEVER returns: API keys, voice IDs, raw provider responses, URLs with
+    auth, raw exception tracebacks.
+    """
+    reachable = _maybe_live_ping_elevenlabs()
+    last_success_iso = _eleven_health.last_successful_synth_at
+    last_attempt_iso = _eleven_health.last_synth_at
+    latency_ms = int(_eleven_health.last_synth_latency_ms or 0)
+
+    # Decide status
+    status = "unknown"
+    reason = "No synthesis activity yet — ElevenLabs health unknown."
+    if reachable is False:
+        status = "down"
+        reason = "ElevenLabs API is not reachable from this host."
+    elif last_success_iso is None and reachable is True:
+        status = "warn"
+        reason = "API reachable but no successful synthesis has been recorded yet."
+    elif last_success_iso is not None:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_success_iso)).total_seconds()
+        except (TypeError, ValueError):
+            age = 0
+        if age > _STALE_SUCCESS_WARN_SECONDS:
+            status = "warn"
+            reason = f"Last successful synthesis was over {int(age // 60)} minutes ago."
+        elif latency_ms > _LATENCY_WARN_MS:
+            status = "warn"
+            reason = f"Last synthesis latency was {latency_ms}ms — above {_LATENCY_WARN_MS}ms threshold."
+        else:
+            status = "safe"
+            reason = "ElevenLabs reachable and synthesizing within latency budget."
+
+    # Build response — strict whitelist, no secrets, no voice IDs
+    return {
+        "api_reachable": bool(reachable) if reachable is not None else False,
+        "last_synth_at": last_attempt_iso,
+        "last_synth_latency_ms": latency_ms,
+        "last_successful_synth_at": last_success_iso,
+        "status": status,
         "reason": reason,
     }

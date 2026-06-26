@@ -622,3 +622,154 @@ def test_11e_admin_status_malformed_report_treated_as_unknown(tmp_path):
     body = r.json()
     assert body["last_selftest_passed"] is None
     assert body["can_live_dial"] is False
+
+
+# ============================================================
+# TEST 12 — /api/admin/elevenlabs-status
+# (a) safe — recent successful synth, low latency → status=safe
+# (b) down — API unreachable → status=down, no synth attempted on poll
+# (c) no secrets in response
+# (d) no synthesis loop — polling the endpoint many times does NOT trigger any
+#     ElevenLabs synth, and the live ping is rate-limited
+# ============================================================
+class _FakeElevenVoices:
+    def __init__(self, raises=False):
+        self._raises = raises
+        self.calls = 0
+    def get_all(self):
+        self.calls += 1
+        if self._raises:
+            raise RuntimeError("network down")
+        class _R: voices = []
+        return _R()
+
+
+class _FakeElevenClient:
+    def __init__(self, voices_raise=False):
+        self.voices = _FakeElevenVoices(raises=voices_raise)
+        self.synth_invocations = 0
+    # Note: NOT a real text_to_speech attribute — if the admin endpoint
+    # accidentally tried to synthesize, the AttributeError would surface.
+
+
+def _reset_eleven_cache():
+    h = twilio_outbound._eleven_health
+    h.last_synth_at = None
+    h.last_synth_latency_ms = 0
+    h.last_synth_success = None
+    h.last_successful_synth_at = None
+    h.last_error = None
+    h.last_ping_at = None
+    h.last_ping_reachable = None
+
+
+def _mount_admin_only_app_for_eleven(eleven_client):
+    """Build a tiny FastAPI app with ONLY the admin router. Wires the given
+    ElevenLabs stub but plugs in a synth_fn that would EXPLODE if invoked —
+    proving the admin endpoint never synthesizes audio on poll."""
+    from fastapi import FastAPI
+
+    def _exploding_synth(text, vid):
+        raise AssertionError("synth_fn called during admin polling — must NEVER happen")
+
+    twilio_outbound.setup_dependencies(
+        db=object(),
+        twilio_client=object(),
+        eleven_client=eleven_client,
+        synthesize_fn=_exploding_synth,
+        voice_id="VOICE_TEST_001",
+        backend_url="https://x.example.com",
+        from_number="+15005550006",
+        kill_switch_path="/tmp/_does_not_exist_eleven_test",
+        selftest_report_path="/tmp/_does_not_exist_eleven_test.json",
+    )
+    app = FastAPI()
+    app.include_router(twilio_outbound.admin_router, prefix="/api")
+    return TestClient(app)
+
+
+def test_12a_elevenlabs_status_safe_after_successful_synth():
+    _reset_eleven_cache()
+    eleven = _FakeElevenClient(voices_raise=False)
+    client = _mount_admin_only_app_for_eleven(eleven)
+
+    # Simulate a recent fast synth
+    twilio_outbound._record_synth_event(success=True, latency_ms=420, error=None)
+
+    r = client.get("/api/admin/elevenlabs-status")
+    body = r.json()
+    assert r.status_code == 200
+    assert body["status"] == "safe"
+    assert body["api_reachable"] is True
+    assert body["last_synth_latency_ms"] == 420
+    assert body["last_successful_synth_at"] is not None
+    assert body["last_synth_at"] is not None
+    # NO live ping should have been issued — the recent synth proves reachability
+    assert eleven.voices.calls == 0
+
+
+def test_12b_elevenlabs_status_down_when_api_unreachable():
+    _reset_eleven_cache()
+    eleven = _FakeElevenClient(voices_raise=True)  # voices.get_all() will throw
+    client = _mount_admin_only_app_for_eleven(eleven)
+
+    r = client.get("/api/admin/elevenlabs-status")
+    body = r.json()
+    assert r.status_code == 200
+    assert body["status"] == "down"
+    assert body["api_reachable"] is False
+    assert "not reachable" in body["reason"].lower()
+    # One ping happened — and that's the ONLY thing that was called
+    assert eleven.voices.calls == 1
+
+
+def test_12c_elevenlabs_status_warn_on_high_latency():
+    _reset_eleven_cache()
+    eleven = _FakeElevenClient(voices_raise=False)
+    client = _mount_admin_only_app_for_eleven(eleven)
+    twilio_outbound._record_synth_event(success=True, latency_ms=4800, error=None)
+
+    body = client.get("/api/admin/elevenlabs-status").json()
+    assert body["status"] == "warn"
+    assert body["last_synth_latency_ms"] == 4800
+    assert "latency" in body["reason"].lower()
+
+
+def test_12d_elevenlabs_response_contains_no_secrets():
+    _reset_eleven_cache()
+    eleven = _FakeElevenClient(voices_raise=False)
+    client = _mount_admin_only_app_for_eleven(eleven)
+    twilio_outbound._record_synth_event(success=True, latency_ms=300, error=None)
+
+    body = client.get("/api/admin/elevenlabs-status").json()
+    flat = _json.dumps(body).lower()
+    # Should contain ONLY the documented keys
+    assert set(body.keys()) == {
+        "api_reachable", "last_synth_at", "last_synth_latency_ms",
+        "last_successful_synth_at", "status", "reason",
+    }
+    # Hard-rule leak checks
+    forbidden = ["api_key", "api-key", "xi-api-key", "voice_id", "voice-id",
+                 "bearer ", "sk-", "elevenlabs_api_key", "authorization",
+                 "voice_test_001", "voice_test", ".env"]
+    for token in forbidden:
+        assert token not in flat, f"forbidden token leaked: {token!r} in {flat!r}"
+
+
+def test_12e_no_synth_loop_on_repeated_polling():
+    """Polling the status endpoint many times must not invoke synthesis and
+    must rate-limit the live ping to <=1 call per 10 minutes."""
+    _reset_eleven_cache()
+    eleven = _FakeElevenClient(voices_raise=False)
+    client = _mount_admin_only_app_for_eleven(eleven)
+
+    # 20 rapid polls without any prior synth event
+    for _ in range(20):
+        r = client.get("/api/admin/elevenlabs-status")
+        assert r.status_code == 200
+
+    # voices.get_all must have been called at most ONCE despite 20 polls
+    # (the cache short-circuits subsequent calls within 10 min).
+    assert eleven.voices.calls <= 1, f"expected ≤1 ping in 20 polls, got {eleven.voices.calls}"
+    # synth_fn (_exploding_synth) was never invoked — if it had been, the test
+    # would have failed at the first poll with AssertionError.

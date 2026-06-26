@@ -1,0 +1,45 @@
+{
+  "summary": "Backend + frontend validation of the new ElevenLabs Status Card and /api/admin/elevenlabs-status endpoint. ALL acceptance criteria from review_request PASS. 21/21 pytest in test_twilio_outbound_gate.py pass (including the 5 new test_12a..e). Live curl + 10x rapid polling + frontend render all behave per spec.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ops Center / ElevenLabs card", "issues": ["MINOR/COSMETIC: When no synth has ever been recorded, 'Last latency' metric displays '0 ms' (because backend returns last_synth_latency_ms=0). Card looks slightly misleading — ideally show '—' until a real synth is recorded. Frontend guard `Number.isFinite(...)` lets 0 through. Suggested fix: change to `latency > 0` in ElevenLabsStatusCard.jsx, OR backend returns null when no synth yet. Not blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_twilio_outbound_gate.py",
+    "/app/test_reports/pytest/pytest_outbound_gate.xml",
+    "/app/test_reports/elevenlabs_ops_center.png"
+  ],
+  "tests_executed": [
+    "PYTEST: cd /app/backend && pytest tests/test_twilio_outbound_gate.py -v -> 21 passed in 0.43s. Specifically: test_12a (safe after synth, no live ping issued) PASS, test_12b (down on voices.get_all raise) PASS, test_12c (warn on latency>3000ms) PASS, test_12d (response contains no secrets — api_key/xi-api-key/voice_id/bearer/sk-/authorization/.env) PASS, test_12e (20 rapid polls -> exploding synth_fn never invoked + voices.get_all called <=1x) PASS.",
+    "LIVE ENDPOINT: GET $REACT_APP_BACKEND_URL/api/admin/elevenlabs-status -> {api_reachable:true, last_synth_at:null, last_synth_latency_ms:0, last_successful_synth_at:null, status:'warn', reason:'API reachable but no successful synthesis has been recorded yet.'}. Exactly the 6 documented keys, no extras. Status is one of {safe,warn,down,unknown}. Secret scan (api_key/xi-api-key/voice_id/bearer/sk-/authorization/token) returned zero hits.",
+    "REPEAT POLLING SAFETY: curled the endpoint 10 times rapidly. md5sum identical across all 10 responses (9e0394d9144c01b1f1b7dcd44c7e6f18). tail -300 /var/log/supervisor/backend.err.log | grep -iE 'synth' -> ZERO matches during the polling window. Confirms no synthesis loop. _MIN_PING_INTERVAL_SECONDS=600 short-circuit working.",
+    "FRONTEND BOTH CARDS RENDER: Logged in as test@example.com/Test123!, navigated to /app/ops. Both [data-testid=status-card-outbound] and [data-testid=status-card-elevenlabs] present. Outbound shows data-status='safe' / badge='SAFE'. ElevenLabs shows data-status='warn' / badge='DEGRADED'.",
+    "FRONTEND ELEVENLABS METRICS: All 4 metric testids present and populated — status-card-elevenlabs-metric-api-reachable='yes', status-card-elevenlabs-metric-last-synth='—', status-card-elevenlabs-metric-last-latency='0 ms', status-card-elevenlabs-metric-last-success='—'. Refresh button present, click triggered +1 GET (call count 2 -> 3).",
+    "FRONTEND DEGRADED STATE: Current live preview state IS the warn/DEGRADED render — verified amber badge + reason text 'API reachable but no successful synthesis has been recorded yet.' matches the warn rendering contract. Per review_request this is acceptable in lieu of full SAFE/DOWN visual tests (which test_12a/b unit tests already cover).",
+    "NO SECRETS IN FRONTEND BUNDLE: grep -iE 'api[_-]?key|secret|sk-|voice_id|xi-api|bearer|authorization' /app/frontend/src/components/cards/ElevenLabsStatusCard.jsx -> NO MATCHES. Only references REACT_APP_BACKEND_URL.",
+    "REUSABILITY: ElevenLabsStatusCard.jsx is 55 lines (<=60). Only imports {Volume2} from lucide-react and StatusCard from @/components/StatusCard. No redefined styling, no custom polling, no relative-time formatter — fully delegates to StatusCard. Pure config/wrapper.",
+    "LEGACY UNTOUCHED: grep -cE '/api/twilio/inbound' /app/backend/server.py -> 11 references (intact). POST /api/tts/generate -> HTTP 200 with valid base64 mpeg audio_url response (legacy endpoint still works)."
+  ],
+  "action_items": [
+    "OPTIONAL (cosmetic): In ElevenLabsStatusCard.jsx, treat last_synth_latency_ms===0 as 'no data' so the card shows '—' instead of '0 ms' until a real synth lands. One-line guard change: `latency != null && latency > 0`."
+  ],
+  "critical_code_review_comments": [
+    "Backend: GET /api/admin/elevenlabs-status correctly enforces strict 6-key whitelist response. No leakage of api_key, voice_id, bearer, sk-, authorization, or .env paths. ✓",
+    "Backend: _MIN_PING_INTERVAL_SECONDS=600 + _maybe_live_ping_elevenlabs short-circuits on recent successful synth — confirmed by zero synth log entries during 10 rapid polls. ✓",
+    "Backend: test_12e wires an exploding synth_fn that fails the test if the endpoint ever synthesizes audio — and it passes, proving no synth loop on poll. Strong regression guard. ✓",
+    "Frontend: ElevenLabsStatusCard at 55 lines is a pure wrapper around StatusCard — perfect reuse pattern. Adding the 3rd card (OpenAI/Twilio/etc.) only needs the same ~50-line file + one entry in OpsCenterPage.jsx cards array. ✓",
+    "MINOR: ElevenLabsStatusCard treats latency=0 as a valid value (shows '0 ms') because Number.isFinite(0)===true. Cosmetic only; not blocking. Backend could also return null when no synth event exists yet."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (21/21 pytest)", "frontend": "100% (all required testids + states verified)" },
+  "test_credentials": "test@example.com / Test123! (admin, unlimited) — read from /app/memory/test_credentials.md, login successful",
+  "seed_data_creation": "None. Used the current live warn/DEGRADED state of the preview environment for the frontend render check (no synth has been recorded yet, so card naturally shows DEGRADED).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The ElevenLabs StatusCard pattern is locked in. To add another engine card (OpenAI/Twilio/Prospecting/etc.): (1) create /app/frontend/src/components/cards/<Engine>StatusCard.jsx (~50 lines, wrap StatusCard), (2) append one entry to the cards array in OpsCenterPage.jsx, (3) backend exposes GET /api/admin/<engine>-status returning {status, reason, ...metric fields}. Confirm the same acceptance pattern: 6-key whitelist, no secrets, no work-loop on poll, data-testid='status-card-<engine>' + metric testids.",
+  "rca of the issue": "No defects found. One minor cosmetic note about 'Last latency' showing '0 ms' when no synth has occurred — handled in action_items."
+}

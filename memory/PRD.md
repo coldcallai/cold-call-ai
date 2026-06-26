@@ -706,6 +706,27 @@ Render with `<StatusCard title=... icon=... fetchStatus=... testId=... />`. That
 
 **Verified by testing agent (iteration_25):** 100% backend + 100% frontend; all acceptance criteria pass.
 
+## Completed (Feb 26, 2026) — Deploy preflight venv autodetection (P0 fix) ✅
+**Reported by operator on VPS:** `ModuleNotFoundError: No module named 'fastapi'` when running `bash scripts/deploy_preflight.sh`. System `python3` lacks the app deps; pm2 runs the backend from a virtualenv.
+
+**Fixed:** `deploy_preflight.sh` now auto-detects a python interpreter that has `fastapi` AND `twilio` importable. Search order:
+1. `$OUTBOUND_PYTHON` env override
+2. `backend/venv/bin/python{3,}` + `backend/.venv/bin/python{3,}`
+3. `<repo_root>/venv/bin/python{3,}` + `<repo_root>/.venv/bin/python{3,}`
+4. System `python3` / `python`
+
+If none qualify → writes `OUTBOUND_DISABLED` with first-line tag `selftest_python_missing`, prints the FATAL hint (`pm2 describe dialgenix-backend | grep exec interpreter`), prints the mandated banner, exits 1. Fail-closed contract preserved.
+
+Probe redirects BOTH stdout AND stderr to `/dev/null` — zero info leakage.
+
+**Verified by testing agent (iteration_26):**
+- ✅ Happy path auto-detects `/root/.venv/bin/python3`, exit 0, PASSED banner
+- ✅ `OUTBOUND_PYTHON` override honored
+- ✅ Fail-closed path writes correct sentinel + mandated banner + exit 1
+- ✅ Secret hygiene intact (no `set -x`, no `--dial`, no `.env` reads)
+- ✅ Full deploy chain E2E green (pytest 21/21, backend restart, both admin endpoints HTTP 200)
+- ✅ `install_mount_block.py` idempotent (re-run prints "Already installed")
+
 ## VPS Deployment
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend

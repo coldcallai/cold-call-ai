@@ -593,11 +593,6 @@ bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
 # until the sentinel is removed (auto by next successful preflight, or manually after fix).
 ```
 
-## VPS Deployment
-```
-cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
-```
-
 ## Completed (Feb 25, 2026) — Admin Status Endpoint ✅
 **`GET /api/admin/outbound-status`** — surfaces the outbound dialer's safety state for the admin UI / uptime monitors. No SSH required.
 
@@ -633,4 +628,48 @@ cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --
 **Verified by testing agent (iteration_23):** All 5 live scenarios curl-verified, hand-crafted leak test passes (phone numbers, API keys, BACKEND_URL, raw provider response, audio URLs, checks array — none leak through), runtime-state consistency confirmed.
 
 **Operator note:** endpoint is intentionally unauthenticated (read-only metadata, no secrets). In production, reverse-proxy auth layer fronts the admin surface.
+
+## Completed (Feb 26, 2026) — AI Operations Center foundation ✅
+**Purpose:** Replace the one-off banner idea with the foundation of an Ops dashboard. Every future engine plugs into the same UI via a single reusable contract.
+
+**Shipped:**
+- `frontend/src/components/StatusCard.jsx` — reusable health card. Polls every 30s, pauses while tab hidden, refreshes on tab refocus. Maps `{safe, warn, down, unknown}` → `{emerald, amber, rose, slate}` styling. Props: `{title, icon, fetchStatus, intervalMs, testId, helpHref}`. Exposes `formatRelativeTime` helper.
+- `frontend/src/components/cards/OutboundDialerStatusCard.jsx` — first concrete card. Polls `/api/admin/outbound-status`, translates response into the StatusCard contract.
+- `frontend/src/pages/OpsCenterPage.jsx` — `/app/ops` page with a `cards` array. **Adding a new engine card = 1 component + 1 array entry.** Header `AI Operations Center` with Activity icon, sub-copy *"Live health of every engine that powers IntentBrain. Cards auto-refresh every 30 seconds."*
+- `frontend/src/App.js` — route `/app/ops` registered inside the protected layout.
+- `frontend/src/components/Sidebar.jsx` — sidebar entry "Ops Center" with Activity icon (between Analytics and CRM Integrations).
+
+**Card contract for future engines** — implement an async function returning:
+```js
+{
+  status: 'safe' | 'warn' | 'down' | 'unknown',
+  label:  'SAFE' | ...,
+  reason: string,
+  metrics: [{ label, value }, ...]
+}
+```
+Render with `<StatusCard title=... icon=... fetchStatus=... testId=... />`. That's it.
+
+**Planned future cards (documented in OpsCenterPage.jsx, NOT built):**
+- ElevenLabs (API reachable, voice latency, last synth)
+- OpenAI (API reachable, model, last completion)
+- Twilio (Voice, SMS, webhook health)
+- Prospecting Engine (last run, prospects loaded, dedup complete)
+- Campaign Engine (active campaign, calls today, transfers, DNC count)
+- UniversalBrain (active brain, version, loaded successfully)
+- System Health (backend online, DB connected, queue healthy)
+
+**Verified by testing agent (iteration_24):**
+- ✅ 11/11 acceptance criteria
+- ✅ SAFE state (data-status="safe", badge "SAFE", all 4 metrics populated)
+- ✅ DISABLED state (data-status="down", badge "DISABLED", sentinel reflected)
+- ✅ Manual Refresh fires `GET /api/admin/outbound-status`
+- ✅ Responsive grid (`grid-cols-1 md:grid-cols-2 xl:grid-cols-3`)
+- ✅ No secrets in frontend bundle (`REACT_APP_BACKEND_URL` only)
+- ✅ All interactive + info elements carry unique `data-testid` per platform rules
+
+## VPS Deployment
+```
+cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
+```
 

@@ -727,6 +727,27 @@ Probe redirects BOTH stdout AND stderr to `/dev/null` — zero info leakage.
 - ✅ Full deploy chain E2E green (pytest 21/21, backend restart, both admin endpoints HTTP 200)
 - ✅ `install_mount_block.py` idempotent (re-run prints "Already installed")
 
+## Completed (Feb 26, 2026) — Phase D operator wrapper ✅
+**`scripts/run_selftest.sh`** — one-line invocation for both structural pre-flight and Phase D live dial. Single source of truth for python detection (refactored out into `scripts/_lib_python_finder.sh`, now consumed by both `deploy_preflight.sh` and `run_selftest.sh`).
+
+**Behavior:**
+- `bash scripts/run_selftest.sh` → structural mode, no live dial.
+- `bash scripts/run_selftest.sh --dial` → live call (only when YOU type `--dial`).
+- All operator args pass through verbatim. `--dial` is **NEVER auto-injected** by the wrapper.
+- Exits with the SAME code as `outbound_selftest.py` (verified with stub-at-exit-7).
+- Prints which python was selected so you always know what just ran.
+- Fails closed (exit 1, no live call attempted) if no fastapi-capable python is found — even when operator passes `--dial`.
+
+**Verified by testing agent (iteration_27):** 10/10 cases pass.
+- ✅ deploy_preflight refactor preserves identical behavior
+- ✅ Structural mode prints correct banners, exit 0
+- ✅ Stub-replaced selftest confirms argv = `[]` without --dial, `[--dial, --phone, +18885131913]` with operator args, `[--foo, bar]` for arbitrary args
+- ✅ Exit 7 propagated (no normalization)
+- ✅ Fail-closed when no usable python — `--dial` never reaches anything
+- ✅ Probe suppresses stdout+stderr; zero secret leakage
+- ✅ Shared finder requires BACKEND_DIR (graceful FATAL if missing)
+- ✅ Full E2E chain green (preflight → run_selftest → backend restart → `/api/admin/outbound-status` 200 → pytest 21/21)
+
 ## VPS Deployment
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend

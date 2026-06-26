@@ -23,12 +23,17 @@
 #
 # Operator override (do NOT use without reading the report first):
 #   FORCE_ENABLE=1 bash scripts/deploy_preflight.sh   # bypass kill switch (NOT recommended)
+#
+# Venv auto-detection: this script searches for a python interpreter that has
+# `fastapi` importable (the venv pm2 uses on the VPS). Override with:
+#   OUTBOUND_PYTHON=/path/to/venv/bin/python bash scripts/deploy_preflight.sh
 
 set -u  # NO `-x` ever — that would echo secrets if any leaked into args.
 
 # --- Locate paths (no secrets touched) ---
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$BACKEND_DIR/.." && pwd)"
 SELFTEST="$BACKEND_DIR/scripts/outbound_selftest.py"
 KILL_SWITCH="${OUTBOUND_KILL_SWITCH:-$BACKEND_DIR/OUTBOUND_DISABLED}"
 REPORT="${OUTBOUND_SELFTEST_REPORT:-/tmp/outbound_selftest_report.json}"
@@ -43,6 +48,52 @@ if [ ! -f "$SELFTEST" ]; then
     exit 1
 fi
 
+# --- Auto-detect a python interpreter that has fastapi available ---
+# pm2 on the VPS runs the backend from a virtualenv; the system `python3` may
+# not have fastapi/twilio/elevenlabs installed. We search common venv locations
+# without ever invoking any tool that prints env vars.
+PY=""
+candidates=(
+    "${OUTBOUND_PYTHON:-}"
+    "$BACKEND_DIR/venv/bin/python3"
+    "$BACKEND_DIR/venv/bin/python"
+    "$BACKEND_DIR/.venv/bin/python3"
+    "$BACKEND_DIR/.venv/bin/python"
+    "$REPO_ROOT/venv/bin/python3"
+    "$REPO_ROOT/venv/bin/python"
+    "$REPO_ROOT/.venv/bin/python3"
+    "$REPO_ROOT/.venv/bin/python"
+    "$(command -v python3 2>/dev/null || true)"
+    "$(command -v python 2>/dev/null || true)"
+)
+for c in "${candidates[@]}"; do
+    [ -n "$c" ] && [ -x "$c" ] || continue
+    # Quiet import probe — no output, no secrets touched.
+    if "$c" -c "import fastapi, twilio" >/dev/null 2>&1; then
+        PY="$c"
+        break
+    fi
+done
+
+if [ -z "$PY" ]; then
+    echo "[deploy_preflight] FATAL: no python interpreter with fastapi+twilio installed could be found." >&2
+    echo "[deploy_preflight] Tried: $BACKEND_DIR/venv, $BACKEND_DIR/.venv, $REPO_ROOT/venv, $REPO_ROOT/.venv, system python3." >&2
+    echo "[deploy_preflight] Pass OUTBOUND_PYTHON=/path/to/venv/bin/python or activate the venv first." >&2
+    echo "[deploy_preflight] Hint: pm2 describe dialgenix-backend | grep 'exec interpreter'" >&2
+    {
+        echo "selftest_python_missing"
+        echo "exit_code=2"
+        echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    } > "$KILL_SWITCH"
+    echo ""
+    echo "================================================================"
+    echo "OUTBOUND SELF-TEST FAILED — LIVE DIALING DISABLED"
+    echo "================================================================"
+    exit 1
+fi
+
+echo "[deploy_preflight] Using python: $PY"
+
 # --- Run the structural self-test ---
 echo "[deploy_preflight] Running structural self-test (no live dial, no secrets printed)..."
 cd "$BACKEND_DIR"
@@ -50,7 +101,7 @@ cd "$BACKEND_DIR"
 # Run with PYTHONPATH but NEVER echo env. Stdout/stderr stream to console;
 # the script itself avoids printing secrets.
 set +e
-PYTHONPATH="$BACKEND_DIR" python3 "$SELFTEST"
+PYTHONPATH="$BACKEND_DIR" "$PY" "$SELFTEST"
 SELFTEST_EXIT=$?
 set -e 2>/dev/null || true
 

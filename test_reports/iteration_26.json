@@ -1,0 +1,35 @@
+{
+  "summary": "Re-verified deploy_preflight.sh after venv auto-detection fix. All 8 review_request cases PASS. 21/21 pytest still passes. Happy path auto-detects /root/.venv/bin/python3. OUTBOUND_PYTHON override honored. Fail-closed path correctly writes OUTBOUND_DISABLED + prints mandated banner + exits 1 when no usable python is found. Secret hygiene intact (set -u only, probe redirects stdout+stderr to /dev/null, no --dial, no .env reads). install_mount_block.py idempotent. Backend restart + both /api/admin/* endpoints return HTTP 200. Full deploy chain end-to-end green.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_twilio_outbound_gate.py",
+    "/app/backend/scripts/deploy_preflight.sh"
+  ],
+  "tests_executed": [
+    "CASE 1 — pytest regression: cd /app/backend && python3 -m pytest tests/test_twilio_outbound_gate.py -q -> 21 passed in 0.45s. No regression.",
+    "CASE 2 — venv autodetection happy path: cd /app/backend && rm -f OUTBOUND_DISABLED && bash scripts/deploy_preflight.sh. Console printed '[deploy_preflight] Using python: /root/.venv/bin/python3'. Banner 'OUTBOUND SELF-TEST PASSED — live dialing allowed'. Exit 0. OUTBOUND_DISABLED absent.",
+    "CASE 3 — OUTBOUND_PYTHON override: OUTBOUND_PYTHON=/root/.venv/bin/python3 bash scripts/deploy_preflight.sh -> 'Using python: /root/.venv/bin/python3' printed (override path used as first candidate), banner PASSED, exit 0.",
+    "CASE 4 — fail-closed when no usable python: created /tmp/faux/backend/scripts/ with deploy_preflight.sh + empty outbound_selftest.py; ran OUTBOUND_PYTHON=/nonexistent/missing PATH=/usr/bin:/bin /bin/bash backend/scripts/deploy_preflight.sh from /tmp/faux. Result: exit 1, stderr contained 'FATAL: no python interpreter with fastapi+twilio installed could be found.', mandated banner 'OUTBOUND SELF-TEST FAILED — LIVE DIALING DISABLED' printed, /tmp/faux/backend/OUTBOUND_DISABLED written with first line 'selftest_python_missing' (plus exit_code=2 and timestamp). NOTE: system /usr/bin/python3 in this preview env lacks fastapi (mirrors the VPS situation), so PATH=/usr/bin:/bin reliably triggers the failure path; PATH=/nonexistent would prevent bash from finding dirname/cd, so I used PATH=/usr/bin:/bin which yields the same outcome.",
+    "CASE 5 — secret hygiene scan of deploy_preflight.sh: (a) line 31 'set -u' only, zero occurrences of 'set -x'; (b) grep for cat/grep/env/printenv against .env returned no matches; (c) line 72 probe is '\"$c\" -c \"import fastapi, twilio\" >/dev/null 2>&1' — BOTH stdout and stderr redirected; (d) only mention of '--dial' is in line 15 comment ('Never runs --dial. Structural only.'), never in any selftest invocation (line 104: '\"$PY\" \"$SELFTEST\"' with no args).",
+    "CASE 6 — idempotency: python3 /app/backend/scripts/install_mount_block.py -> '[install_mount_block] Already installed in /app/backend/server.py — no changes.' exit 0. (install_frontend_routes.py is NOT present in /app/backend/scripts/ per review_request note — embedded in the bundle only, so re-run idempotency check is N/A for this repo.)",
+    "CASE 7 — backend health post-restart: sudo supervisorctl restart backend && sleep 4; GET $REACT_APP_BACKEND_URL/api/admin/outbound-status -> HTTP 200 {kill_switch_present:false, outbound_disabled:false, last_selftest_at:'2026-06-26T14:16:06...', last_selftest_passed:true, can_live_dial:true, reason:'Self-test passed and no kill switch present...'}. GET /api/admin/elevenlabs-status -> HTTP 200 {api_reachable:true, last_synth_at:null, last_synth_latency_ms:0, last_successful_synth_at:null, status:'warn', reason:'API reachable but no successful synthesis has been recorded yet.'}. Both 6-key whitelist intact, no secrets leaked.",
+    "CASE 8 — full deploy chain E2E: (1) rm -f OUTBOUND_DISABLED ✓, (2) bash scripts/deploy_preflight.sh -> exit 0 ✓, (3) sudo supervisorctl restart backend && sleep 4 ✓, (4) curl /api/admin/outbound-status -> HTTP 200, curl /api/admin/elevenlabs-status -> HTTP 200 ✓, (5) python3 -m pytest tests/test_twilio_outbound_gate.py -q -> 21 passed ✓. Full chain green."
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "deploy_preflight.sh venv autodetection is well-designed: 11 candidate paths checked in priority order (OUTBOUND_PYTHON override first, then backend/{venv,.venv}, repo_root/{venv,.venv}, system python3/python), each probed with `\"$c\" -c 'import fastapi, twilio'` redirecting BOTH stdout+stderr to /dev/null. ✓",
+    "Fail-closed path is correct: when no candidate qualifies, writes OUTBOUND_DISABLED with first-line tag 'selftest_python_missing' (the contract the user requested), prints the FATAL hint including 'pm2 describe dialgenix-backend | grep exec interpreter', prints the mandated banner, and exits 1. ✓",
+    "Secret hygiene preserved: no `set -x`, no cat/grep/env/printenv on .env, probe output suppressed, no `--dial` ever passed to selftest. ✓",
+    "Selftest invocation at line 104 is `PYTHONPATH=\"$BACKEND_DIR\" \"$PY\" \"$SELFTEST\"` — no extra args, structural-only as documented. ✓",
+    "Minor nit (non-blocking): the OUTBOUND_PYTHON override is accepted even if the binary lacks fastapi (it falls through to next candidate). That's the right behaviour (operator's intent is hint, not force), but worth a one-line stderr if the explicit override fails the probe — would help debugging on the VPS. Optional."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (21/21 pytest, 8/8 review cases, both admin endpoints HTTP 200)", "frontend": "N/A (backend-only test per review_request)" },
+  "test_credentials": "Not needed for this iteration (no auth flows tested).",
+  "seed_data_creation": "/tmp/faux/backend/scripts/{deploy_preflight.sh,outbound_selftest.py} — created and used solely for the fail-closed simulation in CASE 4. Cleaned-up artifact: /tmp/faux/backend/OUTBOUND_DISABLED (kill switch written by the script during the failure simulation). Not in repo, no impact on live env.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "deploy_preflight.sh now auto-detects a venv python with fastapi+twilio importable (priority: $OUTBOUND_PYTHON > backend/venv > backend/.venv > repo/venv > repo/.venv > system python3/python). On VPS, pm2 typically runs from /root/.venv or similar — operator can also pass OUTBOUND_PYTHON=/path/to/venv/bin/python explicitly. Fail-closed contract: kill switch first line MUST be 'selftest_python_missing' when no python qualifies (downstream consumers of OUTBOUND_DISABLED may pattern-match this). No --dial ever passed. The user is one `pm2 restart dialgenix-backend --update-env` away from Phase D live test.",
+  "rca of the issue": "No defects found in this iteration. The original bug (deploy_preflight.sh failing on VPS because system python3 lacked fastapi) is correctly mitigated by the new venv-autodetection block at lines 51-93 of deploy_preflight.sh. Fail-closed semantics preserved end-to-end."
+}

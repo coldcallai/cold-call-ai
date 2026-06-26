@@ -668,6 +668,44 @@ Render with `<StatusCard title=... icon=... fetchStatus=... testId=... />`. That
 - ✅ No secrets in frontend bundle (`REACT_APP_BACKEND_URL` only)
 - ✅ All interactive + info elements carry unique `data-testid` per platform rules
 
+## Completed (Feb 26, 2026) — Ops Center: ElevenLabs card (second proof-of-pattern) ✅
+**Backend `GET /api/admin/elevenlabs-status`** — strict 6-key whitelist response:
+```json
+{
+  "api_reachable": true,
+  "last_synth_at": "...",
+  "last_synth_latency_ms": 420,
+  "last_successful_synth_at": "...",
+  "status": "safe|warn|down|unknown",
+  "reason": "..."
+}
+```
+**No secrets exposed.** No `api_key`, no `voice_id`, no `xi-api-key`, no `bearer`, no raw provider responses.
+
+**Strategy: cache-first, no synth on poll.**
+- Primary: `_record_synth_event()` is called inside `_default_eleven_synthesize` after every production synth attempt (success + failure), updating an in-memory `_ElevenHealth` cache with `last_synth_at`, `last_synth_latency_ms`, `last_successful_synth_at`.
+- Fallback: `_maybe_live_ping_elevenlabs()` — cheap `voices.get_all()` call, **rate-limited to once per 10 minutes** (`_MIN_PING_INTERVAL_SECONDS=600`). Short-circuits entirely when a recent successful synth proves reachability.
+- **Never synthesizes audio on poll.** `test_12e` wires an exploding `synth_fn` that would fail if invoked — confirmed by 21/21 tests + 10 rapid live curls producing zero synth log entries.
+
+**Status mapping:**
+- `safe`: API reachable, recent success within 1h, latency < 3000ms
+- `warn`: API reachable but no synth yet, OR synth stale > 1h, OR latency > 3000ms
+- `down`: API unreachable
+- `unknown`: insufficient data
+
+**Frontend `ElevenLabsStatusCard.jsx`** — 55-line wrapper around the reusable `StatusCard`. Displays: API reachable / Last synth / Last latency / Last success. Polls every 30s, same as Outbound card. Latency display guards 0 → `—` so the card doesn't show misleading `0 ms` before any synth has happened.
+
+**Ops Center now displays 2 cards side-by-side:** Outbound Dialer + ElevenLabs. Adding the 3rd card (OpenAI / Twilio / Prospecting / Campaign Engine / UniversalBrain / System Health) is one ~50-line component + one entry in the `cards` array.
+
+**5 new tests (12a–12e). Total suite now 21/21.**
+- `12a` safe after successful synth (no live ping issued — cache wins)
+- `12b` down when API unreachable
+- `12c` warn on high latency
+- `12d` response contains no secrets (api_key, xi-api-key, voice_id, bearer, sk-, authorization, .env — all forbidden)
+- `12e` no synth loop: 20 rapid polls → 0 synth invocations + voices.get_all called ≤1×
+
+**Verified by testing agent (iteration_25):** 100% backend + 100% frontend; all acceptance criteria pass.
+
 ## VPS Deployment
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend

@@ -28,6 +28,8 @@ const fetchElevenLabsStatus = async () => {
     status === "down" ? "DOWN" : "UNKNOWN";
 
   const latency = Number.isFinite(data.last_synth_latency_ms) ? data.last_synth_latency_ms : null;
+  // Treat 0 as "no data" — backend reports 0 when no synth event has been recorded yet.
+  const latencyDisplay = latency != null && latency > 0 ? `${latency} ms` : "—";
 
   return {
     status,
@@ -36,7 +38,7 @@ const fetchElevenLabsStatus = async () => {
     metrics: [
       { label: "API reachable", value: data.api_reachable ? "yes" : "no" },
       { label: "Last synth",    value: formatRelativeTime(data.last_synth_at) },
-      { label: "Last latency",  value: latency != null ? `${latency} ms` : "—" },
+      { label: "Last latency",  value: latencyDisplay },
       { label: "Last success",  value: formatRelativeTime(data.last_successful_synth_at) },
     ],
   };

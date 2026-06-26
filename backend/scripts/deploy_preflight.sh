@@ -50,34 +50,15 @@ fi
 
 # --- Auto-detect a python interpreter that has fastapi available ---
 # pm2 on the VPS runs the backend from a virtualenv; the system `python3` may
-# not have fastapi/twilio/elevenlabs installed. We search common venv locations
-# without ever invoking any tool that prints env vars.
-PY=""
-candidates=(
-    "${OUTBOUND_PYTHON:-}"
-    "$BACKEND_DIR/venv/bin/python3"
-    "$BACKEND_DIR/venv/bin/python"
-    "$BACKEND_DIR/.venv/bin/python3"
-    "$BACKEND_DIR/.venv/bin/python"
-    "$REPO_ROOT/venv/bin/python3"
-    "$REPO_ROOT/venv/bin/python"
-    "$REPO_ROOT/.venv/bin/python3"
-    "$REPO_ROOT/.venv/bin/python"
-    "$(command -v python3 2>/dev/null || true)"
-    "$(command -v python 2>/dev/null || true)"
-)
-for c in "${candidates[@]}"; do
-    [ -n "$c" ] && [ -x "$c" ] || continue
-    # Quiet import probe — no output, no secrets touched.
-    if "$c" -c "import fastapi, twilio" >/dev/null 2>&1; then
-        PY="$c"
-        break
-    fi
-done
+# not have fastapi/twilio/elevenlabs installed. The shared finder probes
+# candidates and exports OUTBOUND_PY. See scripts/_lib_python_finder.sh.
+# shellcheck source=./_lib_python_finder.sh
+source "$SCRIPT_DIR/_lib_python_finder.sh" || true
+PY="${OUTBOUND_PY:-}"
 
 if [ -z "$PY" ]; then
     echo "[deploy_preflight] FATAL: no python interpreter with fastapi+twilio installed could be found." >&2
-    echo "[deploy_preflight] Tried: $BACKEND_DIR/venv, $BACKEND_DIR/.venv, $REPO_ROOT/venv, $REPO_ROOT/.venv, system python3." >&2
+    echo "[deploy_preflight] Tried: \$OUTBOUND_PYTHON, $BACKEND_DIR/{venv,.venv}, $REPO_ROOT/{venv,.venv}, system python3/python." >&2
     echo "[deploy_preflight] Pass OUTBOUND_PYTHON=/path/to/venv/bin/python or activate the venv first." >&2
     echo "[deploy_preflight] Hint: pm2 describe dialgenix-backend | grep 'exec interpreter'" >&2
     {

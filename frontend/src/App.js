@@ -65,6 +65,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import ReviewRequestsPage from "@/pages/ReviewRequestsPage";
 import CreditPacks from "@/pages/CreditPacksPage";
 import ROICalculatorPage from "@/pages/ROICalculatorPage";
+import OpsCenterPage from "@/pages/OpsCenterPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -329,6 +330,7 @@ const AppRouter = () => {
                     <Route path="/bookings" element={<BookingsPage />} />
                     <Route path="/calls" element={<CallHistory />} />
                     <Route path="/analytics" element={<AnalyticsPage />} />
+                    <Route path="/ops" element={<OpsCenterPage />} />
                     <Route path="/integrations" element={<CRMIntegrationsPage />} />
                     <Route path="/dnc" element={<DNCManagementPage />} />
                     <Route path="/compliance" element={<ComplianceSetupPage />} />

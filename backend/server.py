@@ -13257,6 +13257,43 @@ try:
 except Exception as _outbound_err:
     logger.error(f"Failed to mount outbound router: {_outbound_err}")
 
+# ============================================================
+# RankTrust → IntentBrain Handoff Webhook (additive)
+# ============================================================
+try:
+    from routes import ranktrust_webhook as _ranktrust_webhook
+
+    _rt_secret = os.environ.get("RANKTRUST_HANDOFF_SECRET", "")
+    _rt_token = os.environ.get("RANKTRUST_HANDOFF_TOKEN", "")
+    _rt_cb_url = os.environ.get("RANKTRUST_CALLBACK_URL", "")
+    _rt_cb_token = os.environ.get("RANKTRUST_CALLBACK_TOKEN", "")
+
+    _ranktrust_webhook.setup_dependencies(
+        db=db,
+        handoff_secret=_rt_secret,
+        handoff_token=_rt_token,
+        callback_url_default=_rt_cb_url,
+        callback_token_default=_rt_cb_token,
+        poll_seconds=30,
+    )
+    app.include_router(_ranktrust_webhook.router, prefix="/api")
+
+    @app.on_event("startup")
+    async def _start_ranktrust_scheduler():
+        try:
+            _ranktrust_webhook.start_scheduler()
+        except Exception as _e:
+            logger.error(f"Failed to start ranktrust scheduler: {_e}")
+
+    logger.info(
+        "Mounted RankTrust webhook at /api/webhooks/ranktrust/* "
+        f"(hmac_secret={'set' if _rt_secret else 'MISSING'}, "
+        f"token={'set' if _rt_token else 'MISSING'}, "
+        f"callback_default_url={'set' if _rt_cb_url else 'MISSING'})"
+    )
+except Exception as _rt_err:
+    logger.error(f"Failed to mount ranktrust webhook: {_rt_err}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

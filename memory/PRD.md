@@ -748,6 +748,56 @@ Probe redirects BOTH stdout AND stderr to `/dev/null` — zero info leakage.
 - ✅ Shared finder requires BACKEND_DIR (graceful FATAL if missing)
 - ✅ Full E2E chain green (preflight → run_selftest → backend restart → `/api/admin/outbound-status` 200 → pytest 21/21)
 
+## Completed (Mar 4, 2026) — RankTrust → IntentBrain Handoff Webhook (Phase 3) ✅
+**`POST /api/webhooks/ranktrust/handoff`** — receives RankTrust AI Call Packages, stores them, schedules the AI call after `delay_seconds`, dials via the outbound gate, and POSTs the result back to RankTrust.
+
+**Auth:** HMAC-SHA256 preferred (`X-RankTrust-Signature: sha256=<hex>` with `RANKTRUST_HANDOFF_SECRET`), token fallback (`?token=` OR `X-RankTrust-Token` header with `RANKTRUST_HANDOFF_TOKEN`). Constant-time compare via `hmac.compare_digest`. Fails 401 when nothing is configured (fail-closed).
+
+**Packet schema (Pydantic-validated):**
+```json
+{
+  "packet_id": "unique-id",
+  "business": {"name": "...", "industry": "...", "phone": "+1E164", "website": "..."},
+  "revenue_opportunity": 45000.0,
+  "close_probability": 0.62,
+  "best_offer": "...",
+  "sales_script": {"opener": "...", "key_points": [...], "call_to_action": "..."},
+  "objections": [{"objection": "...", "response": "..."}],
+  "conversation_strategy": "...",
+  "delay_seconds": 300,
+  "callback_url": "https://...",
+  "callback_token": "..."
+}
+```
+
+**Flow:**
+1. Verify auth → 401 on failure (no DB write).
+2. Validate + persist to `db.ranktrust_handoffs` (idempotent on `packet_id`).
+3. Missing phone → `status='needs_phone'`, immediate callback with reason, no scheduled call. **Non-crashing** (RankTrust can hand off packets even before every prospect has clean phone data.)
+4. Valid phone → persist `db.ranktrust_scheduled_calls` row with `target_at = now + delay_seconds`.
+5. Background scheduler polls every 30s. When due, claims the job atomically, calls `place_outbound_call()` — respects `OUTBOUND_DISABLED` sentinel + `db.dnc_list`.
+6. Outcomes: `dial_placed`, `blocked_outbound_disabled`, `blocked_dnc`, `needs_phone`, `failed`. Every terminal outcome fires a callback to RankTrust.
+
+**Callback contract:** POST JSON `{packet_id, outcome, detail, at}` with `Authorization: Bearer <callback_token>`. Packet-level `callback_url`/`callback_token` override env `.env` defaults. **Body never contains** `callback_token` or HMAC secret (only the Authorization header carries the bearer).
+
+**Hard gates preserved:**
+- `OUTBOUND_DISABLED` kill switch → scheduler still claims job but `place_outbound_call` refuses; RankTrust gets `blocked_outbound_disabled` callback.
+- `db.dnc_list` → `blocked_dnc` callback.
+- Callback body: strict allowlist, redacts `callback_token`.
+- Public GET response: `_public_view()` explicitly pops `callback_token`.
+
+**12 regression tests. 33/33 combined with outbound gate suite.**
+
+**Verified by testing agent (iteration_28):** 100% backend. Live auth gate returns 401 fail-closed with zero DB writes when secrets unconfigured. No secret leakage in logs. Legacy `/api/twilio/inbound*` + `/api/tts/generate` untouched.
+
+**Operator env vars to configure for production:**
+```
+RANKTRUST_HANDOFF_SECRET=<random 32+ char>   # HMAC secret (preferred)
+RANKTRUST_HANDOFF_TOKEN=<random 32+ char>    # Shared-token fallback
+RANKTRUST_CALLBACK_URL=https://ranktrust.io/api/webhooks/intentbrain   # server-side default
+RANKTRUST_CALLBACK_TOKEN=<random 32+ char>   # server-side default
+```
+
 ## VPS Deployment
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend

@@ -291,6 +291,7 @@ async def place_outbound_call(
     business_name: Optional[str] = None,
     experiment_tag: Optional[str] = None,
     opener_text_override: Optional[str] = None,
+    max_call_seconds: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Place an outbound call through the human-greeting gate.
 
@@ -301,6 +302,11 @@ async def place_outbound_call(
 
     If `opener_text_override` is provided, that exact string is used as the
     opener (no campaign session lookup). Used by the self-test script.
+
+    If `max_call_seconds` is a positive int, it is passed to Twilio as
+    `time_limit=` — Twilio will HARD-END the call after that many seconds.
+    This is the runaway-cost cap for RankTrust-triggered handoff dials. When
+    omitted (Phase D self-test, legacy dialer) no time_limit is attached.
     """
     if _state.db is None or _state.twilio_client is None:
         raise RuntimeError("Outbound router not initialized — call setup_dependencies() first")
@@ -364,7 +370,7 @@ async def place_outbound_call(
     status_url = f"{base}/api/twilio/outbound/status?session_id={session_id}"
 
     # Rule #1 — URL callback, NEVER inline TwiML
-    call = _state.twilio_client.calls.create(
+    call_kwargs: Dict[str, Any] = dict(
         to=to_number,
         from_=_state.from_number,
         url=answer_url,
@@ -377,6 +383,12 @@ async def place_outbound_call(
         status_callback_method="POST",
         record=True,
     )
+    # Runaway-cost cap for RankTrust handoffs — Twilio hard-ends the call
+    # after `time_limit` seconds. Legacy dialing paths pass no cap.
+    if isinstance(max_call_seconds, int) and max_call_seconds > 0:
+        call_kwargs["time_limit"] = int(max_call_seconds)
+
+    call = _state.twilio_client.calls.create(**call_kwargs)
     call_sid = getattr(call, "sid", None) or f"CA-{uuid.uuid4().hex[:30]}"
 
     await _state.db.outbound_sessions.insert_one({

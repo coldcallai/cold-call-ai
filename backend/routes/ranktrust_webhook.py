@@ -421,7 +421,18 @@ async def scheduler_tick_once(now_dt: Optional[datetime] = None) -> Dict[str, An
                                 detail={"reason": "packet has no sales_script.opener"})
             continue
 
-        # Dial through the outbound gate — kill switch + DNC still hard-govern
+        # Dial through the outbound gate — kill switch + DNC still hard-govern.
+        # Attach a runaway-cost cap: Twilio HARD-ENDS this call after
+        # OUTBOUND_MAX_CALL_SECONDS (default 120s). Applies to RankTrust
+        # handoffs only — legacy Phase D / dental dialer paths pass no cap.
+        try:
+            max_seconds_env = os.environ.get("OUTBOUND_MAX_CALL_SECONDS", "120")
+            max_call_seconds = int(max_seconds_env) if max_seconds_env else 120
+            if max_call_seconds <= 0:
+                max_call_seconds = 120
+        except (TypeError, ValueError):
+            max_call_seconds = 120
+
         try:
             from routes import twilio_outbound as _twilio_outbound
             result = await _twilio_outbound.place_outbound_call(
@@ -433,6 +444,7 @@ async def scheduler_tick_once(now_dt: Optional[datetime] = None) -> Dict[str, An
                 business_name=business_name,
                 experiment_tag="ranktrust_handoff",
                 opener_text_override=opener,
+                max_call_seconds=max_call_seconds,
             )
         except Exception as e:  # pragma: no cover
             stats["failed"] += 1

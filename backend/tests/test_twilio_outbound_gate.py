@@ -625,6 +625,63 @@ def test_11e_admin_status_malformed_report_treated_as_unknown(tmp_path):
 
 
 # ============================================================
+# TEST 13 — max_call_seconds runaway-cost cap.
+# When callers omit `max_call_seconds` (Phase D self-test, legacy dental
+# dialer), Twilio.calls.create MUST NOT receive `time_limit`.
+# When callers pass a positive int (RankTrust handoff), it MUST be forwarded
+# to Twilio.calls.create as `time_limit=<int>`.
+# ============================================================
+@pytest.mark.asyncio
+async def test_13a_no_time_limit_when_not_passed(db, fake_twilio, fake_eleven, app):
+    result = await twilio_outbound.place_outbound_call(
+        to_number="+15551237777",
+        lead_id="legacy-no-cap",
+        campaign_id="ranktrust_local_growth",
+        variant_index=3,
+        lead_attrs={"gbp_rank": 8, "niche": "dental"},
+        opener_text_override="Test opener",
+    )
+    assert result["ok"] is True
+    kw = fake_twilio.calls.created_kwargs[-1]
+    assert "time_limit" not in kw, (
+        "legacy dialing path must NOT receive time_limit — Phase D behavior must not change"
+    )
+
+
+@pytest.mark.asyncio
+async def test_13b_time_limit_forwarded_when_passed(db, fake_twilio, fake_eleven, app):
+    result = await twilio_outbound.place_outbound_call(
+        to_number="+15551238888",
+        lead_id="ranktrust-cap",
+        campaign_id="ranktrust_handoff",
+        variant_index=0,
+        lead_attrs={"source": "ranktrust_handoff"},
+        opener_text_override="Test opener",
+        max_call_seconds=120,
+    )
+    assert result["ok"] is True
+    kw = fake_twilio.calls.created_kwargs[-1]
+    assert kw.get("time_limit") == 120
+
+
+@pytest.mark.asyncio
+async def test_13c_time_limit_ignores_non_positive(db, fake_twilio, fake_eleven, app):
+    # Zero and negative values should be silently ignored (no time_limit set)
+    for bad in (0, -5, None):
+        result = await twilio_outbound.place_outbound_call(
+            to_number=f"+155512399{abs(hash(bad)) % 100:02d}",
+            lead_id=f"ranktrust-bad-{bad}",
+            campaign_id="ranktrust_handoff",
+            variant_index=0,
+            opener_text_override="Test opener",
+            max_call_seconds=bad,  # type: ignore[arg-type]
+        )
+        assert result["ok"] is True
+        kw = fake_twilio.calls.created_kwargs[-1]
+        assert "time_limit" not in kw, f"non-positive cap {bad!r} should be ignored"
+
+
+# ============================================================
 # TEST 12 — /api/admin/elevenlabs-status
 # (a) safe — recent successful synth, low latency → status=safe
 # (b) down — API unreachable → status=down, no synth attempted on poll

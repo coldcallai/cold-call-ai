@@ -1,0 +1,34 @@
+{
+  "summary": "Verified OUTBOUND_MAX_CALL_SECONDS runaway-cost cap implementation. All 39 tests pass (24 in test_twilio_outbound_gate.py + 15 in test_ranktrust_webhook.py) including the 6 new cap tests (13a/b/c on both files). Phase D + legacy dialer paths remain untouched; cap is scoped strictly to RankTrust-triggered handoff dials. No env value leakage. Live mount log confirms both routers mounted successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_twilio_outbound_gate.py",
+    "/app/backend/tests/test_ranktrust_webhook.py",
+    "/app/test_reports/pytest/iter30_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "place_outbound_call signature is CORRECT: max_call_seconds: Optional[int] = None (twilio_outbound.py:294). Guarded by `isinstance(max_call_seconds, int) and max_call_seconds > 0` at line 388-389 — 0, negatives, and None all correctly skip adding time_limit. Phase D self-test and legacy dental dialer pass no kwarg → no time_limit attached. VERIFIED via test_13a_no_time_limit_when_not_passed.",
+    "scheduler_tick_once in ranktrust_webhook.py:428-434 correctly reads env with default '120', wraps int() in try/except (TypeError, ValueError), and additionally clamps non-positive results back to 120. Env value is never logged or printed anywhere in the codebase (grep confirmed).",
+    "Mount log lines report only set/MISSING flags for env presence (backend_url, voice_id, from, hmac_secret, token, callback_default_url). OUTBOUND_MAX_CALL_SECONDS value is never emitted to logs — good.",
+    "Legacy /api/twilio/inbound/respond endpoint intact in server.py; place_outbound_call's post-opener <Gather action='/api/twilio/inbound/respond'> handoff (line 574) is preserved. The Twilio time_limit bounds the entire call including subsequent inbound-brain turns — correct behavior per user's cost-cap intent.",
+    "Legacy /api/tts/generate endpoint present at server.py:12881 — untouched.",
+    "Minor: mount log shows `backend_url=MISSING` — this is a pre-existing preview-env condition, not related to this change. Reported previously; still worth attention if RankTrust callback URLs need to hit a public host, but out of scope for this iteration."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "N/A (backend only)"},
+  "test_credentials": "n/a — cap verification uses in-process mocks (mongomock_motor + FakeTwilioClient)",
+  "seed_data_creation": "None — all fixture data is per-test in-memory",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 30 verified the OUTBOUND_MAX_CALL_SECONDS runaway-cost cap. Scope was strictly backend regression: 39/39 pytest cases pass. The cap flows: env → scheduler_tick_once (ranktrust_webhook.py) → max_call_seconds kwarg → place_outbound_call (twilio_outbound.py) → time_limit in Twilio calls.create kwargs. Legacy Phase D self-test and dental dialer pass no cap and get no time_limit — unchanged. Actual Twilio-side time_limit enforcement was not tested against a live account (user explicitly excluded --dial). No new files written by testing agent.",
+  "rca of the issue": "N/A — this iteration was a feature-add verification, not a bug fix."
+}

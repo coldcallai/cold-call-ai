@@ -456,3 +456,77 @@ async def test_12_public_view_redacts_callback_token(client, db):
     r2 = await client.get("/api/webhooks/ranktrust/handoff/pkt-view")
     assert r2.status_code == 200
     assert "top_secret_callback_bearer_XYZ" not in _json.dumps(r2.json())
+
+
+# ============================================================
+# 13 — RankTrust handoff dials get the runaway-cost cap.
+# Default 120s. OUTBOUND_MAX_CALL_SECONDS env var overrides. Non-positive
+# / malformed env values fall back to the 120s default.
+# ============================================================
+@pytest.mark.asyncio
+async def test_13a_ranktrust_dial_gets_default_120s_cap(app, client, db, monkeypatch):
+    monkeypatch.delenv("OUTBOUND_MAX_CALL_SECONDS", raising=False)
+    packet = _valid_packet(packet_id="pkt-cap-default")
+    packet["business"]["phone"] = "+14045557777"
+    body = _json.dumps(packet).encode()
+    r = await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                          headers={"X-RankTrust-Signature": _sign(body),
+                                   "Content-Type": "application/json"})
+    assert r.status_code == 200
+
+    from datetime import datetime, timezone, timedelta
+    past = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    await db.ranktrust_scheduled_calls.update_one(
+        {"packet_id": "pkt-cap-default"}, {"$set": {"target_at": past}}
+    )
+    await ranktrust_webhook.scheduler_tick_once()
+
+    created = app.state.fake_twilio.calls.created
+    assert len(created) == 1
+    assert created[0].get("time_limit") == 120, (
+        f"RankTrust handoff dial must get the default 120s cap. Got: {created[0].get('time_limit')!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_13b_ranktrust_dial_honors_env_override(app, client, db, monkeypatch):
+    monkeypatch.setenv("OUTBOUND_MAX_CALL_SECONDS", "45")
+    packet = _valid_packet(packet_id="pkt-cap-env")
+    packet["business"]["phone"] = "+14045558888"
+    body = _json.dumps(packet).encode()
+    await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                      headers={"X-RankTrust-Signature": _sign(body),
+                               "Content-Type": "application/json"})
+
+    from datetime import datetime, timezone, timedelta
+    past = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    await db.ranktrust_scheduled_calls.update_one(
+        {"packet_id": "pkt-cap-env"}, {"$set": {"target_at": past}}
+    )
+    await ranktrust_webhook.scheduler_tick_once()
+
+    created = app.state.fake_twilio.calls.created
+    # The env-override run is the SECOND call fired in this test file's fixture.
+    # Assert the latest call has time_limit=45.
+    assert created[-1].get("time_limit") == 45
+
+
+@pytest.mark.asyncio
+async def test_13c_ranktrust_dial_falls_back_on_bad_env(app, client, db, monkeypatch):
+    monkeypatch.setenv("OUTBOUND_MAX_CALL_SECONDS", "not_an_int")
+    packet = _valid_packet(packet_id="pkt-cap-badenv")
+    packet["business"]["phone"] = "+14045559999"
+    body = _json.dumps(packet).encode()
+    await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                      headers={"X-RankTrust-Signature": _sign(body),
+                               "Content-Type": "application/json"})
+
+    from datetime import datetime, timezone, timedelta
+    past = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    await db.ranktrust_scheduled_calls.update_one(
+        {"packet_id": "pkt-cap-badenv"}, {"$set": {"target_at": past}}
+    )
+    await ranktrust_webhook.scheduler_tick_once()
+
+    created = app.state.fake_twilio.calls.created
+    assert created[-1].get("time_limit") == 120, "malformed env must fall back to 120"

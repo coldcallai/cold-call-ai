@@ -798,6 +798,33 @@ RANKTRUST_CALLBACK_URL=https://ranktrust.io/api/webhooks/intentbrain   # server-
 RANKTRUST_CALLBACK_TOKEN=<random 32+ char>   # server-side default
 ```
 
+## Completed (Mar 4, 2026) — E2E test helper: `send_test_packet.sh` ✅
+**Purpose:** operator-friendly one-liner to fire a real RankTrust handoff packet from the VPS without manual HMAC math or secret handling.
+
+**`backend/scripts/send_test_packet.sh`:**
+- Sources the shared `_lib_python_finder.sh` (same venv autodetect as deploy_preflight.sh)
+- Uses `python-dotenv` to read `RANKTRUST_HANDOFF_SECRET` / `RANKTRUST_HANDOFF_TOKEN` from `.env` (never `cat`/`echo`/`grep`)
+- Builds a canonical test packet: business_name=`IntentBrain Demo AI`, phone=`+18885131913` (operator's demo-AI-answered line), delay=60s, unique `test-e2e-<epoch>-<uuid8>` packet_id
+- HMAC-signs when secret present, else `?token=` fallback
+- Prints ONLY response status + JSON. Zero secret / HMAC-hex leakage
+- Flags: `--phone`, `--delay`, `--url`
+
+**Verified by testing agent (iteration_29):**
+- ✅ 33/33 pytest regression still green
+- ✅ Fails-closed with clear FATAL when no secret configured; zero HTTP request, zero DB write
+- ✅ HMAC happy path → HTTP 200 + `status="scheduled"` + `scheduled_call_id` + zero secret leakage
+- ✅ Token fallback path → HTTP 200 (known limitation: uvicorn access log captures query string — documented)
+- ✅ Back-to-back runs generate unique packet_ids; `replayed=false` each time
+- ✅ Rows correctly appear in `db.ranktrust_handoffs` (status=scheduled) + `db.ranktrust_scheduled_calls` (status=pending)
+- ✅ Cleanup via `python-dotenv unset_key` returns webhook to 401 fail-closed
+
+**Operator usage on VPS (after configuring `RANKTRUST_HANDOFF_SECRET`):**
+```
+bash /var/www/dialgenix/backend/scripts/send_test_packet.sh                # +18885131913, delay 60
+bash scripts/send_test_packet.sh --phone +1XXXXXXXXXX --delay 300
+curl -s http://localhost:8001/api/webhooks/ranktrust/handoff/<packet_id> | python3 -m json.tool
+```
+
 ## VPS Deployment
 ```
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend

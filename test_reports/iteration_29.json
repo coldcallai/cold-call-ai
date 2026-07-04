@@ -1,0 +1,27 @@
+{
+  "summary": "Verified send_test_packet.sh helper end-to-end. pytest regression: 33/33 pass (test_twilio_outbound_gate.py + test_ranktrust_webhook.py). Helper fail-closes with exit 4 + clear FATAL stderr when no secret/token in .env (zero HTTP request, zero DB write). HMAC happy path returns HTTP 200 with status=scheduled, business_phone=+18885131913, scheduled_call_id, replayed=false. Token fallback returns HTTP 200 status=scheduled via ?token= URL. Two back-to-back runs generate distinct packet_ids (timestamp+uuid) with replayed=false each time. DB rows created correctly in ranktrust_handoffs (status=scheduled) and ranktrust_scheduled_calls (status=pending, target_at~now+60s). Zero secret / token / HMAC-hex leakage in stdout across all runs. Venv autodetection prints '[send_test_packet] Using python: /root/.venv/bin/python3'. Post-cleanup verify: webhook back to 401 fail-closed; all test-e2e-* rows deleted (0 handoffs, 0 scheduled remain). Scheduler tick was NOT invoked against live backend per operator guidance (safe E2E — packet-queued-only verification).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/scripts/send_test_packet.sh",
+    "/app/backend/tests/test_ranktrust_webhook.py",
+    "/app/backend/tests/test_twilio_outbound_gate.py",
+    "/app/test_reports/pytest/iter29_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "send_test_packet.sh: 'set -u' but not 'set -e' or 'set -o pipefail' — acceptable since python inside the heredoc owns exit codes; noted for future hardening.",
+    "Auth-mode selection prefers HMAC when both secret and token are set; documented behavior matches webhook precedence.",
+    "?token= URL fallback places the token in the query string — as flagged in the request, uvicorn access logs may capture it. Helper stdout itself does not print the token; this is a known documented limitation of URL-based tokens.",
+    "Python heredoc uses urllib (stdlib) rather than requests — good: zero extra deps beyond python-dotenv (already used by backend).",
+    "packet_id format 'test-e2e-<epoch>-<uuid8>' is sortable and safe — verified unique across back-to-back runs."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "not_tested"},
+  "test_credentials": "RANKTRUST_HANDOFF_SECRET / RANKTRUST_HANDOFF_TOKEN were temporarily added to /app/backend/.env during testing and REMOVED afterward via python-dotenv unset_key. Final .env has no RANKTRUST_* keys. Webhook confirmed 401 after cleanup.",
+  "seed_data_creation": "Temporary test rows created in db.ranktrust_handoffs and db.ranktrust_scheduled_calls (packet_id prefix 'test-e2e-'). All rows deleted at end of run — verified count=0 for both collections with that prefix.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "send_test_packet.sh is operator-ready. One-liner to fire a live E2E test after adding RANKTRUST_HANDOFF_SECRET to .env + restart backend: `bash /app/backend/scripts/send_test_packet.sh --delay 60`. Scheduler tick (ranktrust_webhook.scheduler_tick_once) intentionally NOT invoked in this iteration — operator's guidance was to verify packet-queued-only against live backend (target phone +18885131913 is their demo-AI-answered line, but scheduler would use real Twilio creds which we should NOT exercise from CI). All 33 regression tests continue to pass. Note: helper's venv finder falls back to /root/.venv/bin/python3 in this container (no /app/backend/venv exists); production VPS should have backend/venv or .venv where OUTBOUND_PYTHON detection prefers it.",
+  "rca of the issue": "n/a — no failures observed. Helper behaves exactly as designed across all 6 required scenarios (fail-closed, HMAC happy path, DB queued, unique packet_id idempotency, token fallback, cleanup-to-401)."
+}

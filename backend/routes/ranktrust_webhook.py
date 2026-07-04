@@ -281,6 +281,207 @@ async def ranktrust_handoff_status(packet_id: str) -> Dict[str, Any]:
 
 
 # ============================================================
+# Baseline Timeline (read-only diagnostic view)
+# ============================================================
+# Merges three collections into a single ordered stage-by-stage lifecycle:
+#   * ranktrust_handoffs        (packet_received / queued / dial_placed / callback events)
+#   * ranktrust_scheduled_calls (target_at / dialed_at)
+#   * outbound_sessions         (answered / greeting_detected / call_ended)
+#
+# Never writes. Never touches secrets. Callback details are already redacted
+# at write-time (stored detail is {outcome, status_code} or {outcome, error}).
+_TIMELINE_STAGES_ORDER = [
+    "packet_received",
+    "packet_validated",
+    "queued",
+    "delay_target",
+    "dial_started",
+    "answered",
+    "greeting_detected",
+    "ai_conversation_started",
+    "call_ended",
+    "callback_sent",
+]
+
+
+def _iso_or_none(value: Any) -> Optional[str]:
+    return value if isinstance(value, str) and value else None
+
+
+def _elapsed_seconds(start_iso: Optional[str], stage_iso: Optional[str]) -> Optional[float]:
+    if not start_iso or not stage_iso:
+        return None
+    try:
+        start_dt = datetime.fromisoformat(start_iso)
+        stage_dt = datetime.fromisoformat(stage_iso)
+    except (TypeError, ValueError):
+        return None
+    return round((stage_dt - start_dt).total_seconds(), 3)
+
+
+async def _build_timeline(packet_id: str) -> Optional[Dict[str, Any]]:
+    """Return a merged, ordered lifecycle timeline for a packet.
+
+    Returns None if the packet is unknown (endpoint will translate to 404).
+    """
+    handoff = await _state.db.ranktrust_handoffs.find_one({"packet_id": packet_id})
+    if not handoff:
+        return None
+
+    sched = await _state.db.ranktrust_scheduled_calls.find_one({"packet_id": packet_id})
+    session = await _state.db.outbound_sessions.find_one({"lead_id": f"ranktrust:{packet_id}"})
+
+    events = handoff.get("events") or []
+    received_at = _iso_or_none(handoff.get("received_at"))
+
+    def _find_event(name: str) -> Optional[Dict[str, Any]]:
+        return next((e for e in events if e.get("event") == name), None)
+
+    def _find_callback_event() -> Optional[Dict[str, Any]]:
+        for e in events:
+            if e.get("event") in ("callback_posted", "callback_failed", "callback_skipped_no_url"):
+                return e
+        return None
+
+    stages: List[Dict[str, Any]] = []
+
+    def _add(stage: str, at: Optional[str], **detail: Any) -> None:
+        if not at:
+            return
+        # Filter out None-valued detail fields for a clean readable payload
+        clean_detail = {k: v for k, v in detail.items() if v is not None}
+        stages.append({"stage": stage, "at": at, "detail": clean_detail})
+
+    # 1. packet_received
+    _add("packet_received", received_at, status="received")
+
+    # 2. packet_validated — implicit: if the row exists, auth+Pydantic passed.
+    _add("packet_validated", received_at,
+         note="Auth (HMAC or token) accepted; Pydantic schema validated")
+
+    # 3. queued — same moment as receipt (row was persisted).
+    _add("queued", received_at,
+         status=handoff.get("status"),
+         delay_seconds=handoff.get("delay_seconds"))
+
+    # 4. delay_target — the moment scheduler is allowed to dial.
+    if sched:
+        _add("delay_target", _iso_or_none(sched.get("target_at")),
+             pending_for_seconds=handoff.get("delay_seconds"))
+
+    # 5. dial_started
+    dial_evt = _find_event("dial_placed")
+    if dial_evt:
+        _add("dial_started", _iso_or_none(dial_evt.get("at")),
+             call_sid=(dial_evt.get("detail") or {}).get("call_sid"))
+
+    # 6-9. answered / greeting_detected / ai_conversation_started / call_ended
+    if session:
+        _add("answered", _iso_or_none(session.get("answered_at")),
+             answered_by=session.get("answered_by"))
+
+        opener_played_at = _iso_or_none(session.get("opener_played_at"))
+        _add("greeting_detected", opener_played_at,
+             first_human_speech=session.get("first_human_speech"))
+        _add("ai_conversation_started", opener_played_at,
+             opener_text=session.get("opener_text"),
+             disposition=session.get("disposition"))
+
+        _add("call_ended", _iso_or_none(session.get("ended_at")),
+             final_call_status=session.get("final_call_status"),
+             duration_seconds=session.get("duration_seconds"),
+             disposition=session.get("disposition"))
+
+    # 10. callback_sent — any callback event (posted / failed / skipped).
+    cb_evt = _find_callback_event()
+    if cb_evt:
+        _add("callback_sent", _iso_or_none(cb_evt.get("at")),
+             event=cb_evt.get("event"),
+             detail=cb_evt.get("detail"))
+
+    # Attach elapsed_from_start_seconds
+    for s in stages:
+        s["elapsed_from_start_seconds"] = _elapsed_seconds(received_at, s["at"])
+
+    # Stable order: primary key = _TIMELINE_STAGES_ORDER index; secondary = at.
+    order_index = {name: i for i, name in enumerate(_TIMELINE_STAGES_ORDER)}
+    stages.sort(key=lambda s: (order_index.get(s["stage"], 999), s["at"]))
+
+    return {
+        "packet_id": packet_id,
+        "business_name": handoff.get("business_name"),
+        "business_phone": handoff.get("business_phone"),
+        "business_industry": handoff.get("business_industry"),
+        "status": handoff.get("status"),
+        "call_sid": handoff.get("call_sid") or (session or {}).get("call_sid"),
+        "received_at": received_at,
+        "delay_seconds": handoff.get("delay_seconds"),
+        "timeline": stages,
+    }
+
+
+def _format_timeline_markdown(payload: Dict[str, Any]) -> str:
+    """Copy-paste baseline block for debugging notes / chat sharing.
+
+    Never includes secrets. Safe to paste into a public issue tracker.
+    """
+    lines: List[str] = []
+    lines.append(f"# RankTrust → IntentBrain Baseline — `{payload.get('packet_id')}`")
+    lines.append("")
+    lines.append(f"- **Business:** {payload.get('business_name') or 'n/a'}"
+                 f" ({payload.get('business_industry') or 'n/a'})")
+    lines.append(f"- **Phone:** `{payload.get('business_phone') or 'n/a'}`")
+    lines.append(f"- **Status:** `{payload.get('status') or 'unknown'}`")
+    lines.append(f"- **Call SID:** `{payload.get('call_sid') or 'n/a'}`")
+    lines.append(f"- **Received at:** `{payload.get('received_at') or 'n/a'}`")
+    lines.append(f"- **Configured delay:** {payload.get('delay_seconds') or 'n/a'}s")
+    lines.append("")
+    lines.append("| # | Stage | Timestamp (UTC) | Elapsed from start (s) | Detail |")
+    lines.append("|---|-------|-----------------|------------------------|--------|")
+    for i, s in enumerate(payload.get("timeline") or [], start=1):
+        detail = s.get("detail") or {}
+        # Compact detail into `k=v` pairs so the whole line stays one row.
+        detail_str = ", ".join(
+            f"{k}=`{v}`" for k, v in detail.items()
+            if v is not None and v != "" and v != []
+        ) or "—"
+        elapsed = s.get("elapsed_from_start_seconds")
+        elapsed_str = f"{elapsed:.3f}" if isinstance(elapsed, (int, float)) else "—"
+        lines.append(
+            f"| {i} | `{s['stage']}` | `{s['at']}` | {elapsed_str} | {detail_str} |"
+        )
+    lines.append("")
+    lines.append("_Generated by `GET /api/webhooks/ranktrust/timeline/{packet_id}?format=markdown`._")
+    return "\n".join(lines)
+
+
+@router.get("/timeline/{packet_id}")
+async def ranktrust_timeline(
+    packet_id: str,
+    format: Optional[str] = Query(default=None),
+) -> Any:
+    """Read-only lifecycle timeline for a single RankTrust packet.
+
+    - Default: JSON with an ordered `timeline` array.
+    - `?format=markdown`: text/markdown baseline block for chat / debug notes.
+    """
+    if _state.db is None:
+        raise HTTPException(status_code=503, detail="webhook not initialized")
+
+    payload = await _build_timeline(packet_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="packet not found")
+
+    if (format or "").lower() in ("md", "markdown"):
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(
+            content=_format_timeline_markdown(payload),
+            media_type="text/markdown; charset=utf-8",
+        )
+    return payload
+
+
+# ============================================================
 # Helpers
 # ============================================================
 def _packet_to_dict(p: HandoffPacket) -> Dict[str, Any]:

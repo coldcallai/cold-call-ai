@@ -830,3 +830,42 @@ curl -s http://localhost:8001/api/webhooks/ranktrust/handoff/<packet_id> | pytho
 cd /var/www/dialgenix && git pull origin main && cd frontend && npm run build --legacy-peer-deps && cd ../backend && bash scripts/deploy_preflight.sh && pm2 restart dialgenix-backend
 ```
 
+
+
+## Completed (Feb 2026) — RankTrust → IntentBrain Baseline Timeline (Read-Only Diagnostic)
+- [x] Added `GET /api/webhooks/ranktrust/timeline/{packet_id}` — merges `ranktrust_handoffs`,
+      `ranktrust_scheduled_calls`, and `outbound_sessions` into a single ordered lifecycle
+      with 10 canonical stages: `packet_received`, `packet_validated`, `queued`, `delay_target`,
+      `dial_started`, `answered`, `greeting_detected`, `ai_conversation_started`, `call_ended`,
+      `callback_sent`. Each stage carries ISO timestamp + `elapsed_from_start_seconds`.
+- [x] Added `?format=markdown` variant returning a copy-paste baseline table for chat/PR notes.
+      No secrets, no callback_tokens, no HMAC values ever emitted (redacted at write time).
+- [x] Read-only + additive: no writes, no legacy brain edits, no new features, no behavior
+      changes to outbound gate / scheduler / callback path.
+- [x] Docs at `/app/docs/RANKTRUST_INTENTBRAIN_BASELINE.md` — sequence explanation, capture
+      instructions (curl one-liners), interpretation guide, failure-mode → subsystem mapping,
+      baseline template to fill in after first live E2E.
+- [x] pytest coverage (43/43 passing): 404 on unknown packet, partial pre-dial timeline,
+      full happy-path with monotonic timestamps + canonical stage ordering, markdown format
+      secret-leak assertion.
+
+**Operator usage on VPS (after live E2E completes):**
+```
+BASE=https://intentbrain.ai
+PACKET_ID=pkt-live-test-001
+curl -sS "$BASE/api/webhooks/ranktrust/timeline/$PACKET_ID" | jq .
+curl -sS "$BASE/api/webhooks/ranktrust/timeline/$PACKET_ID?format=markdown" \
+  > docs/baselines/${PACKET_ID}.md
+```
+
+## Scope Freeze (still in effect, Feb 2026)
+Development is frozen until user completes:
+1. Phase D live self-test on VPS (`bash scripts/run_selftest.sh --dial`)
+2. RankTrust E2E packet (`bash scripts/send_test_packet.sh`) + baseline capture via timeline endpoint
+3. Rotation of leaked OpenAI + Stripe API keys
+
+Post-unfreeze priority order:
+1. SerpAPI live prospecting (replace mock data)
+2. Stripe Live mode toggle
+3. 3–5 agency validation sessions
+4. Phase 2 UniversalBrain wiring

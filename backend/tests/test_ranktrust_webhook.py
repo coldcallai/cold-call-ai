@@ -530,3 +530,147 @@ async def test_13c_ranktrust_dial_falls_back_on_bad_env(app, client, db, monkeyp
 
     created = app.state.fake_twilio.calls.created
     assert created[-1].get("time_limit") == 120, "malformed env must fall back to 120"
+
+
+
+# ============================================================
+# 14 — Baseline Timeline (read-only merged view)
+# ============================================================
+@pytest.mark.asyncio
+async def test_14a_timeline_unknown_packet_returns_404(client):
+    r = await client.get("/api/webhooks/ranktrust/timeline/does-not-exist")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_14b_timeline_partial_before_dial(client, db):
+    """After a valid packet is received but BEFORE the scheduler ticks:
+    timeline must include packet_received / packet_validated / queued / delay_target,
+    and MUST NOT include dial_started / answered / call_ended / callback_sent."""
+    packet = _valid_packet(packet_id="pkt-timeline-partial")
+    body = _json.dumps(packet).encode()
+    r = await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                          headers={"X-RankTrust-Signature": _sign(body),
+                                   "Content-Type": "application/json"})
+    assert r.status_code == 200
+
+    tl = await client.get("/api/webhooks/ranktrust/timeline/pkt-timeline-partial")
+    assert tl.status_code == 200
+    payload = tl.json()
+    assert payload["packet_id"] == "pkt-timeline-partial"
+    assert payload["business_name"] == "Acme Dental"
+    assert payload["business_phone"] == "+14045551234"
+    assert payload["status"] == "scheduled"
+
+    stages = [s["stage"] for s in payload["timeline"]]
+    assert "packet_received" in stages
+    assert "packet_validated" in stages
+    assert "queued" in stages
+    assert "delay_target" in stages
+    for absent in ("dial_started", "answered", "greeting_detected",
+                   "ai_conversation_started", "call_ended", "callback_sent"):
+        assert absent not in stages, f"unexpected {absent} present pre-dial"
+
+    # Elapsed values must be non-negative and monotonically non-decreasing.
+    elapsed = [s["elapsed_from_start_seconds"] for s in payload["timeline"]]
+    assert all(e is None or e >= 0 for e in elapsed)
+    non_null = [e for e in elapsed if e is not None]
+    assert non_null == sorted(non_null), "timeline elapsed must be non-decreasing"
+
+
+@pytest.mark.asyncio
+async def test_14c_timeline_full_happy_path(app, client, db):
+    """After scheduler dials + we simulate answer/opener/ended/callback,
+    the timeline must show all 10 stages, in order."""
+    from datetime import datetime, timezone, timedelta
+
+    packet = _valid_packet(packet_id="pkt-timeline-full")
+    packet["business"]["phone"] = "+14045557777"
+    body = _json.dumps(packet).encode()
+    await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                      headers={"X-RankTrust-Signature": _sign(body),
+                               "Content-Type": "application/json"})
+
+    # Force target_at into the past so scheduler dials immediately.
+    past = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    await db.ranktrust_scheduled_calls.update_one(
+        {"packet_id": "pkt-timeline-full"}, {"$set": {"target_at": past}}
+    )
+    stats = await ranktrust_webhook.scheduler_tick_once()
+    assert stats["dialed"] == 1
+    # Let the fire-and-forget callback task run so `callback_posted` is logged.
+    import asyncio as _asyncio
+    await _asyncio.sleep(0.05)
+
+    # Simulate the outbound gate lifecycle (answered → opener played → call ended).
+    now = datetime.now(timezone.utc)
+    answered_at = now.isoformat()
+    opener_at = (now + timedelta(seconds=2)).isoformat()
+    ended_at = (now + timedelta(seconds=30)).isoformat()
+
+    await db.outbound_sessions.update_one(
+        {"lead_id": "ranktrust:pkt-timeline-full"},
+        {"$set": {
+            "answered_at": answered_at,
+            "answered_by": "human",
+            "opener_played": True,
+            "opener_played_at": opener_at,
+            "first_human_speech": "Hello, this is Sarah at Acme Dental.",
+            "disposition": "CONVERSATION",
+            "ended_at": ended_at,
+            "final_call_status": "completed",
+            "duration_seconds": 30,
+        }},
+    )
+
+    tl = await client.get("/api/webhooks/ranktrust/timeline/pkt-timeline-full")
+    assert tl.status_code == 200
+    payload = tl.json()
+    stages = [s["stage"] for s in payload["timeline"]]
+
+    for required in ("packet_received", "packet_validated", "queued",
+                     "delay_target", "dial_started", "answered",
+                     "greeting_detected", "ai_conversation_started",
+                     "call_ended", "callback_sent"):
+        assert required in stages, f"missing stage {required} in {stages}"
+
+    # Stage ordering must respect the canonical order.
+    canonical = ["packet_received", "packet_validated", "queued", "delay_target",
+                 "dial_started", "answered", "greeting_detected",
+                 "ai_conversation_started", "call_ended", "callback_sent"]
+    seen_indexes = [canonical.index(s) for s in stages if s in canonical]
+    assert seen_indexes == sorted(seen_indexes), \
+        f"stages out of canonical order: {stages}"
+
+    # call_ended detail contains duration + final status.
+    call_ended = next(s for s in payload["timeline"] if s["stage"] == "call_ended")
+    assert call_ended["detail"]["duration_seconds"] == 30
+    assert call_ended["detail"]["final_call_status"] == "completed"
+
+    # Callback detail must NOT contain any raw callback_token / auth header.
+    cb = next(s for s in payload["timeline"] if s["stage"] == "callback_sent")
+    cb_blob = _json.dumps(cb).lower()
+    assert "top_secret_callback_bearer_xyz" not in cb_blob
+    assert "authorization" not in cb_blob
+
+
+@pytest.mark.asyncio
+async def test_14d_timeline_markdown_format(client, db):
+    """?format=markdown must return text/markdown with a table + no secrets."""
+    packet = _valid_packet(packet_id="pkt-timeline-md")
+    body = _json.dumps(packet).encode()
+    await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                      headers={"X-RankTrust-Signature": _sign(body),
+                               "Content-Type": "application/json"})
+
+    r = await client.get("/api/webhooks/ranktrust/timeline/pkt-timeline-md?format=markdown")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/markdown")
+    text = r.text
+    assert "RankTrust → IntentBrain Baseline" in text
+    assert "pkt-timeline-md" in text
+    assert "| # | Stage |" in text
+    assert "`packet_received`" in text
+    assert "`queued`" in text
+    # Never leak the callback_token stored on the packet.
+    assert "top_secret_callback_bearer_XYZ" not in text

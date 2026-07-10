@@ -176,7 +176,7 @@ async def test_1_hmac_valid_and_tampered(client, db):
                           headers={"X-RankTrust-Signature": _sign(body),
                                    "Content-Type": "application/json"})
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "scheduled"
+    assert r.json()["status"] == "queued"
 
     # Tampered body (change one byte) — signature no longer matches
     tampered = body.replace(b"Acme Dental", b"Nope Dental")
@@ -560,7 +560,7 @@ async def test_14b_timeline_partial_before_dial(client, db):
     assert payload["packet_id"] == "pkt-timeline-partial"
     assert payload["business_name"] == "Acme Dental"
     assert payload["business_phone"] == "+14045551234"
-    assert payload["status"] == "scheduled"
+    assert payload["status"] == "queued"
 
     stages = [s["stage"] for s in payload["timeline"]]
     assert "packet_received" in stages
@@ -674,3 +674,103 @@ async def test_14d_timeline_markdown_format(client, db):
     assert "`queued`" in text
     # Never leak the callback_token stored on the packet.
     assert "top_secret_callback_bearer_XYZ" not in text
+
+
+# ============================================================
+# 15 — RankTrust v2 response contract cleanup (approved patch)
+# ============================================================
+# Verifies:
+#   * Fresh success response is the strict shape {status, packet_id, scheduled_call_id}
+#   * status is 'queued' (not 'scheduled')
+#   * Replay response includes the SAME scheduled_call_id as the original
+#   * ranktrust_handoffs row persists signature_verified=true AND scheduled_call_id
+#     at the top level (not nested)
+#   * When phone is missing: status='needs_phone', scheduled_call_id is None
+#   * Token-fallback auth persists signature_verified=false (only HMAC counts)
+@pytest.mark.asyncio
+async def test_15a_success_response_strict_shape(client, db):
+    packet = _valid_packet(packet_id="pkt-shape-1")
+    body = _json.dumps(packet).encode()
+    r = await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                          headers={"X-RankTrust-Signature": _sign(body),
+                                   "Content-Type": "application/json"})
+    assert r.status_code == 200
+    resp = r.json()
+
+    # Contract §2: exact required fields present + correct types
+    assert resp["status"] == "queued"
+    assert resp["packet_id"] == "pkt-shape-1"
+    assert isinstance(resp["scheduled_call_id"], str) and len(resp["scheduled_call_id"]) >= 16
+    assert resp["replayed"] is False
+
+    # Contract §3: row persists signature_verified + scheduled_call_id at TOP level
+    row = await db.ranktrust_handoffs.find_one({"packet_id": "pkt-shape-1"})
+    assert row is not None
+    assert row["signature_verified"] is True, "HMAC-authed request must persist signature_verified=true"
+    assert row["scheduled_call_id"] == resp["scheduled_call_id"], \
+        "scheduled_call_id must be top-level on ranktrust_handoffs and match response"
+    # Also linked on the scheduled row
+    sched = await db.ranktrust_scheduled_calls.find_one({"packet_id": "pkt-shape-1"})
+    assert sched["scheduled_call_id"] == resp["scheduled_call_id"]
+
+
+@pytest.mark.asyncio
+async def test_15b_replay_includes_scheduled_call_id(client, db):
+    packet = _valid_packet(packet_id="pkt-shape-replay")
+    body = _json.dumps(packet).encode()
+    r1 = await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                           headers={"X-RankTrust-Signature": _sign(body),
+                                    "Content-Type": "application/json"})
+    first_id = r1.json()["scheduled_call_id"]
+    assert r1.json()["replayed"] is False
+
+    # Second identical POST — must return SAME scheduled_call_id
+    r2 = await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                           headers={"X-RankTrust-Signature": _sign(body),
+                                    "Content-Type": "application/json"})
+    assert r2.status_code == 200
+    resp = r2.json()
+    assert resp["status"] == "queued"
+    assert resp["packet_id"] == "pkt-shape-replay"
+    assert resp["scheduled_call_id"] == first_id, \
+        "Contract §1: replay must return the previously stored scheduled_call_id"
+    assert resp["replayed"] is True
+    # And no dupes
+    assert await db.ranktrust_handoffs.count_documents({"packet_id": "pkt-shape-replay"}) == 1
+    assert await db.ranktrust_scheduled_calls.count_documents({"packet_id": "pkt-shape-replay"}) == 1
+
+
+@pytest.mark.asyncio
+async def test_15c_needs_phone_has_null_scheduled_call_id(client, db):
+    packet = _valid_packet(packet_id="pkt-shape-nophone")
+    packet["business"]["phone"] = None
+    body = _json.dumps(packet).encode()
+    r = await client.post("/api/webhooks/ranktrust/handoff", content=body,
+                          headers={"X-RankTrust-Signature": _sign(body),
+                                   "Content-Type": "application/json"})
+    assert r.status_code == 200
+    resp = r.json()
+    assert resp["status"] == "needs_phone"
+    assert resp["packet_id"] == "pkt-shape-nophone"
+    assert resp["scheduled_call_id"] is None
+
+    row = await db.ranktrust_handoffs.find_one({"packet_id": "pkt-shape-nophone"})
+    assert row["signature_verified"] is True
+    assert row["scheduled_call_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_15d_token_auth_records_signature_verified_false(client, db):
+    """Token-fallback auth is accepted BUT signature_verified must reflect
+    that no HMAC signature was actually verified."""
+    packet = _valid_packet(packet_id="pkt-shape-token")
+    body = _json.dumps(packet).encode()
+    r = await client.post(f"/api/webhooks/ranktrust/handoff?token={TOKEN}",
+                          content=body, headers={"Content-Type": "application/json"})
+    assert r.status_code == 200
+    row = await db.ranktrust_handoffs.find_one({"packet_id": "pkt-shape-token"})
+    assert row is not None
+    assert row["signature_verified"] is False, \
+        "Token-only auth must persist signature_verified=false (no HMAC checked)"
+    assert row.get("auth_method") == "token"
+

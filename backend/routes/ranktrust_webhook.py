@@ -31,6 +31,7 @@ import hmac
 import logging
 import os
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -162,16 +163,23 @@ def _authorized(
     signature_header: Optional[str],
     token_query: Optional[str],
     token_header: Optional[str],
-) -> bool:
+) -> Optional[str]:
+    """Return the auth method used ('hmac' | 'token') or None on failure.
+
+    Precedence matches original behavior:
+      * If an X-RankTrust-Signature header is present AND a secret is configured,
+        HMAC is the ONLY accepted method — token fallback is NOT tried.
+      * Otherwise, if a shared token is configured, the token fallback is checked.
+    """
     # Prefer HMAC when a signature header is provided AND a secret is configured.
     if signature_header and _state.handoff_secret:
-        return _verify_hmac(raw_body, signature_header, _state.handoff_secret)
+        return "hmac" if _verify_hmac(raw_body, signature_header, _state.handoff_secret) else None
     # Fallback: shared token
     if _state.handoff_token:
         candidate = (token_query or token_header or "").strip()
         if candidate and hmac.compare_digest(candidate, _state.handoff_token):
-            return True
-    return False
+            return "token"
+    return None
 
 
 # ============================================================
@@ -191,7 +199,8 @@ async def ranktrust_handoff(
         raise HTTPException(status_code=503, detail="webhook not initialized")
 
     raw = await request.body()
-    if not _authorized(raw, x_ranktrust_signature, token, x_ranktrust_token):
+    auth_method = _authorized(raw, x_ranktrust_signature, token, x_ranktrust_token)
+    if auth_method is None:
         # Never disclose which method failed
         raise HTTPException(status_code=401, detail="unauthorized")
 
@@ -211,24 +220,36 @@ async def ranktrust_handoff(
     # Idempotency: if we've already seen this packet_id, return the stored row.
     existing = await _state.db.ranktrust_handoffs.find_one({"packet_id": packet.packet_id})
     if existing:
-        # Never echo callback_token / any secret field
-        return _public_view(existing, replayed=True)
+        # Replay MUST include the previously stored scheduled_call_id (RankTrust contract §1).
+        return _handoff_response(
+            status=existing.get("status") or "queued",
+            packet_id=packet.packet_id,
+            scheduled_call_id=existing.get("scheduled_call_id"),
+            replayed=True,
+        )
 
     now = datetime.now(timezone.utc)
     phone = packet.business.phone
 
-    # Decide initial status
-    if not phone:
+    # Decide initial status + assign a stable, unique scheduled_call_id up front.
+    # Using uuid.uuid4() (not packet_id) so RankTrust can distinguish the dial job
+    # from their own packet identifier.
+    if phone:
+        status = "queued"
+        scheduled_call_id: Optional[str] = uuid.uuid4().hex
+    else:
         status = "needs_phone"
         scheduled_call_id = None
-    else:
-        status = "scheduled"
 
-    # Persist the handoff record
+    # Persist the handoff record — signature_verified + scheduled_call_id are
+    # stored at the TOP LEVEL (RankTrust contract §3).
     record = {
         "packet_id": packet.packet_id,
         "received_at": now.isoformat(),
         "status": status,
+        "signature_verified": (auth_method == "hmac"),
+        "auth_method": auth_method,             # 'hmac' | 'token' — internal-only, safe
+        "scheduled_call_id": scheduled_call_id,  # top-level (may be null on needs_phone)
         "business_name": packet.business.name,
         "business_industry": packet.business.industry,
         "business_phone": phone,
@@ -237,7 +258,7 @@ async def ranktrust_handoff(
         "delay_seconds": packet.delay_seconds,
         # Store the full packet as an opaque blob for later use by the dialer /
         # in-call brain. NOTE: callback_token is stored ONLY server-side and
-        # never returned by _public_view().
+        # never returned by _public_view() or _handoff_response().
         "packet": _packet_to_dict(packet),
         "events": [
             {"at": now.isoformat(), "event": "received", "detail": f"status={status}"}
@@ -245,11 +266,11 @@ async def ranktrust_handoff(
     }
     await _state.db.ranktrust_handoffs.insert_one(record)
 
-    scheduled_call_id: Optional[str] = None
-    if status == "scheduled":
+    if status == "queued":
         target_at = now + timedelta(seconds=packet.delay_seconds)
         sched = {
             "packet_id": packet.packet_id,
+            "scheduled_call_id": scheduled_call_id,   # linkage back to the handoff row
             "phone": phone,
             "target_at": target_at.isoformat(),
             "created_at": now.isoformat(),
@@ -257,7 +278,6 @@ async def ranktrust_handoff(
             "attempts": 0,
         }
         await _state.db.ranktrust_scheduled_calls.insert_one(sched)
-        scheduled_call_id = str(sched.get("_id") or packet.packet_id)
 
     # If we can't dial, fire the callback right now.
     if status == "needs_phone":
@@ -267,7 +287,12 @@ async def ranktrust_handoff(
             detail={"reason": "Handoff accepted but business.phone is missing."},
         ))
 
-    return _public_view(record, replayed=False, scheduled_call_id=scheduled_call_id)
+    return _handoff_response(
+        status=status,
+        packet_id=packet.packet_id,
+        scheduled_call_id=scheduled_call_id,
+        replayed=False,
+    )
 
 
 @router.get("/handoff/{packet_id}")
@@ -363,7 +388,6 @@ async def _build_timeline(packet_id: str) -> Optional[Dict[str, Any]]:
     _add("queued", received_at,
          status=handoff.get("status"),
          delay_seconds=handoff.get("delay_seconds"))
-
     # 4. delay_target — the moment scheduler is allowed to dial.
     if sched:
         _add("delay_target", _iso_or_none(sched.get("target_at")),
@@ -493,7 +517,11 @@ def _packet_to_dict(p: HandoffPacket) -> Dict[str, Any]:
 
 
 def _public_view(record: Dict[str, Any], *, replayed: bool, scheduled_call_id: Optional[str] = None) -> Dict[str, Any]:
-    """Redact server-only fields (callback_token) before returning to the caller."""
+    """Redact server-only fields (callback_token) before returning to the caller.
+
+    Used by the debug GET /handoff/{packet_id} endpoint. The POST endpoint uses
+    the stricter `_handoff_response` shape below.
+    """
     packet = dict(record.get("packet") or {})
     packet.pop("callback_token", None)  # never echo
     return {
@@ -503,9 +531,30 @@ def _public_view(record: Dict[str, Any], *, replayed: bool, scheduled_call_id: O
         "business_name": record.get("business_name"),
         "business_phone": record.get("business_phone"),
         "delay_seconds": record.get("delay_seconds"),
-        "scheduled_call_id": scheduled_call_id,
+        "signature_verified": record.get("signature_verified"),
+        "scheduled_call_id": scheduled_call_id if scheduled_call_id is not None else record.get("scheduled_call_id"),
         "replayed": replayed,
         "packet": packet,
+    }
+
+
+def _handoff_response(*, status: str, packet_id: str,
+                     scheduled_call_id: Optional[str], replayed: bool) -> Dict[str, Any]:
+    """Strict RankTrust POST /handoff response contract.
+
+    Contract (v2):
+      {"status": "queued" | "needs_phone",
+       "packet_id": "<from payload>",
+       "scheduled_call_id": "<uuid hex>" | null}
+
+    Also emits `replayed: bool` — RankTrust ignores extra keys but this is
+    useful for their operators when eyeballing responses.
+    """
+    return {
+        "status": status,
+        "packet_id": packet_id,
+        "scheduled_call_id": scheduled_call_id,
+        "replayed": replayed,
     }
 
 

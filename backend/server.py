@@ -415,6 +415,7 @@ class Campaign(BaseModel):
     voicemail_enabled: bool = True  # Enable voicemail drop when machine detected
     voicemail_message: Optional[str] = None  # Custom voicemail message (uses default if None)
     voicemail_audio_url: Optional[str] = None  # ElevenLabs cloned-voice MP3 URL (auto-generated on save)
+    voicemail_audio_key: Optional[str] = None  # Opaque token backing voicemail_audio_url; regenerated on every audio refresh
     # AI conversation settings
     response_wait_seconds: int = 4  # Seconds to wait for caller response before AI continues
     company_name: Optional[str] = None  # Company name for personalization
@@ -10780,16 +10781,17 @@ async def demo_audio(demo_call_id: str):
     raise HTTPException(status_code=404, detail="Demo audio unavailable")
 
 
-@api_router.get("/vm-audio/{campaign_id}")
-async def vm_audio_stream(campaign_id: str):
-    """Serve the persisted cloned-voice voicemail MP3 for a campaign.
+@api_router.get("/vm-audio/{token}")
+async def vm_audio_stream(token: str):
+    """Serve a persisted cloned-voice voicemail MP3 by opaque token.
 
     Reachable by Twilio (no auth) at the URL stored in campaign.voicemail_audio_url.
-    Returns 404 if the campaign has no cloned-voice audio → generate_voicemail_twiml
-    falls back to Polly automatically.
+    Token is a uuid4.hex minted at synth time — campaign_id is never exposed.
+    Returns 404 if the file is absent → generate_voicemail_twiml falls back
+    to Polly automatically.
     """
     from services.vm_cloned_audio import read_vm_audio_bytes
-    data = read_vm_audio_bytes(campaign_id)
+    data = read_vm_audio_bytes(token)
     if not data:
         raise HTTPException(status_code=404, detail="vm audio not found")
     return Response(
@@ -13353,7 +13355,6 @@ try:
             _ranktrust_webhook.start_scheduler()
         except Exception as _e:
             logger.error(f"Failed to start ranktrust scheduler: {_e}")
-
     logger.info(
         "Mounted RankTrust webhook at /api/webhooks/ranktrust/* "
         f"(hmac_secret={'set' if _rt_secret else 'MISSING'}, "
@@ -13362,6 +13363,19 @@ try:
     )
 except Exception as _rt_err:
     logger.error(f"Failed to mount ranktrust webhook: {_rt_err}")
+
+
+# ============================================================
+# Cloned-voice VM audio retention sweep (isolated, non-fatal)
+# ============================================================
+@app.on_event("startup")
+async def _vm_cloned_audio_startup_sweep():
+    try:
+        from services.vm_cloned_audio import sweep_orphaned_vm_audio
+        stats = await sweep_orphaned_vm_audio(db)
+        logger.info(f"[vm_cloned] startup sweep: {stats}")
+    except Exception as _vm_sweep_err:
+        logger.error(f"[vm_cloned] startup sweep failed: {_vm_sweep_err}")
 
 app.add_middleware(
     CORSMiddleware,

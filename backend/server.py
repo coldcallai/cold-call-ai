@@ -414,6 +414,7 @@ class Campaign(BaseModel):
     # AMD + Voicemail Drop settings
     voicemail_enabled: bool = True  # Enable voicemail drop when machine detected
     voicemail_message: Optional[str] = None  # Custom voicemail message (uses default if None)
+    voicemail_audio_url: Optional[str] = None  # ElevenLabs cloned-voice MP3 URL (auto-generated on save)
     # AI conversation settings
     response_wait_seconds: int = 4  # Seconds to wait for caller response before AI continues
     company_name: Optional[str] = None  # Company name for personalization
@@ -2793,8 +2794,27 @@ class TwilioCallingService:
             raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
     
     def generate_voicemail_twiml(self, lead: Dict, campaign: Dict) -> str:
-        """Generate TwiML for voicemail drop - short, professional message"""
+        """Generate TwiML for voicemail drop - short, professional message.
+
+        If the campaign has a `voicemail_audio_url` (cloned-voice MP3 generated
+        by services.vm_cloned_audio on save), we <Play> it. Otherwise we fall
+        back to the original Polly.Matthew-Neural <Say> path — no regression.
+        """
         response = VoiceResponse()
+
+        # ---- Preferred path: cloned-voice MP3 via <Play> ----
+        vm_audio_url = campaign.get("voicemail_audio_url")
+        if vm_audio_url:
+            try:
+                response.play(vm_audio_url)
+                response.pause(length=1)
+                response.hangup()
+                return str(response)
+            except Exception as _play_err:
+                # Never let a Play failure lose the voicemail — fall through to Say.
+                logger.error(f"[vm_cloned] <Play> emit failed, falling back to Polly: {_play_err}")
+
+        # ---- Fallback path: Polly.Matthew-Neural <Say> ----
         
         company_name = campaign.get('company_name', 'our team')
         business_name = lead.get('business_name', 'your company')
@@ -6783,6 +6803,21 @@ async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends
     
     campaign_obj = Campaign(**campaign_data, user_id=current_user["user_id"])
     await db.campaigns.insert_one(campaign_obj.model_dump())
+
+    # Cloned-voice VM audio (isolated, non-fatal on any failure)
+    try:
+        from services.vm_cloned_audio import refresh_campaign_vm_audio
+        _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
+        if _backend_url:
+            await refresh_campaign_vm_audio(
+                db=db, eleven_client=eleven_client,
+                backend_public_url=_backend_url,
+                campaign_id=campaign_obj.id,
+                user_id=current_user["user_id"],
+            )
+    except Exception as _vm_err:
+        logger.error(f"[vm_cloned] refresh on create failed for {campaign_obj.id}: {_vm_err}")
+
     return campaign_obj
 
 @api_router.put("/campaigns/{campaign_id}", response_model=Campaign)
@@ -6795,7 +6830,22 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_use
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
+    # Regenerate cloned-voice VM audio if the message or voicemail flag changed
+    if any(k in updates for k in ("voicemail_message", "voicemail_enabled", "agent_id", "company_name")):
+        try:
+            from services.vm_cloned_audio import refresh_campaign_vm_audio
+            _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
+            if _backend_url:
+                await refresh_campaign_vm_audio(
+                    db=db, eleven_client=eleven_client,
+                    backend_public_url=_backend_url,
+                    campaign_id=campaign_id,
+                    user_id=current_user["user_id"],
+                )
+        except Exception as _vm_err:
+            logger.error(f"[vm_cloned] refresh on update failed for {campaign_id}: {_vm_err}")
+
     campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return campaign
 
@@ -10728,6 +10778,25 @@ async def demo_audio(demo_call_id: str):
         logger.error(f"Demo audio generation failed: {e}")
     
     raise HTTPException(status_code=404, detail="Demo audio unavailable")
+
+
+@api_router.get("/vm-audio/{campaign_id}")
+async def vm_audio_stream(campaign_id: str):
+    """Serve the persisted cloned-voice voicemail MP3 for a campaign.
+
+    Reachable by Twilio (no auth) at the URL stored in campaign.voicemail_audio_url.
+    Returns 404 if the campaign has no cloned-voice audio → generate_voicemail_twiml
+    falls back to Polly automatically.
+    """
+    from services.vm_cloned_audio import read_vm_audio_bytes
+    data = read_vm_audio_bytes(campaign_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="vm audio not found")
+    return Response(
+        content=data,
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @api_router.get("/demo/calls-remaining")

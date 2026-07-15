@@ -1,0 +1,49 @@
+{
+  "summary": "Cloned-voice voicemail drop launch verification: Sections 3, 4, 5, 8 (unit), 9 (sweep), 10 all PASS (71/71 pytest). Section 6 (missing-token 404) PASS. Frontend UI (Sections 1 FE + 2 FE) PASS — all data-testids render, VM script pre-fills to 255 chars starting 'Hi, this is {agent_name} with {company_name}...', callback warning shows, textarea editable, edit dialog exposes 4 controls, save-button disables when callback empty & vm on. CRITICAL LAUNCH-BLOCKER FOUND at Backend API layer: the modular campaigns router (routes/campaigns.py — active because USE_NEW_CAMPAIGNS_ROUTES=true) SHADOWS the guarded routes in server.py. It is missing (a) callback_number/voicemail_audio_url/voicemail_audio_key/agent_id fields on Campaign+CampaignCreate models, (b) callback validation on create/update, (c) refresh_campaign_vm_audio hook on update, (d) callback safety guard on start. Sections 1(API), 2(API), 6(regen), 7 all FAIL against live URL.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/campaigns", "issue": "Accepts voicemail_enabled=true with NO callback_number and returns 200. Silently drops callback_number field entirely (not in response, not in DB). All FE safety is bypassable via direct API. Root cause: /app/backend/routes/campaigns.py CampaignCreate model has no callback_number field and no validation logic ported from server.py:6891.", "priority": "CRITICAL"},
+      {"endpoint": "PUT /api/campaigns/{id}", "issue": "Accepts callback_number in updates dict but never persists (Campaign model in routes/campaigns.py lacks the field — the value is silently dropped by response_model). No callback validation. No refresh_campaign_vm_audio call. voicemail_audio_url will never be populated on cloned-voice campaigns. Root cause: routes/campaigns.py:133-146 vs server.py:6948-6998 (guarded version is dead code).", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/campaigns/{id}/start", "issue": "Returns 200 for a campaign with voicemail_enabled=true and no callback_number — must return 400 with detail 'Add a callback number before enabling voicemail drops.' Root cause: routes/campaigns.py:161-171 has NO safety check (server.py:7010 version is dead code).", "priority": "CRITICAL"},
+      {"endpoint": "Startup wiring", "issue": "USE_NEW_CAMPAIGNS_ROUTES=true in backend/.env. server.py:13394-13403 mounts routes/campaigns.py router at /api which takes priority over the inline @api_router.post('/campaigns') routes in server.py:6891/6948/7010. Result: 100% of the launch-blocker safety code is not executed at runtime.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/campaigns", "issue": "Toast on FE failure reads 'Please fill in all required fields' instead of the spec-mandated 'Add a callback number before enabling voicemail drops.' when name is set and callback is missing. Minor UX gap — but only cosmetic once the API-level guard is fixed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Edit Campaign save", "issue": "Because PUT /api/campaigns/{id} does not persist callback_number and does not trigger vm-audio regeneration, saving edits appears successful on FE but never round-trips the callback or regenerates the cloned MP3 in DB.", "affected_selectors": ["[data-testid=edit-campaign-save-btn]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_vm_launch_blocker.py",
+    "/app/backend/tests/test_vm_cloned_audio.py",
+    "/app/backend/tests/test_vm_config.py",
+    "/app/backend/tests/test_ranktrust_webhook.py",
+    "/app/backend/tests/test_twilio_outbound_gate.py"
+  ],
+  "action_items": [
+    "PRIMARY FIX: Port ALL cloned-voice voicemail guards into /app/backend/routes/campaigns.py before shipping — specifically: (1) add callback_number, voicemail_audio_url, voicemail_audio_key, agent_id fields to both Campaign and CampaignCreate BaseModels; (2) in create_campaign, import resolve_callback_number and raise HTTPException(400, 'Add a callback number before enabling voicemail drops.') when voicemail_enabled and no resolvable callback; also add the placeholder-literal guard against unresolved {callback_number}; (3) in update_campaign, add same callback validation on effective (merged) doc AND call refresh_campaign_vm_audio when voicemail_message/voicemail_enabled/agent_id/company_name/callback_number changed; (4) in start_campaign, refuse-with-400 if voicemail_enabled and no callback_number resolvable.",
+    "ALTERNATIVE FIX: Set USE_NEW_CAMPAIGNS_ROUTES=false in backend/.env so the guarded server.py routes take over. Requires restarting backend and re-running the launch_blocker test to confirm all four backend criticals become PASS.",
+    "TOAST COPY: In CampaignsPage.jsx createCampaign(), replace generic 'Please fill in all required fields' with the exact spec-mandated 'Add a callback number before enabling voicemail drops.' when callback is the specific missing field.",
+    "Re-run tests/test_vm_launch_blocker.py after fixes — all 6 tests should pass end-to-end."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 13,614 lines and has a HUGE chunk of guarded voicemail logic (lines 6891-7020) that is DEAD CODE because USE_NEW_CAMPAIGNS_ROUTES=true. This duplication is a maintenance liability and directly caused the launch-blocker. Recommend: single source of truth in routes/campaigns.py, delete legacy inline routes.",
+    "routes/campaigns.py 'updates: Dict[str, Any]' with unrestricted $set means ANY field including internal columns can be written by a client (unless the response Campaign model filters). Add a whitelist of allowed update keys.",
+    "Feature-flag pattern (USE_NEW_*_ROUTES) is dangerous when new module drifts from legacy code. Recommend adding a startup assertion that the modular Campaign model has feature-parity fields with server.py Campaign model, or delete the legacy branch entirely."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_vm_launch_blocker.py (NEW — 6 tests covering Sections 1/2/3/6/7)"
+  ],
+  "success_rate": {"backend": "50% (4 of 8 launch-blocker paths fail — API create/update/start guards missing; unit tests 71/71 pass)", "frontend": "95% (all testids + guards present; only minor toast-copy mismatch)"},
+  "test_credentials": "test@example.com / Test123! — login endpoint returns 'session_token' (not 'access_token' or 'token'); auth header uses 'Bearer sess_<hex>'",
+  "seed_data_creation": "Test creates & deletes TEST_launch_blocker_* campaigns per test; all cleaned up in finally blocks.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent ports guards to routes/campaigns.py (or flips USE_NEW_CAMPAIGNS_ROUTES=false), run: cd /app/backend && python3 -m pytest tests/test_vm_launch_blocker.py tests/test_vm_cloned_audio.py tests/test_vm_config.py tests/test_ranktrust_webhook.py tests/test_twilio_outbound_gate.py -v. Expected 77 pass, 0 fail. UI already verified — no need to rerun Playwright unless CampaignsPage.jsx changes. Sections 11 (packaging) and 12 (real Twilio call) remain out-of-scope, user-verified post-deploy.",
+  "rca of the issue": "ROOT CAUSE: When the campaigns route was extracted to a modular file (Phase 5, gated on USE_NEW_CAMPAIGNS_ROUTES flag), the modular version was frozen at the pre-voicemail-drop baseline. All subsequent cloned-voice voicemail work (callback_number field, refresh hook, 3-tier fallback, start-safety guard) was added ONLY to the legacy inline routes in server.py, which are shadowed at startup because the flag is 'true' in the .env. REPRODUCTION: (1) POST /api/campaigns with {name,ai_script,voicemail_enabled:true, no callback_number} returns 200 (should be 400); (2) POST /api/campaigns/{id}/start on that same campaign returns 200 (should be 400). MITIGATION: Either port the guards into routes/campaigns.py (recommended — align both models and re-import resolve_callback_number/refresh_campaign_vm_audio) OR set USE_NEW_CAMPAIGNS_ROUTES=false. Do NOT ship the tarball to Ryan's VPS until the launch_blocker suite passes 6/6."
+}

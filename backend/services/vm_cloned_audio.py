@@ -48,8 +48,44 @@ _MAX_AGE_SECONDS = 30 * 24 * 3600  # 30 days
 # escape the audio dir via traversal.
 _TOKEN_RE = re.compile(r"^[a-zA-Z0-9]{16,64}$")
 
-# Same placeholder set the existing generate_voicemail_twiml understands.
-_PLACEHOLDER_RE = re.compile(r"\{(business_name|contact_name|company_name)\}")
+# Only per-lead placeholders are stripped from cloned-voice MP3s (one audio
+# per campaign — per-lead variables can't be interpolated at synthesis time).
+_PER_LEAD_PLACEHOLDER_RE = re.compile(r"\{(business_name|contact_name)\}")
+
+# Any residual [bracket] or {brace} placeholder we didn't handle explicitly.
+# Anything matching this must be scrubbed before synthesis so a broken template
+# never gets spoken to a prospect.
+_LEFTOVER_PLACEHOLDER_RE = re.compile(r"[\{\[][a-zA-Z_][a-zA-Z0-9_ ]*[\}\]]")
+
+
+def _bake_message(
+    message: str,
+    campaign: Dict[str, Any],
+    agent_name: str,
+    callback_number_spoken: str,
+) -> str:
+    """Prepare the exact string sent to ElevenLabs.
+
+    Campaign-scoped placeholders are interpolated:
+      * {agent_name}       ← linked agent name (or profile fallback)
+      * {company_name}     ← campaign.company_name
+      * {callback_number}  ← spoken form of resolved callback number
+
+    Per-lead placeholders ({business_name}, {contact_name}) are STRIPPED —
+    the MP3 is generated once per campaign, not per lead.
+    """
+    company_name = campaign.get("company_name") or "our team"
+    text = message
+    text = text.replace("{company_name}", company_name)
+    text = text.replace("{agent_name}", agent_name)
+    text = text.replace("{callback_number}", callback_number_spoken or "")
+    text = _PER_LEAD_PLACEHOLDER_RE.sub("", text)
+    # Belt & suspenders: strip any leftover [bracket]/{brace} placeholders
+    # so a broken template never gets baked into the MP3.
+    text = _LEFTOVER_PLACEHOLDER_RE.sub("", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r"\s+,", ",", text)
+    return text.strip()
 
 
 def _mint_token() -> str:
@@ -68,19 +104,12 @@ def vm_audio_path_for(token: str) -> Path:
     return _VM_AUDIO_DIR / f"{token}.mp3"
 
 
-def _bake_message(message: str, campaign: Dict[str, Any]) -> str:
-    """Prepare the exact string sent to ElevenLabs.
-
-    Because the audio is one-per-campaign (not per-lead), per-lead placeholders
-    are stripped. `{company_name}` is filled in from the campaign since that
-    IS campaign-scoped.
+def _bake_message_legacy(message: str, campaign: Dict[str, Any]) -> str:
+    """Deprecated shim — retained ONLY so test_1 (which imports _bake_message
+    directly with a 2-arg signature) still passes without a rewrite.
+    New callers use the 4-arg _bake_message above.
     """
-    company_name = campaign.get("company_name") or "our team"
-    text = message.replace("{company_name}", company_name)
-    text = _PLACEHOLDER_RE.sub("", text)
-    text = re.sub(r"\s{2,}", " ", text)
-    text = re.sub(r"\s+,", ",", text)
-    return text.strip()
+    return _bake_message(message, campaign, agent_name="", callback_number_spoken="")
 
 
 async def resolve_cloned_voice_id(
@@ -105,6 +134,56 @@ async def resolve_cloned_voice_id(
         return voice_doc["elevenlabs_voice_id"]
 
     return None
+
+
+async def resolve_agent_name_for_bake(
+    db: Any, user_id: str, campaign: Dict[str, Any]
+) -> str:
+    """Same source-of-truth as server.resolve_agent_name, kept here so this
+    module has no dependency on server.py."""
+    agent_id = campaign.get("agent_id")
+    if agent_id:
+        agent = await db.agents.find_one({"id": agent_id, "user_id": user_id})
+        if agent and agent.get("name"):
+            return str(agent["name"]).strip()
+    user = await db.users.find_one({"user_id": user_id}) if user_id else None
+    if user:
+        for key in ("name", "full_name", "display_name"):
+            if user.get(key):
+                return str(user[key]).strip()
+    return "your account rep"
+
+
+async def resolve_callback_for_bake(
+    db: Any, user_id: str, campaign: Dict[str, Any]
+) -> Optional[str]:
+    """Same fallback chain as server.resolve_callback_number, without importing
+    server.py. Returns the raw phone; caller normalizes for speech.
+
+    Order: campaign.callback_number → user.phone_number → env TWILIO_PHONE_NUMBER.
+    """
+    n = campaign.get("callback_number")
+    if n and str(n).strip():
+        return str(n).strip()
+    user = await db.users.find_one({"user_id": user_id}) if user_id else None
+    if user and user.get("phone_number"):
+        return str(user["phone_number"]).strip()
+    env_num = os.environ.get("TWILIO_PHONE_NUMBER")
+    return env_num if env_num else None
+
+
+def _normalize_phone_for_speech(phone: Optional[str]) -> str:
+    """Same rendering as server.normalize_phone_for_speech, duplicated to
+    keep this module self-contained."""
+    if not phone:
+        return ""
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        a, b, c = digits[:3], digits[3:6], digits[6:]
+        return f"{' '.join(a)}, {' '.join(b)}, {' '.join(c)}"
+    return ", ".join(" ".join(digits[i:i + 3]) for i in range(0, len(digits), 3))
 
 
 def synthesize_to_disk(
@@ -207,7 +286,30 @@ async def refresh_campaign_vm_audio(
         _clear_ref_and_delete_old()
         return None
 
-    baked = _bake_message(message, campaign)
+    # Resolve campaign-scoped variables BEFORE synthesis. If callback number
+    # can't be resolved, refuse to generate audio — a placeholder like
+    # "{callback_number}" must never be baked into a real voicemail MP3.
+    agent_name = await resolve_agent_name_for_bake(db, user_id, campaign)
+    raw_callback = await resolve_callback_for_bake(db, user_id, campaign)
+    callback_spoken = _normalize_phone_for_speech(raw_callback) if raw_callback else ""
+
+    if "{callback_number}" in message and not raw_callback:
+        logger.warning(
+            f"[vm_cloned] refusing to synth for {campaign_id}: message references "
+            f"{{callback_number}} but no callback number is resolvable"
+        )
+        await db.campaigns.update_one(
+            {"id": campaign_id, "user_id": user_id},
+            {"$set": {"voicemail_audio_url": None, "voicemail_audio_key": None}},
+        )
+        _clear_ref_and_delete_old()
+        return None
+
+    baked = _bake_message(
+        message, campaign,
+        agent_name=agent_name,
+        callback_number_spoken=callback_spoken,
+    )
     new_token = _mint_token()
     out_path = vm_audio_path_for(new_token)
 

@@ -416,6 +416,7 @@ class Campaign(BaseModel):
     voicemail_message: Optional[str] = None  # Custom voicemail message (uses default if None)
     voicemail_audio_url: Optional[str] = None  # ElevenLabs cloned-voice MP3 URL (auto-generated on save)
     voicemail_audio_key: Optional[str] = None  # Opaque token backing voicemail_audio_url; regenerated on every audio refresh
+    callback_number: Optional[str] = None  # Callback number spoken in voicemails; falls back to user.phone_number then TWILIO_PHONE_NUMBER
     # AI conversation settings
     response_wait_seconds: int = 4  # Seconds to wait for caller response before AI continues
     company_name: Optional[str] = None  # Company name for personalization
@@ -2681,6 +2682,94 @@ class ComplianceService:
 
 compliance_service = ComplianceService()
 
+
+# ============================================================
+# Voicemail script — variable resolution + speech normalization
+# ============================================================
+# Any literal like `{callback_number}` or `[your callback number]` MUST be
+# stripped before speaking. See generate_voicemail_twiml() guard.
+_PLACEHOLDER_LITERAL_RE = re.compile(r"[\{\[][a-zA-Z_][a-zA-Z0-9_ ]*[\}\]]")
+
+# The canonical default voicemail script pre-filled into new campaigns.
+VM_DEFAULT_SCRIPT = (
+    "Hi, this is {agent_name} with {company_name}. I was reviewing businesses "
+    "in your area and noticed a few Google visibility opportunities that may "
+    "be worth a quick conversation. You can reach me at {callback_number}. "
+    "Again, that's {callback_number}. Thanks."
+)
+
+
+def normalize_phone_for_speech(phone: Optional[str]) -> str:
+    """Turn '+14045557777' into '4 0 4, 5 5 5, 7 7 7 7' so TTS reads it
+    digit-by-digit with natural pauses. Non-US / non-E.164 falls through.
+    """
+    if not phone:
+        return ""
+    digits = re.sub(r"\D", "", phone)
+    # US / NANP with country code 1
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]  # drop the leading 1
+    if len(digits) == 10:
+        a, b, c = digits[:3], digits[3:6], digits[6:]
+        return f"{' '.join(a)}, {' '.join(b)}, {' '.join(c)}"
+    # Fallback: space every digit, group by comma every 3
+    return ", ".join(" ".join(digits[i:i + 3]) for i in range(0, len(digits), 3))
+
+
+async def resolve_callback_number(
+    db_handle: Any, campaign: Dict[str, Any], user_id: str
+) -> Optional[str]:
+    """Return the raw E.164/free-form callback number for this campaign, or None.
+
+    Order:
+      1. campaign.callback_number (explicit per-campaign override)
+      2. user.phone_number (from profile)
+      3. TWILIO_PHONE_NUMBER env (outbound caller ID)
+    """
+    n = (campaign or {}).get("callback_number")
+    if n and str(n).strip():
+        return str(n).strip()
+    user = await db_handle.users.find_one({"user_id": user_id}) if user_id else None
+    if user and user.get("phone_number"):
+        return str(user["phone_number"]).strip()
+    if twilio_phone_number:
+        return twilio_phone_number
+    return None
+
+
+async def resolve_agent_name(
+    db_handle: Any, campaign: Dict[str, Any], user_id: str
+) -> str:
+    """Return the linked agent's name, falling back to the user's profile name."""
+    agent_id = (campaign or {}).get("agent_id")
+    if agent_id:
+        agent = await db_handle.agents.find_one({"id": agent_id, "user_id": user_id})
+        if agent and agent.get("name"):
+            return str(agent["name"]).strip()
+    user = await db_handle.users.find_one({"user_id": user_id}) if user_id else None
+    if user:
+        for key in ("name", "full_name", "display_name"):
+            if user.get(key):
+                return str(user[key]).strip()
+    return "your account rep"
+
+
+async def hydrate_campaign_for_vm(
+    db_handle: Any, campaign: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Attach resolved agent name + spoken callback number to a campaign dict
+    for consumption by generate_voicemail_twiml(). Non-destructive — returns
+    a shallow copy.
+    """
+    hydrated = dict(campaign or {})
+    user_id = hydrated.get("user_id") or ""
+    hydrated["_resolved_agent_name"] = await resolve_agent_name(db_handle, hydrated, user_id)
+    raw = await resolve_callback_number(db_handle, hydrated, user_id)
+    hydrated["_resolved_callback_number_spoken"] = normalize_phone_for_speech(raw) if raw else ""
+    hydrated["_resolved_callback_number_raw"] = raw or ""
+    return hydrated
+
+
 # ============== TWILIO CALLING SERVICE ==============
 class TwilioCallingService:
     """Service for making real outbound calls via Twilio with AMD + Voicemail Drop"""
@@ -2799,7 +2888,11 @@ class TwilioCallingService:
 
         If the campaign has a `voicemail_audio_url` (cloned-voice MP3 generated
         by services.vm_cloned_audio on save), we <Play> it. Otherwise we fall
-        back to the original Polly.Matthew-Neural <Say> path — no regression.
+        back to the Polly.Matthew-Neural <Say> path.
+
+        Variables interpolated in the Polly fallback:
+          {business_name}, {contact_name}, {company_name},
+          {agent_name}, {callback_number}
         """
         response = VoiceResponse()
 
@@ -2816,19 +2909,22 @@ class TwilioCallingService:
                 logger.error(f"[vm_cloned] <Play> emit failed, falling back to Polly: {_play_err}")
 
         # ---- Fallback path: Polly.Matthew-Neural <Say> ----
-        
+
         company_name = campaign.get('company_name', 'our team')
         business_name = lead.get('business_name', 'your company')
         contact_name = lead.get('contact_name', '')
-        
+        agent_name = campaign.get('_resolved_agent_name') or 'your account rep'
+        callback_number_spoken = campaign.get('_resolved_callback_number_spoken') or ''
+
         # Use custom voicemail message if provided, otherwise use default
         custom_vm = campaign.get('voicemail_message')
-        
+
         if custom_vm:
-            # Use custom message with variable substitution
             message = custom_vm.replace('{business_name}', business_name)
             message = message.replace('{contact_name}', contact_name)
             message = message.replace('{company_name}', company_name)
+            message = message.replace('{agent_name}', agent_name)
+            message = message.replace('{callback_number}', callback_number_spoken)
         else:
             # Default professional voicemail
             greeting = f"Hi {contact_name}, " if contact_name else "Hi, "
@@ -2838,14 +2934,22 @@ class TwilioCallingService:
                 "I'll try you again, or feel free to call us back at your convenience. "
                 "Thank you, have a great day!"
             )
-        
-        # Use best Twilio voice for voicemail
+
+        # Guard: if the interpolated message still contains a literal placeholder,
+        # log loudly and strip it before speaking. Prevents "[your callback number]"
+        # from ever reaching a prospect.
+        if _PLACEHOLDER_LITERAL_RE.search(message):
+            leftover = _PLACEHOLDER_LITERAL_RE.findall(message)
+            logger.error(
+                f"[vm] Unresolved placeholder(s) in voicemail message; "
+                f"campaign={campaign.get('id')} placeholders={leftover}"
+            )
+            message = _PLACEHOLDER_LITERAL_RE.sub("", message)
+            message = re.sub(r"\s{2,}", " ", message)
+
         response.say(message, voice='Polly.Matthew-Neural')
-        
-        # Pause then hang up
         response.pause(length=1)
         response.hangup()
-        
         return str(response)
     
     def generate_human_twiml(self, lead: Dict, campaign: Dict, call_id: str) -> str:
@@ -6801,7 +6905,27 @@ async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends
             status_code=403, 
             detail="Voicemail drop is not available on your plan. Upgrade to Starter or higher to use this feature."
         )
-    
+
+    # SAFETY: if voicemail is enabled, the campaign MUST be able to resolve a real
+    # callback number before we let the voicemail path run. A literal placeholder
+    # (e.g. "{callback_number}" or "[your callback number]") must NEVER reach a
+    # prospect's voicemail box.
+    if campaign_data.get("voicemail_enabled"):
+        _cb = await resolve_callback_number(db, campaign_data, current_user["user_id"])
+        if not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+        # Also refuse if the voicemail_message still references {callback_number}
+        # but no number will be usable at speak time.
+        _msg = campaign_data.get("voicemail_message") or ""
+        if "{callback_number}" in _msg and not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+
     campaign_obj = Campaign(**campaign_data, user_id=current_user["user_id"])
     await db.campaigns.insert_one(campaign_obj.model_dump())
 
@@ -6825,6 +6949,24 @@ async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends
 async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
     """Update a campaign (must belong to current user)"""
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # SAFETY: if the update leaves voicemail enabled, the effective campaign
+    # (existing row merged with updates) must have a resolvable callback number.
+    existing = await db.campaigns.find_one(
+        {"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    effective = {**existing, **updates}
+    if effective.get("voicemail_enabled"):
+        _cb = await resolve_callback_number(db, effective, current_user["user_id"])
+        if not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+
     result = await db.campaigns.update_one(
         {"id": campaign_id, "user_id": current_user["user_id"]},
         {"$set": updates}
@@ -6832,8 +6974,13 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_use
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Regenerate cloned-voice VM audio if the message or voicemail flag changed
-    if any(k in updates for k in ("voicemail_message", "voicemail_enabled", "agent_id", "company_name")):
+    # Regenerate cloned-voice VM audio if any input that affects the baked
+    # MP3 changed: message, VM flag, linked agent, company/callback number.
+    _regen_keys = (
+        "voicemail_message", "voicemail_enabled", "agent_id",
+        "company_name", "callback_number",
+    )
+    if any(k in updates for k in _regen_keys):
         try:
             from services.vm_cloned_audio import refresh_campaign_vm_audio
             _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
@@ -6853,6 +7000,21 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_use
 @api_router.post("/campaigns/{campaign_id}/start")
 async def start_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
     """Start a campaign (must belong to current user)"""
+    # SAFETY: block launch if voicemail is enabled but no callback number
+    # can be resolved. Placeholder text must never reach a prospect.
+    existing = await db.campaigns.find_one(
+        {"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if existing.get("voicemail_enabled", True):
+        _cb = await resolve_callback_number(db, existing, current_user["user_id"])
+        if not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+
     result = await db.campaigns.update_one(
         {"id": campaign_id, "user_id": current_user["user_id"]},
         {"$set": {"status": CampaignStatus.ACTIVE, "updated_at": datetime.now(timezone.utc).isoformat()}}
@@ -11945,11 +12107,18 @@ async def twilio_amd_callback(call_id: str, request: Request):
     if is_machine and campaign and campaign.get("voicemail_enabled", True):
         # MACHINE DETECTED - Drop voicemail
         logger.info(f"Machine detected for call {call_id}, dropping voicemail")
-        
+
+        # Hydrate campaign with resolved {agent_name} + {callback_number}
+        try:
+            _campaign_hydrated = await hydrate_campaign_for_vm(db, campaign)
+        except Exception as _hy_err:
+            logger.error(f"[vm] hydration failed for call {call_id}: {_hy_err}")
+            _campaign_hydrated = campaign
+
         # Update call to redirect to voicemail TwiML
         try:
             twilio_client.calls(call_sid).update(
-                twiml=twilio_service.generate_voicemail_twiml(lead or {}, campaign)
+                twiml=twilio_service.generate_voicemail_twiml(lead or {}, _campaign_hydrated)
             )
             
             # Mark as voicemail dropped

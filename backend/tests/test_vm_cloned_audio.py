@@ -61,12 +61,45 @@ def fake_eleven_client():
 def test_1_placeholder_stripping():
     from services.vm_cloned_audio import _bake_message
     msg = "Hi {contact_name}, this is a message for {business_name} from {company_name}."
-    out = _bake_message(msg, {"company_name": "IntentBrain"})
+    out = _bake_message(msg, {"company_name": "IntentBrain"},
+                        agent_name="", callback_number_spoken="")
     assert "{contact_name}" not in out
     assert "{business_name}" not in out
     assert "IntentBrain" in out
     assert "  " not in out
     assert " ," not in out
+
+
+# --------- 1b) 4-variable interpolation for cloned-voice bake ---------
+def test_1b_four_variable_interpolation():
+    from services.vm_cloned_audio import _bake_message
+    msg = (
+        "Hi, this is {agent_name} with {company_name}. Reach me at {callback_number}. "
+        "Again, that's {callback_number}. Thanks."
+    )
+    out = _bake_message(
+        msg,
+        {"company_name": "RankTrust"},
+        agent_name="David",
+        callback_number_spoken="4 0 4, 5 5 5, 7 7 7 7",
+    )
+    assert "{agent_name}" not in out and "{company_name}" not in out
+    assert "{callback_number}" not in out
+    assert "David" in out
+    assert "RankTrust" in out
+    # Callback appears TWICE in the template — both instances must interpolate
+    assert out.count("4 0 4, 5 5 5, 7 7 7 7") == 2
+
+
+# --------- 1c) Bracket-style placeholder scrubbing (belt-and-suspenders) ---------
+def test_1c_bracket_placeholder_scrubbed():
+    from services.vm_cloned_audio import _bake_message
+    msg = "Hi, this is [Your Name] with {company_name}. Call [Your Number]."
+    out = _bake_message(msg, {"company_name": "RankTrust"},
+                        agent_name="David", callback_number_spoken="404")
+    # No square-bracket literals may survive into the baked text
+    assert "[Your Name]" not in out
+    assert "[Your Number]" not in out
 
 
 # --------- 2) refresh: cloned voice present → token minted, MP3 written, URL stored ---------

@@ -20,10 +20,47 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// The canonical default voicemail script — pre-filled into new campaigns.
+// Users can edit before launch. Cloned-voice campaigns must NOT reference
+// {business_name} or {contact_name} (one MP3 is generated per campaign).
+const VM_DEFAULT_SCRIPT =
+  "Hi, this is {agent_name} with {company_name}. I was reviewing businesses in your area and " +
+  "noticed a few Google visibility opportunities that may be worth a quick conversation. " +
+  "You can reach me at {callback_number}. Again, that's {callback_number}. Thanks.";
+
+const emptyCampaign = () => ({
+  name: "",
+  description: "",
+  ai_script: "",
+  calls_per_day: 100,
+  calls_per_hour: 0,
+  calling_hours_start: "09:00",
+  calling_hours_end: "17:00",
+  calling_days: ["mon", "tue", "wed", "thu", "fri"],
+  voicemail_enabled: true,
+  voicemail_message: VM_DEFAULT_SCRIPT,
+  callback_number: "",
+  response_wait_seconds: 4,
+  company_name: "",
+  agent_id: "",
+  icp_config: {
+    target_industries: [],
+    preferred_company_sizes: ["11-50", "51-200"],
+    min_intent_signals: 1,
+    preferred_roles: ["Owner", "CEO", "Manager", "Director"],
+  },
+  min_icp_score: 0,
+  ab_testing_enabled: false,
+  script_variant_b: "",
+  ab_split_percentage: 50,
+});
+
 const Campaigns = () => {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState(null); // campaign being edited, or null
+  const [editDraft, setEditDraft] = useState(null); // draft copy of the editing campaign
   const [showFollowUpSettings, setShowFollowUpSettings] = useState(null); // campaign for settings modal
   const [followUpSettings, setFollowUpSettings] = useState({
     enabled: true,
@@ -33,31 +70,7 @@ const Campaigns = () => {
     voicemail_followup_enabled: true,
     voicemail_followup_delay_hours: 48
   });
-  const [newCampaign, setNewCampaign] = useState({
-    name: "",
-    description: "",
-    ai_script: "Hello, this is an AI assistant calling about credit card processing solutions for your business. Am I speaking with the owner or manager?",
-    calls_per_day: 100,
-    calls_per_hour: 0,
-    calling_hours_start: "09:00",
-    calling_hours_end: "17:00",
-    calling_days: ["mon","tue","wed","thu","fri"],
-    voicemail_enabled: true,
-    voicemail_message: "",
-    response_wait_seconds: 4,
-    company_name: "",
-    icp_config: {
-      target_industries: [],
-      preferred_company_sizes: ["11-50", "51-200"],
-      min_intent_signals: 1,
-      preferred_roles: ["Owner", "CEO", "Manager", "Director"]
-    },
-    min_icp_score: 0,
-    // A/B Testing
-    ab_testing_enabled: false,
-    script_variant_b: "",
-    ab_split_percentage: 50
-  });
+  const [newCampaign, setNewCampaign] = useState(emptyCampaign());
 
   const fetchCampaigns = async () => {
     try {
@@ -79,15 +92,48 @@ const Campaigns = () => {
       toast.error("Please fill in all required fields");
       return;
     }
+    if (newCampaign.voicemail_enabled && !newCampaign.callback_number) {
+      toast.error("Add a callback number before enabling voicemail drops.");
+      return;
+    }
 
     try {
       await axios.post(`${API}/campaigns`, newCampaign);
       toast.success("Campaign created!");
       setShowCreate(false);
-      setNewCampaign({ name: "", description: "", ai_script: "", calls_per_day: 100, calls_per_hour: 0, calling_hours_start: "09:00", calling_hours_end: "17:00", calling_days: ["mon","tue","wed","thu","fri"], voicemail_enabled: true, voicemail_message: "", response_wait_seconds: 4, company_name: "", icp_config: { target_industries: [], preferred_company_sizes: ["11-50", "51-200"], min_intent_signals: 1, preferred_roles: ["Owner", "CEO", "Manager", "Director"] }, min_icp_score: 0 });
+      setNewCampaign(emptyCampaign());
       fetchCampaigns();
     } catch (error) {
-      toast.error("Failed to create campaign");
+      const msg = error?.response?.data?.detail || "Failed to create campaign";
+      toast.error(msg);
+    }
+  };
+
+  const openEditCampaign = (campaign) => {
+    setEditing(campaign);
+    setEditDraft({
+      voicemail_enabled: campaign.voicemail_enabled ?? true,
+      voicemail_message: campaign.voicemail_message ?? VM_DEFAULT_SCRIPT,
+      callback_number: campaign.callback_number ?? "",
+      agent_id: campaign.agent_id ?? "",
+    });
+  };
+
+  const saveEditCampaign = async () => {
+    if (!editing) return;
+    if (editDraft.voicemail_enabled && !editDraft.callback_number) {
+      toast.error("Add a callback number before enabling voicemail drops.");
+      return;
+    }
+    try {
+      await axios.put(`${API}/campaigns/${editing.id}`, editDraft);
+      toast.success("Campaign updated. Voicemail audio will regenerate if applicable.");
+      setEditing(null);
+      setEditDraft(null);
+      fetchCampaigns();
+    } catch (error) {
+      const msg = error?.response?.data?.detail || "Failed to update campaign";
+      toast.error(msg);
     }
   };
 
@@ -207,6 +253,16 @@ const Campaigns = () => {
                       title="Follow-up Settings"
                     >
                       <RefreshCw className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`edit-campaign-${campaign.id}`}
+                      onClick={() => openEditCampaign(campaign)}
+                      className="text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                      title="Edit voicemail + callback"
+                    >
+                      <Settings className="w-4 h-4" />
                     </Button>
                     <Button
                       size="sm"
@@ -644,18 +700,49 @@ const Campaigns = () => {
               </div>
               
               {newCampaign.voicemail_enabled && (
-                <div>
-                  <Label htmlFor="voicemail-message">Voicemail Drop Script</Label>
-                  <Textarea
-                    id="voicemail-message"
-                    value={newCampaign.voicemail_message}
-                    onChange={(e) => setNewCampaign({...newCampaign, voicemail_message: e.target.value})}
-                    placeholder="Hi, this is {agent_name} with {company_name}. I just wanted to raise my hand and let you know I'm out here. I focus on helping businesses get more qualified leads. If you need help with more booked appointments or live transfers, I'm happy to have a discussion—even if it's just to bounce an idea. My number is 555-555-5555. Talk soon!"
-                    className="mt-1 min-h-[100px]"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Variables: {'{contact_name}'}, {'{business_name}'}, {'{company_name}'}, {'{agent_name}'}
-                  </p>
+                <div className="space-y-4">
+                  {/* Callback Number — MUST be set when voicemail is enabled */}
+                  <div>
+                    <Label htmlFor="callback-number">
+                      Callback Number <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="callback-number"
+                      data-testid="callback-number-input"
+                      type="tel"
+                      value={newCampaign.callback_number}
+                      onChange={(e) =>
+                        setNewCampaign({ ...newCampaign, callback_number: e.target.value })
+                      }
+                      placeholder="+14045551234"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      This is the number spoken in the voicemail via {"{callback_number}"}. Required — leaving it blank will block campaign launch.
+                    </p>
+                    {newCampaign.voicemail_enabled && !newCampaign.callback_number && (
+                      <p
+                        data-testid="callback-required-warning"
+                        className="text-xs text-red-500 mt-1"
+                      >
+                        Add a callback number before enabling voicemail drops.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="voicemail-message">Voicemail Drop Script</Label>
+                    <Textarea
+                      id="voicemail-message"
+                      data-testid="voicemail-message-textarea"
+                      value={newCampaign.voicemail_message}
+                      onChange={(e) => setNewCampaign({ ...newCampaign, voicemail_message: e.target.value })}
+                      placeholder="Hi, this is {agent_name} with {company_name}..."
+                      className="mt-1 min-h-[140px]"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Editable per campaign. Variables: <code>{"{agent_name}"}</code>, <code>{"{company_name}"}</code>, <code>{"{callback_number}"}</code>. For cloned-voice VMs, avoid <code>{"{business_name}"}</code> / <code>{"{contact_name}"}</code> — the MP3 is generated once per campaign, not per lead.
+                    </p>
                   
                   {/* VM Drop Tips */}
                   <div className="mt-4 p-4 bg-violet-500/10 border border-violet-500/20 rounded-lg">
@@ -676,6 +763,7 @@ const Campaigns = () => {
                         <p className="text-gray-500 text-xs mt-2">✓ Friendly ✓ No pressure ✓ Offers value ✓ Easy callback</p>
                       </div>
                     </div>
+                  </div>
                   </div>
                 </div>
               )}
@@ -970,6 +1058,110 @@ const Campaigns = () => {
               data-testid="save-followup-settings-btn"
             >
               Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Campaign Dialog — voicemail + callback + linked agent */}
+      <Dialog
+        open={!!editing}
+        onOpenChange={(open) => { if (!open) { setEditing(null); setEditDraft(null); } }}
+      >
+        <DialogContent className="max-w-lg" data-testid="edit-campaign-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Campaign</DialogTitle>
+            <DialogDescription>
+              Change the voicemail script, callback number, or linked agent. Saving
+              will regenerate the cloned-voice voicemail MP3 when applicable.
+            </DialogDescription>
+          </DialogHeader>
+          {editDraft && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-vm-enabled">Voicemail enabled</Label>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    id="edit-vm-enabled"
+                    data-testid="edit-vm-enabled-toggle"
+                    type="checkbox"
+                    checked={!!editDraft.voicemail_enabled}
+                    onChange={(e) => setEditDraft({ ...editDraft, voicemail_enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                </label>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-callback-number">
+                  Callback Number <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="edit-callback-number"
+                  data-testid="edit-callback-number-input"
+                  type="tel"
+                  value={editDraft.callback_number || ""}
+                  onChange={(e) => setEditDraft({ ...editDraft, callback_number: e.target.value })}
+                  placeholder="+14045551234"
+                  className="mt-1"
+                />
+                {editDraft.voicemail_enabled && !editDraft.callback_number && (
+                  <p
+                    data-testid="edit-callback-required-warning"
+                    className="text-xs text-red-500 mt-1"
+                  >
+                    Add a callback number before enabling voicemail drops.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="edit-voicemail-message">Voicemail Drop Script</Label>
+                <Textarea
+                  id="edit-voicemail-message"
+                  data-testid="edit-voicemail-message-textarea"
+                  value={editDraft.voicemail_message || ""}
+                  onChange={(e) => setEditDraft({ ...editDraft, voicemail_message: e.target.value })}
+                  placeholder={VM_DEFAULT_SCRIPT}
+                  className="mt-1 min-h-[140px]"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Variables: <code>{"{agent_name}"}</code>, <code>{"{company_name}"}</code>, <code>{"{callback_number}"}</code>
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-agent-id">Linked Agent ID</Label>
+                <Input
+                  id="edit-agent-id"
+                  data-testid="edit-agent-id-input"
+                  value={editDraft.agent_id || ""}
+                  onChange={(e) => setEditDraft({ ...editDraft, agent_id: e.target.value })}
+                  placeholder="agent-uuid"
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  The agent whose cloned voice speaks the voicemail. The agent&apos;s <code>name</code> renders as {"{agent_name}"}.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setEditing(null); setEditDraft(null); }}
+              data-testid="edit-campaign-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveEditCampaign}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+              data-testid="edit-campaign-save-btn"
+              disabled={!!editDraft?.voicemail_enabled && !editDraft?.callback_number}
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

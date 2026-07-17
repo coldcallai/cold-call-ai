@@ -18,7 +18,7 @@ import requests
 import pytest
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or \
-           "https://voice-clone-preview-1.preview.emergentagent.com"
+           "https://ai-cold-calling.preview.emergentagent.com"
 
 TEST_EMAIL = "test@example.com"
 TEST_PASSWORD = "Test123!"

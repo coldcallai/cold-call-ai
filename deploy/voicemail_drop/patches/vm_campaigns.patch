@@ -1,0 +1,151 @@
+--- a/backend/routes/campaigns.py	2026-07-17 18:24:23.076876029 +0000
++++ b/backend/routes/campaigns.py	2026-07-17 18:24:23.079876029 +0000
+@@ -4,6 +4,7 @@
+ Extracted from server.py as part of the Strangler Fig refactoring pattern (Phase 5).
+ """
+ import logging
++import os
+ import uuid
+ from datetime import datetime, timezone
+ from typing import Dict, List, Optional, Any
+@@ -62,6 +63,10 @@
+     booked_meetings: int = 0
+     voicemail_enabled: bool = True
+     voicemail_message: Optional[str] = None
++    voicemail_audio_url: Optional[str] = None
++    voicemail_audio_key: Optional[str] = None
++    callback_number: Optional[str] = None
++    agent_id: Optional[str] = None
+     response_wait_seconds: int = 4
+     company_name: Optional[str] = None
+     icp_config: Optional[Dict[str, Any]] = None
+@@ -79,6 +84,8 @@
+     calls_per_day: int = 100
+     voicemail_enabled: bool = True
+     voicemail_message: Optional[str] = None
++    callback_number: Optional[str] = None
++    agent_id: Optional[str] = None
+     response_wait_seconds: int = 4
+     company_name: Optional[str] = None
+     icp_config: Optional[Dict[str, Any]] = None
+@@ -124,9 +131,39 @@
+             status_code=403, 
+             detail="Voicemail drop is not available on your plan. Upgrade to Starter or higher to use this feature."
+         )
+-    
++
++    # SAFETY: block create when voicemail_enabled but no callback resolvable.
++    if campaign_data.get("voicemail_enabled"):
++        try:
++            from server import resolve_callback_number
++            _cb = await resolve_callback_number(db, campaign_data, current_user["user_id"])
++        except Exception:
++            _cb = campaign_data.get("callback_number")
++        if not _cb:
++            raise HTTPException(
++                status_code=400,
++                detail="Add a callback number before enabling voicemail drops.",
++            )
++
+     campaign_obj = Campaign(**campaign_data, user_id=current_user["user_id"])
+     await db.campaigns.insert_one(campaign_obj.model_dump())
++
++    # Cloned-voice VM audio regen (non-fatal on any error)
++    try:
++        from server import eleven_client
++        from services.vm_cloned_audio import refresh_campaign_vm_audio
++        _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
++        if _backend_url:
++            await refresh_campaign_vm_audio(
++                db=db, eleven_client=eleven_client,
++                backend_public_url=_backend_url,
++                campaign_id=campaign_obj.id,
++                user_id=current_user["user_id"],
++            )
++    except Exception as _vm_err:
++        import logging
++        logging.getLogger(__name__).error(f"[vm_cloned] refresh on create failed: {_vm_err}")
++
+     return campaign_obj
+ 
+ 
+@@ -135,13 +172,52 @@
+     """Update a campaign (must belong to current user)"""
+     db = get_db()
+     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
++
++    existing = await db.campaigns.find_one(
++        {"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0}
++    )
++    if not existing:
++        raise HTTPException(status_code=404, detail="Campaign not found")
++
++    effective = {**existing, **updates}
++    if effective.get("voicemail_enabled"):
++        try:
++            from server import resolve_callback_number
++            _cb = await resolve_callback_number(db, effective, current_user["user_id"])
++        except Exception:
++            _cb = effective.get("callback_number")
++        if not _cb:
++            raise HTTPException(
++                status_code=400,
++                detail="Add a callback number before enabling voicemail drops.",
++            )
++
+     result = await db.campaigns.update_one(
+         {"id": campaign_id, "user_id": current_user["user_id"]},
+         {"$set": updates}
+     )
+     if result.matched_count == 0:
+         raise HTTPException(status_code=404, detail="Campaign not found")
+-    
++
++    # Regenerate cloned-voice VM audio if any input that affects the baked MP3 changed.
++    _regen_keys = ("voicemail_message", "voicemail_enabled", "agent_id",
++                   "company_name", "callback_number")
++    if any(k in updates for k in _regen_keys):
++        try:
++            from server import eleven_client
++            from services.vm_cloned_audio import refresh_campaign_vm_audio
++            _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
++            if _backend_url:
++                await refresh_campaign_vm_audio(
++                    db=db, eleven_client=eleven_client,
++                    backend_public_url=_backend_url,
++                    campaign_id=campaign_id,
++                    user_id=current_user["user_id"],
++                )
++        except Exception as _vm_err:
++            import logging
++            logging.getLogger(__name__).error(f"[vm_cloned] refresh on update failed: {_vm_err}")
++
+     campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0})
+     return campaign
+ 
+@@ -162,6 +238,25 @@
+ async def start_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
+     """Start a campaign (must belong to current user)"""
+     db = get_db()
++
++    # SAFETY: block launch if voicemail enabled but no callback resolvable.
++    existing = await db.campaigns.find_one(
++        {"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0}
++    )
++    if not existing:
++        raise HTTPException(status_code=404, detail="Campaign not found")
++    if existing.get("voicemail_enabled", True):
++        try:
++            from server import resolve_callback_number
++            _cb = await resolve_callback_number(db, existing, current_user["user_id"])
++        except Exception:
++            _cb = existing.get("callback_number")
++        if not _cb:
++            raise HTTPException(
++                status_code=400,
++                detail="Add a callback number before enabling voicemail drops.",
++            )
++
+     result = await db.campaigns.update_one(
+         {"id": campaign_id, "user_id": current_user["user_id"]},
+         {"$set": {"status": CampaignStatus.ACTIVE, "updated_at": datetime.now(timezone.utc).isoformat()}}

@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration-33 verification of the Cloned-Voice Voicemail Drop backend flows on the running /app backend (source of truth for the VPS patch). All requested positive flows PASS; the /api/vm-audio/{token} 404 fallback works; the callback-number safety guard resolves via the documented 3-tier fallback (campaign -> user.phone_number -> TWILIO_PHONE_NUMBER). Placeholder guard for {callback_number}/{agent_name} in voicemail_message is honoured (stored verbatim, interpolated at call time).",
+  "pytest_run": {
+    "command": "python -m pytest tests/test_vm_api_iter32.py tests/test_vm_launch_blocker.py::test_section6_vm_audio_missing_token_returns_404 tests/test_vm_launch_blocker.py::test_section2_update_campaign_persists_callback_and_message tests/test_vm_config.py -v --junitxml=/app/test_reports/pytest/pytest_iter33.xml",
+    "result": "19 passed, 1 skipped in 5.22s (skip = Section 6 cloned-voice MP3 URL — test user has no ElevenLabs cloned voice, so voicemail_audio_url is null. This is the documented, acceptable case per review request.)",
+    "junit_xml": "/app/test_reports/pytest/pytest_iter33.xml"
+  },
+  "requested_features_verified": {
+    "F1_create_campaign_vm_true_with_callback": "PASS — POST /api/campaigns with voicemail_enabled=true + callback_number=+14045557777 returns 200/201, callback_number and voicemail_enabled persist on the response. (test_s1a_create_with_resolvable_callback_returns_200)",
+    "F2_callback_3tier_fallback_guard": "PASS — With callback_number='' the request returns 200 because tier-3 (TWILIO_PHONE_NUMBER) resolves, exactly as spec'd. Not treated as a failure. (test_s1b_create_with_vm_on_no_cb_hits_twilio_fallback). Env-blank negative path (all 3 tiers empty -> 400 with 'callback' in detail) was already confirmed by main agent in test_vm_envblank_iter32.py; not re-run this iteration to avoid mutating .env.",
+    "F3_vm_audio_bogus_token_404": "PASS — GET /api/vm-audio/deadbeef00000000000000000000dead returns 404 so Twilio TwiML <Play> falls through to Polly. (test_section6_vm_audio_missing_token_returns_404)",
+    "F4_update_persists_voicemail_message_and_callback": "PASS — PUT /api/campaigns/{id} with new voicemail_message + callback_number returns 200; subsequent GET round-trips both fields exactly. (test_s2_update_message_and_callback_persist, test_section2_update_campaign_persists_callback_and_message)",
+    "F5_placeholder_guard_accepts_curly_placeholders": "PASS — voicemail_message containing {agent_name}, {company_name}, {callback_number} is accepted on both create and update and stored verbatim (interpolated later by generate_voicemail_twiml). Verified indirectly by every positive test (all payloads contain the placeholders) and directly by test_5_twiml_interpolates_four_variables + test_6_twiml_never_speaks_unresolved_literal_placeholder in test_vm_config.py.",
+    "F6_start_campaign_with_vm_true": "PASS — POST /api/campaigns/{id}/start with vm=true + resolvable callback returns 200 and status becomes 'active'. (test_s7a_start_with_resolvable_callback_returns_200)",
+    "F7_source_has_all_three_guards": "PASS — routes/campaigns.py contains exactly 3 occurrences of the error message 'Add a callback number before enabling voicemail drops.' (create/update/start). (test_s7b_source_has_all_three_callback_guards)"
+  },
+  "helper_layer_verified": {
+    "normalize_phone_for_speech": "PASS on +E.164, 10-digit, formatted, empty, None inputs.",
+    "resolve_callback_number": "PASS on all 4 priority-chain branches (campaign -> user -> env -> None).",
+    "resolve_agent_name": "PASS on agent -> user -> 'your account rep' default.",
+    "hydrate_campaign_for_vm": "PASS — attaches _resolved_agent_name, _resolved_callback_number_raw, _resolved_callback_number_spoken.",
+    "generate_voicemail_twiml": "PASS — interpolates all 4 vars, strips [bracket] literal placeholders, never leaks '{'/'}' in output.",
+    "VM_DEFAULT_SCRIPT": "PASS — uses {agent_name}, {company_name}, and {callback_number} twice."
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_vm_api_iter32.py",
+    "/app/backend/tests/test_vm_launch_blocker.py",
+    "/app/backend/tests/test_vm_config.py",
+    "/app/backend/tests/test_vm_cloned_audio.py",
+    "/app/backend/tests/test_vm_envblank_iter32.py",
+    "/app/test_reports/pytest/pytest_iter33.xml"
+  ],
+  "action_items": [
+    "No blocking action items. Backend is deploy-ready for the VPS patch.",
+    "Optional (already flagged in iter31/iter32): delete the shadowed legacy voicemail-guard code in server.py (~lines 6891-7020) that duplicates routes/campaigns.py logic to eliminate future drift.",
+    "Optional: whitelist accepted fields in PUT /api/campaigns/{id} — it currently accepts an unrestricted Dict[str, Any] and could allow client writes of internal columns (total_calls, successful_calls, user_id)."
+  ],
+  "critical_code_review_comments": [
+    "Duplicated guard between server.py (dead when USE_NEW_CAMPAIGNS_ROUTES=true) and routes/campaigns.py — remove the legacy inline routes.",
+    "PUT /api/campaigns/{id} accepts arbitrary keys — should whitelist voicemail_enabled/voicemail_message/callback_number/name/description/etc.",
+    "ElevenLabs refresh_campaign_vm_audio is non-fatal on failure — good, keeps campaign save resilient when TTS is unavailable in preview."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (19/19 pass, 1 documented skip)", "frontend": "not tested (backend-only per review request)"},
+  "test_credentials": "test@example.com / Test123! — login field 'session_token' -> Bearer sess_...",
+  "seed_data_creation": "All TEST_iter32_* campaigns created by the run are cleaned up via `_cleanup` finalizers in test_vm_api_iter32.py.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The Cloned-Voice Voicemail Drop feature is fully verified on /app backend. Section 6 end-to-end (real MP3 fetched via voicemail_audio_url) can only be validated in an env with a real ElevenLabs cloned voice on the test user — currently that path is user-verified in production. Do NOT re-blank TWILIO_PHONE_NUMBER or user.phone_number in the live preview to force the 400 path; the env-blank scenario is covered by test_vm_envblank_iter32.py which uses monkeypatch and an autouse restore fixture.",
+  "rca of the issue": "N/A — no new bug. Iter32 fix (porting callback guard + refresh hook into routes/campaigns.py to close the shadow-router gap) is stable. This iteration re-confirmed all positive flows and the /api/vm-audio 404 fallback on the live backend."
+}

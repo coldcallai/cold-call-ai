@@ -1,3 +1,12 @@
+try:
+    from conversation_brain import respond as brain_respond
+    BRAIN_AVAILABLE = True
+except Exception as _be:
+    BRAIN_AVAILABLE = False
+    brain_respond = None
+    import logging as _lg
+    _lg.getLogger(__name__).warning(f'Brain unavailable: {_be}')
+
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File, Depends, Request, Response, WebSocket, WebSocketDisconnect, Form
 from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -113,6 +122,85 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# BUG #004 fix - Fast-path cache for AI identity questions.
+# Bypasses OpenAI (~3s) for predictable phrases. Returns deterministic answer
+# already terminated with a follow-up question so the Gather never dead-ends.
+# ---------------------------------------------------------------------------
+_BRAIN_FAST_PATH_CACHE = {
+    # AI / human / identity probes
+    "are you human": "I'm an AI, but I can help just like a real rep. Want a quick demo?",
+    "are you a human": "I'm an AI, but I can help just like a real rep. Want a quick demo?",
+    "are you ai": "Yes, IntentBrain's AI demo agent. Want me to show you what we do?",
+    "are you a i": "Yes, IntentBrain's AI demo agent. Want me to show you what we do?",
+    "are you an ai": "Yes, IntentBrain's AI demo agent. Want me to show you what we do?",
+    "are you a robot": "I'm an AI. This is a live demo of our cold-calling product. Want to see it?",
+    "are you a bot": "I'm an AI. This is a live demo of our cold-calling product. Want to see it?",
+    "is this a bot": "Yes, you're talking to IntentBrain's AI. Pretty realistic, right? Want a demo?",
+    "is this a robot": "Yes, you're talking to IntentBrain's AI. Pretty realistic, right? Want a demo?",
+    "is this ai": "Yes, IntentBrain's AI agent. Pretty realistic, right? Want a demo?",
+    "are you real": "I'm a real AI, not a real person. Want me to show you what IntentBrain does?",
+    "are you a live person": "I'm an AI, not a live person. Want a quick demo of what we do?",
+    "are you a real person": "I'm an AI. IntentBrain's demo agent. Want a quick walkthrough?",
+    "are you automated": "Yes, I'm automated AI built by IntentBrain. Want a quick demo?",
+    "is this a recording": "Nope, real-time AI. I'm IntentBrain's demo agent. Want a walkthrough?",
+    # Name / origin probes
+    "what are you": "I'm IntentBrain's AI agent. Want a quick walkthrough?",
+    "who are you": "IntentBrain's AI sales agent. We build AI cold-callers. Want a demo?",
+    "what's your name": "Just call me the IntentBrain agent. Want a quick demo?",
+    "whats your name": "Just call me the IntentBrain agent. Want a quick demo?",
+    "what is your name": "Just call me the IntentBrain agent. Want a quick demo?",
+    "who built you": "The IntentBrain team. We make AI cold-callers for B2B. Want a demo?",
+    "who created you": "The IntentBrain team. We make AI cold-callers for B2B. Want a demo?",
+    "who made you": "The IntentBrain team. We make AI cold-callers for B2B. Want a demo?",
+    "where are you calling from": "From IntentBrain - we're an AI cold-calling platform. Want a demo?",
+    "what voice are you using": "ElevenLabs voice, IntentBrain brain. Sounds pretty good, right? Want a demo?",
+    "are you using elevenlabs": "Yes, ElevenLabs for voice. Want me to walk you through IntentBrain?",
+    "can people tell you're ai": "Most don't catch on right away. Want a quick demo?",
+    "can people tell youre ai": "Most don't catch on right away. Want a quick demo?",
+    "how human do you sound": "Pretty human apparently. Want a quick walkthrough?",
+    # Language support probes
+    "do you speak spanish": "Yes, IntentBrain supports Spanish-speaking businesses. Want a quick demo?",
+    "do you speak espanol": "Yes, IntentBrain supports Spanish-speaking businesses. Want a quick demo?",
+    "can you speak spanish": "Yes, IntentBrain supports Spanish-speaking businesses. Want a quick demo?",
+    "habla espanol": "Yes, our AI agents can speak Spanish too. Want a quick demo?",
+    "hablas espanol": "Yes, our AI agents can speak Spanish too. Want a quick demo?",
+    "what languages do you speak": "IntentBrain supports English and Spanish today. More coming soon. Want a demo?",
+    "what languages do you support": "IntentBrain supports English and Spanish today. More coming soon. Want a demo?",
+    "do you do spanish": "Yes, IntentBrain supports Spanish. Want a quick demo?",
+}
+
+
+def _fast_path_lookup(text: str):
+    """Return canned answer for AI-identity questions, or None."""
+    if not text:
+        return None
+    norm = re.sub(r"[^a-z0-9\s']", "", text.lower()).strip()
+    norm = re.sub(r"\s+", " ", norm)
+    if norm in _BRAIN_FAST_PATH_CACHE:
+        return _BRAIN_FAST_PATH_CACHE[norm]
+    # Try fuzzy contains on shorter keys (e.g. "hey are you human really?")
+    for key, val in _BRAIN_FAST_PATH_CACHE.items():
+        if len(key) >= 10 and key in norm:
+            return val
+    return None
+
+
+def _ensure_followup(response_text: str) -> str:
+    """If the brain answer doesn't end with a question, append a follow-up
+    so the caller knows the AI is waiting for them to speak."""
+    if not response_text:
+        return "Would you like to hear how IntentBrain works, or book a quick demo?"
+    stripped = response_text.rstrip()
+    if stripped.endswith("?"):
+        return response_text
+    # Append follow-up
+    if not stripped.endswith((".", "!", ":")):
+        stripped += "."
+    return stripped + " Want a quick demo?"
+
+
 app = FastAPI(title="AI Cold Calling Machine")
 api_router = APIRouter(prefix="/api")
 
@@ -126,7 +214,7 @@ DISC_PERSONALITIES = {
         "sales_tips": "Be direct, focus on ROI and results. Don't small talk. Let them feel in control. Provide options, not just one solution."
     },
     "I": {
-        "name": "Influencer", 
+        "name": "Influencer",
         "traits": "Energetic, fun, creative, enthusiastic, social",
         "signals": ["exciting", "love it", "amazing", "awesome", "fun", "creative", "people", "team", "everyone", "party", "celebrate", "great idea", "sounds cool"],
         "ai_style": "Be energetic and enthusiastic! Use expressive language and build rapport. Make the conversation fun and engaging. Share stories and be personable.",
@@ -153,17 +241,17 @@ def detect_disc_personality(transcript_text: str) -> dict:
     text_lower = transcript_text.lower()
     scores = {"D": 0, "I": 0, "S": 0, "C": 0}
     detected_signals = {"D": [], "I": [], "S": [], "C": []}
-    
+
     for ptype, pdata in DISC_PERSONALITIES.items():
         for signal in pdata["signals"]:
             if signal in text_lower:
                 scores[ptype] += 1
                 detected_signals[ptype].append(signal)
-    
+
     # Additional heuristics
     words = text_lower.split()
     word_count = len(words)
-    
+
     # Short, direct responses suggest D
     if word_count < 20:
         scores["D"] += 1
@@ -173,16 +261,16 @@ def detect_disc_personality(transcript_text: str) -> dict:
     # Medium with enthusiasm words suggest I
     elif any(w in text_lower for w in ["!", "great", "love", "awesome"]):
         scores["I"] += 1
-    
+
     # Find the dominant type
     max_score = max(scores.values())
     if max_score == 0:
         return {"type": None, "confidence": 0, "signals": []}
-    
+
     dominant_type = max(scores, key=scores.get)
     total_signals = sum(scores.values())
     confidence = round(scores[dominant_type] / max(total_signals, 1), 2)
-    
+
     return {
         "type": dominant_type,
         "name": DISC_PERSONALITIES[dominant_type]["name"],
@@ -405,6 +493,10 @@ class Campaign(BaseModel):
     qualification_criteria: Dict[str, Any] = {}
     status: CampaignStatus = CampaignStatus.DRAFT
     calls_per_day: int = 100
+    calls_per_hour: int = 0
+    calling_hours_start: str = "09:00"
+    calling_hours_end: str = "17:00"
+    calling_days: List[str] = Field(default_factory=lambda: ["mon","tue","wed","thu","fri"])
     total_calls: int = 0
     successful_calls: int = 0
     qualified_leads: int = 0
@@ -412,6 +504,10 @@ class Campaign(BaseModel):
     # AMD + Voicemail Drop settings
     voicemail_enabled: bool = True  # Enable voicemail drop when machine detected
     voicemail_message: Optional[str] = None  # Custom voicemail message (uses default if None)
+    voicemail_audio_url: Optional[str] = None  # ElevenLabs cloned-voice MP3 URL (auto-generated on save)
+    voicemail_audio_key: Optional[str] = None  # Opaque token backing voicemail_audio_url; regenerated on every audio refresh
+    callback_number: Optional[str] = None  # Callback number spoken in voicemails; falls back to user.phone_number then TWILIO_PHONE_NUMBER
+    agent_id: Optional[str] = None  # Exact agent/voice bound to this campaign
     # AI conversation settings
     response_wait_seconds: int = 4  # Seconds to wait for caller response before AI continues
     company_name: Optional[str] = None  # Company name for personalization
@@ -427,8 +523,14 @@ class CampaignCreate(BaseModel):
     ai_script: str
     qualification_criteria: Dict[str, Any] = {}
     calls_per_day: int = 100
+    calls_per_hour: int = 0
+    calling_hours_start: str = "09:00"
+    calling_hours_end: str = "17:00"
+    calling_days: List[str] = Field(default_factory=lambda: ["mon","tue","wed","thu","fri"])
     voicemail_enabled: bool = True
     voicemail_message: Optional[str] = None
+    callback_number: Optional[str] = None
+    agent_id: Optional[str] = None
     response_wait_seconds: int = 4  # Default 4 seconds
     company_name: Optional[str] = None
     icp_config: Optional[Dict[str, Any]] = None
@@ -517,25 +619,25 @@ class FollowUp(BaseModel):
     lead_id: str
     campaign_id: str
     agent_id: Optional[str] = None
-    
+
     # Scheduling
     scheduled_at: str  # When to make the follow-up call (ISO format)
     reason: FollowUpReason = FollowUpReason.NO_ANSWER
     status: FollowUpStatus = FollowUpStatus.SCHEDULED
-    
+
     # Retry tracking
     attempt_number: int = 1  # Which attempt this is (1, 2, 3...)
     max_attempts: int = 3  # Max retry attempts for this follow-up
-    
+
     # Context
     original_call_id: Optional[str] = None  # Reference to original call
     notes: Optional[str] = None  # Why this follow-up was scheduled
     callback_time_preference: Optional[str] = None  # "morning", "afternoon", "evening" or specific time
-    
+
     # Results
     result_call_id: Optional[str] = None  # Call ID when follow-up executed
     completed_at: Optional[str] = None
-    
+
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -555,36 +657,36 @@ class FollowUpSequence(BaseModel):
     name: str
     description: Optional[str] = None
     is_active: bool = True
-    
+
     # Sequence steps
     steps: List[Dict[str, Any]] = []
     # Example step: {"step": 1, "delay_hours": 24, "action": "call", "script_override": None}
     # Example step: {"step": 2, "delay_hours": 72, "action": "call", "script_override": "Follow-up script..."}
-    
+
     # Settings
     max_attempts_per_step: int = 2
     stop_on_connect: bool = True  # Stop sequence when lead answers
     stop_on_booking: bool = True  # Stop sequence when meeting booked
-    
+
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class CampaignFollowUpSettings(BaseModel):
     """Follow-up settings for a campaign"""
     enabled: bool = True
-    
+
     # No-answer retry settings
     no_answer_retry_enabled: bool = True
     no_answer_retry_count: int = 3  # Max retries for no-answer
     no_answer_retry_delay_hours: int = 24  # Hours between retries
-    
+
     # Voicemail follow-up
     voicemail_followup_enabled: bool = True
     voicemail_followup_delay_hours: int = 48  # Follow up 2 days after voicemail
-    
+
     # Callback handling
     callback_buffer_minutes: int = 15  # Buffer time around requested callback
-    
+
     # Sequence
     sequence_id: Optional[str] = None  # Optional follow-up sequence to use
 
@@ -780,7 +882,7 @@ class DNCSuppression(BaseModel):
     source: str  # "internal", "national_dnc", "state_dnc"
     added_by: Optional[str] = None  # user_id who added
     added_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    
+
 class NumberVerification(BaseModel):
     """Phone number verification result"""
     phone_number: str
@@ -865,16 +967,16 @@ class BookingRequest(BaseModel):
 # ============== AI SERVICE ==============
 class AIService:
     """AI Service using GPT-5.2 for conversations, lead qualification, and intent search"""
-    
+
     def __init__(self):
         self.api_key = os.environ.get('EMERGENT_LLM_KEY')
-    
+
     async def gpt_intent_search(self, query: str, industry: str = None, location: str = None, max_results: int = 10, custom_keywords: List[str] = None, exclude_industries: List[str] = None) -> List[Dict]:
         """Use GPT-5.2 to research and find businesses with buying intent"""
         if not self.api_key:
             logger.warning("EMERGENT_LLM_KEY not configured, using mock data")
             return await self._mock_discover_leads(query, location, max_results)
-        
+
         # Default high-intent keywords that indicate buying mode
         default_keywords = [
             "Toast alternative", "Clover alternative", "Square alternative", "Stripe alternative",
@@ -882,14 +984,14 @@ class AIService:
             "merchant services", "switch payment processor", "POS system for restaurants",
             "credit card machine", "payment terminal", "reduce processing fees"
         ]
-        
+
         # Use custom keywords if provided (up to 100), otherwise use defaults
         if custom_keywords and len(custom_keywords) > 0:
             intent_keywords = [kw.strip() for kw in custom_keywords[:100] if kw and kw.strip()]
             logger.info(f"Using {len(intent_keywords)} custom intent keywords for search")
         else:
             intent_keywords = default_keywords
-        
+
         try:
             chat = LlmChat(
                 api_key=self.api_key,
@@ -916,21 +1018,21 @@ For each lead, provide:
 
 Return ONLY a valid JSON array. No prose, no markdown fences."""
             ).with_model("openai", "gpt-5.2")
-            
+
             # Build keyword list for prompt
             keywords_prompt = chr(10).join(f'- "{kw}"' for kw in intent_keywords[:50])
-            
+
             exclude_block = ""
             if exclude_industries and len(exclude_industries) > 0:
                 exclude_list = ", ".join(exclude_industries)
                 exclude_block = f"\n\nEXCLUDE these industries — DO NOT return any lead from: {exclude_list}"
-            
+
             industry_block = (
                 f"REQUIRED INDUSTRY (every lead must be in this industry): {industry}"
                 if industry else
                 "Industry: Any (but be consistent with the query and keywords)"
             )
-            
+
             search_prompt = f"""Find up to {max_results} businesses that are ACTIVELY IN BUYING MODE based on these signals.
 
 Primary search query: {query}
@@ -950,7 +1052,7 @@ Return a JSON array. Every lead's industry field MUST match the required industr
 
             user_message = UserMessage(text=search_prompt)
             response = await chat.send_message(user_message)
-            
+
             # Parse the JSON response
             import json
             response_text = response.strip()
@@ -959,9 +1061,9 @@ Return a JSON array. Every lead's industry field MUST match the required industr
                 if response_text.startswith("json"):
                     response_text = response_text[4:]
             response_text = response_text.strip()
-            
+
             leads = json.loads(response_text)
-            
+
             # Post-filter: drop any leads whose industry clearly doesn't match filters
             if industry or exclude_industries:
                 filtered = []
@@ -979,14 +1081,14 @@ Return a JSON array. Every lead's industry field MUST match the required industr
                     filtered.append(lead)
                 logger.info(f"GPT Intent Search: {len(leads)} returned, {len(filtered)} passed industry filter")
                 return filtered
-            
+
             logger.info(f"GPT Intent Search found {len(leads)} high-intent leads")
             return leads
-            
+
         except Exception as e:
             logger.error(f"GPT Intent Search failed: {str(e)}")
             return await self._mock_discover_leads(query, location, max_results)
-    
+
     @staticmethod
     async def _mock_discover_leads(query: str, location: str = None, max_results: int = 10) -> List[Dict]:
         """Fallback mock data for lead discovery"""
@@ -1003,20 +1105,20 @@ Return a JSON array. Every lead's industry field MUST match the required industr
             {"name": "Fresh Market Grocery", "industry": "Grocery", "phone": "+1-555-0110", "intent_signals": ["High volume", "EBT processing"], "location": "Atlanta, GA"},
         ]
         return sample_businesses[:max_results]
-    
+
     @staticmethod
     async def simulate_call_conversation(lead: Dict, script: str) -> Dict:
         """Simulate AI cold call conversation - MOCKED"""
         await asyncio.sleep(2)
-        
+
         is_decision_maker = random.choice([True, True, False])
         interest_level = random.randint(1, 10)
-        
+
         transcript = [
             {"role": "ai", "text": f"Hello, this is an AI assistant calling about credit card processing solutions. Am I speaking with the owner or manager of {lead.get('business_name', 'the business')}?"},
             {"role": "human", "text": "Yes, this is the owner speaking." if is_decision_maker else "No, the owner isn't available right now."},
         ]
-        
+
         if is_decision_maker:
             transcript.extend([
                 {"role": "ai", "text": "Great! We're reaching out to businesses in your area about our competitive credit card processing rates. Are you currently satisfied with your payment processing fees?"},
@@ -1024,7 +1126,7 @@ Return a JSON array. Every lead's industry field MUST match the required industr
                 {"role": "ai", "text": "I understand. Would you be interested in a quick consultation to see how much you could save?" if interest_level > 5 else "I appreciate your time. May I follow up with you in a few months?"},
                 {"role": "human", "text": "Sure, that sounds good." if interest_level > 5 else "Maybe, we'll see."},
             ])
-        
+
         return {
             "transcript": transcript,
             "is_decision_maker": is_decision_maker,
@@ -1032,32 +1134,32 @@ Return a JSON array. Every lead's industry field MUST match the required industr
             "duration_seconds": random.randint(30, 180),
             "status": "completed"
         }
-    
+
     @staticmethod
     async def qualify_lead(call_data: Dict) -> QualificationResult:
         """Qualify lead based on call data"""
         is_decision_maker = call_data.get("is_decision_maker", False)
         interest_level = call_data.get("interest_level", 0)
-        
+
         score = 0
         notes = []
-        
+
         if is_decision_maker:
             score += 50
             notes.append("Confirmed decision maker")
         else:
             notes.append("Not speaking with decision maker")
-        
+
         score += interest_level * 5
         notes.append(f"Interest level: {interest_level}/10")
-        
+
         is_qualified = score >= 60 and is_decision_maker and interest_level >= 6
-        
+
         if is_qualified:
             notes.append("Lead qualifies for meeting booking")
         else:
             notes.append("Lead does not meet qualification criteria")
-        
+
         return QualificationResult(
             is_qualified=is_qualified,
             is_decision_maker=is_decision_maker,
@@ -1071,31 +1173,31 @@ ai_service = AIService()
 # ============== NOTIFICATION SERVICE ==============
 class NotificationService:
     """Email notification service using Resend"""
-    
+
     def __init__(self):
         self.api_key = os.environ.get('RESEND_API_KEY')
         self.sender_email = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
         self.is_configured = bool(self.api_key)
         if self.is_configured:
             resend.api_key = self.api_key
-    
+
     async def send_lead_qualified_notification(self, lead: Dict, qualification: Dict, recipients: List[str]):
         """Send email notification when a lead is qualified"""
         if not self.is_configured:
             logger.info("Email notifications not configured - skipping lead qualified notification")
             return None
-        
+
         subject = f"🎯 New Qualified Lead: {lead.get('business_name', 'Unknown')}"
-        
+
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #10B981, #059669); padding: 20px; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0; font-size: 24px;">New Qualified Lead!</h1>
             </div>
-            
+
             <div style="background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
                 <h2 style="color: #1f2937; margin-top: 0;">{lead.get('business_name', 'Unknown Business')}</h2>
-                
+
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
                         <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Contact:</td>
@@ -1110,24 +1212,24 @@ class NotificationService:
                         <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; color: #1f2937; font-weight: 500;">{lead.get('email', 'N/A')}</td>
                     </tr>
                 </table>
-                
+
                 <div style="margin-top: 20px; padding: 15px; background: #ecfdf5; border-radius: 8px; border-left: 4px solid #10B981;">
                     <h3 style="margin: 0 0 10px 0; color: #065f46;">Qualification Score: {qualification.get('score', 0)}/100</h3>
                     <p style="margin: 5px 0; color: #047857;">✓ Decision Maker: {'Yes' if qualification.get('is_decision_maker') else 'No'}</p>
                     <p style="margin: 5px 0; color: #047857;">✓ Interest Level: {qualification.get('interest_level', 0)}/10</p>
                 </div>
-                
+
                 <div style="margin-top: 20px; text-align: center;">
                     <p style="color: #6b7280; font-size: 14px;">This lead is ready for booking! Log in to IntentBrain.ai to assign an agent.</p>
                 </div>
             </div>
-            
+
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
                 <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by IntentBrain.ai - AI Sales Automation</p>
             </div>
         </div>
         """
-        
+
         try:
             for recipient in recipients:
                 params = {
@@ -1142,24 +1244,24 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Failed to send lead qualified notification: {str(e)}")
             return False
-    
+
     async def send_meeting_booked_notification(self, lead: Dict, agent: Dict, recipients: List[str], booking_link: str = None):
         """Send email notification when a meeting is booked"""
         if not self.is_configured:
             logger.info("Email notifications not configured - skipping meeting booked notification")
             return None
-        
+
         subject = f"📅 Meeting Booked: {lead.get('business_name', 'Unknown')} → {agent.get('name', 'Agent')}"
-        
+
         # Use personalized booking link if provided, otherwise use agent's default
         calendly_link = booking_link or agent.get('calendly_link', '#')
-        
+
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #8B5CF6, #7C3AED); padding: 20px; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0; font-size: 24px;">Meeting Booked!</h1>
             </div>
-            
+
             <div style="background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
                 <div style="display: flex; align-items: center; margin-bottom: 20px;">
                     <div style="flex: 1;">
@@ -1172,7 +1274,7 @@ class NotificationService:
                         <p style="margin: 5px 0; color: #1f2937; font-size: 18px; font-weight: 600;">{agent.get('name', 'Agent')}</p>
                     </div>
                 </div>
-                
+
                 <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
                     <tr>
                         <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Lead Phone:</td>
@@ -1193,24 +1295,24 @@ class NotificationService:
                         </td>
                     </tr>
                 </table>
-                
+
                 <div style="margin-top: 20px; padding: 15px; background: #f5f3ff; border-radius: 8px; border-left: 4px solid #8B5CF6;">
                     <p style="margin: 0; color: #5b21b6;">🎉 Great job! A personalized booking link has been generated for this lead.</p>
                 </div>
-                
+
                 <div style="margin-top: 15px; text-align: center;">
                     <a href="{calendly_link}" style="display: inline-block; background: #8B5CF6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">
                         View Booking Link
                     </a>
                 </div>
             </div>
-            
+
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
                 <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by IntentBrain.ai - AI Sales Automation</p>
             </div>
         </div>
         """
-        
+
         try:
             for recipient in recipients:
                 params = {
@@ -1225,26 +1327,26 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Failed to send meeting booked notification: {str(e)}")
             return False
-    
+
     async def send_low_balance_notification(self, user_email: str, user_name: str, lead_credits: int, call_credits: int):
         """Send email notification when user has low credit balance"""
         if not self.is_configured:
             logger.info("Email notifications not configured - skipping low balance notification")
             return None
-        
+
         subject = "⚠️ Low Credit Balance Alert - IntentBrain.ai"
-        
+
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #F59E0B, #D97706); padding: 20px; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0; font-size: 24px;">Low Credit Balance Alert</h1>
             </div>
-            
+
             <div style="background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
                 <p style="color: #1f2937; font-size: 16px;">Hi {user_name},</p>
-                
+
                 <p style="color: #4b5563;">Your IntentBrain.ai credit balance is running low. Here's your current status:</p>
-                
+
                 <div style="display: flex; gap: 20px; margin: 20px 0;">
                     <div style="flex: 1; background: {'#FEF3C7' if lead_credits <= 20 else '#ECFDF5'}; padding: 15px; border-radius: 8px; text-align: center;">
                         <div style="font-size: 32px; font-weight: bold; color: {'#D97706' if lead_credits <= 20 else '#059669'};">{lead_credits}</div>
@@ -1255,25 +1357,25 @@ class NotificationService:
                         <div style="color: #6B7280; font-size: 14px;">Call Credits</div>
                     </div>
                 </div>
-                
+
                 <div style="margin-top: 20px; padding: 15px; background: #FEF3C7; border-radius: 8px; border-left: 4px solid #F59E0B;">
                     <p style="margin: 0; color: #92400E;">
                         <strong>Don't let your campaigns stop!</strong><br>
                         Purchase additional credits or upgrade your plan to keep your AI calling machine running smoothly.
                     </p>
                 </div>
-                
+
                 <div style="margin-top: 20px; text-align: center;">
                     <p style="color: #6b7280; font-size: 14px;">Log in to your dashboard to purchase more credits or upgrade your subscription.</p>
                 </div>
             </div>
-            
+
             <div style="background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;">
                 <p style="color: #9ca3af; margin: 0; font-size: 12px;">Powered by IntentBrain.ai - AI Sales Automation</p>
             </div>
         </div>
         """
-        
+
         try:
             params = {
                 "from": self.sender_email,
@@ -1296,12 +1398,12 @@ class CalendlyService:
     Service for Calendly API integration - auto-booking qualified leads.
     Supports generating booking links, checking availability, and scheduling meetings.
     """
-    
+
     def __init__(self):
         self.api_token = os.environ.get("CALENDLY_API_TOKEN")
         self.base_url = "https://api.calendly.com"
         self.is_configured = bool(self.api_token)
-        
+
         if self.is_configured:
             self.headers = {
                 "Authorization": f"Bearer {self.api_token}",
@@ -1310,12 +1412,12 @@ class CalendlyService:
             logger.info("Calendly service initialized with API token")
         else:
             logger.warning("Calendly API token not configured - using booking links only")
-    
+
     async def get_current_user(self) -> Optional[Dict]:
         """Get the authenticated Calendly user info"""
         if not self.is_configured:
             return None
-        
+
         try:
             response = await asyncio.to_thread(
                 requests.get,
@@ -1328,19 +1430,19 @@ class CalendlyService:
         except Exception as e:
             logger.error(f"Failed to get Calendly user: {str(e)}")
             return None
-    
+
     async def get_event_types(self, user_uri: str = None) -> List[Dict]:
         """Fetch all event types for the user"""
         if not self.is_configured:
             return []
-        
+
         try:
             if not user_uri:
                 user = await self.get_current_user()
                 if not user:
                     return []
                 user_uri = user["uri"]
-            
+
             response = await asyncio.to_thread(
                 requests.get,
                 f"{self.base_url}/event_types",
@@ -1353,17 +1455,17 @@ class CalendlyService:
         except Exception as e:
             logger.error(f"Failed to get event types: {str(e)}")
             return []
-    
+
     async def get_available_times(
-        self, 
-        event_type_uri: str, 
-        start_time: str, 
+        self,
+        event_type_uri: str,
+        start_time: str,
         end_time: str
     ) -> List[Dict]:
         """Get available time slots for an event type"""
         if not self.is_configured:
             return []
-        
+
         try:
             response = await asyncio.to_thread(
                 requests.get,
@@ -1381,11 +1483,11 @@ class CalendlyService:
         except Exception as e:
             logger.error(f"Failed to get available times: {str(e)}")
             return []
-    
+
     def generate_booking_link(
-        self, 
-        calendly_link: str, 
-        lead_name: str = None, 
+        self,
+        calendly_link: str,
+        lead_name: str = None,
         lead_email: str = None,
         lead_phone: str = None
     ) -> str:
@@ -1394,10 +1496,10 @@ class CalendlyService:
         Works even without API token (uses standard Calendly link format).
         """
         import urllib.parse
-        
+
         # Clean the base Calendly link
         base_link = calendly_link.rstrip("/")
-        
+
         # Build query params for pre-filling
         params = {}
         if lead_name:
@@ -1407,13 +1509,13 @@ class CalendlyService:
         if lead_phone:
             # Calendly uses 'a1' for custom questions - phone is commonly first
             params["a1"] = lead_phone
-        
+
         if params:
             query_string = urllib.parse.urlencode(params)
             return f"{base_link}?{query_string}"
-        
+
         return base_link
-    
+
     async def create_single_use_link(
         self,
         event_type_uri: str,
@@ -1422,7 +1524,7 @@ class CalendlyService:
         """Create a single-use scheduling link for a specific lead"""
         if not self.is_configured:
             return None
-        
+
         try:
             response = await asyncio.to_thread(
                 requests.post,
@@ -1440,7 +1542,7 @@ class CalendlyService:
         except Exception as e:
             logger.error(f"Failed to create single-use link: {str(e)}")
             return None
-    
+
     async def get_scheduled_events(
         self,
         user_uri: str,
@@ -1451,7 +1553,7 @@ class CalendlyService:
         """Get scheduled events in a time range"""
         if not self.is_configured:
             return []
-        
+
         try:
             response = await asyncio.to_thread(
                 requests.get,
@@ -1470,12 +1572,12 @@ class CalendlyService:
         except Exception as e:
             logger.error(f"Failed to get scheduled events: {str(e)}")
             return []
-    
+
     async def cancel_event(self, event_uuid: str, reason: str = "") -> bool:
         """Cancel a scheduled event"""
         if not self.is_configured:
             return False
-        
+
         try:
             response = await asyncio.to_thread(
                 requests.post,
@@ -1504,12 +1606,12 @@ def init_storage():
     global storage_key
     if storage_key:
         return storage_key
-    
+
     emergent_key = os.environ.get("EMERGENT_LLM_KEY")
     if not emergent_key:
         logger.warning("EMERGENT_LLM_KEY not set - call recording storage disabled")
         return None
-    
+
     try:
         resp = requests.post(
             f"{STORAGE_URL}/init",
@@ -1529,7 +1631,7 @@ def put_object(path: str, data: bytes, content_type: str) -> Optional[Dict]:
     key = init_storage()
     if not key:
         return None
-    
+
     try:
         resp = requests.put(
             f"{STORAGE_URL}/objects/{path}",
@@ -1548,7 +1650,7 @@ def get_object(path: str) -> Optional[tuple]:
     key = init_storage()
     if not key:
         return None
-    
+
     try:
         resp = requests.get(
             f"{STORAGE_URL}/objects/{path}",
@@ -1569,32 +1671,32 @@ class CallRecordingService:
     - Uploads to object storage
     - Transcribes using Whisper API
     """
-    
+
     def __init__(self):
         self.emergent_key = os.environ.get("EMERGENT_LLM_KEY")
         self.twilio_account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
         self.twilio_auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
-        
+
         self.storage_enabled = bool(self.emergent_key)
         self.transcription_enabled = bool(self.emergent_key)
-        
+
         if self.transcription_enabled:
             self.stt = OpenAISpeechToText(api_key=self.emergent_key)
             logger.info("Call recording & transcription service initialized")
         else:
             self.stt = None
             logger.warning("Transcription disabled - EMERGENT_LLM_KEY not set")
-    
+
     async def download_twilio_recording(self, recording_sid: str) -> Optional[bytes]:
         """Download recording audio from Twilio"""
         if not self.twilio_account_sid or not self.twilio_auth_token:
             logger.error("Twilio credentials not configured")
             return None
-        
+
         try:
             # Twilio recording URL format
             recording_url = f"https://api.twilio.com/2010-04-01/Accounts/{self.twilio_account_sid}/Recordings/{recording_sid}.mp3"
-            
+
             response = await asyncio.to_thread(
                 requests.get,
                 recording_url,
@@ -1602,51 +1704,51 @@ class CallRecordingService:
                 timeout=60
             )
             response.raise_for_status()
-            
+
             logger.info(f"Downloaded Twilio recording {recording_sid}: {len(response.content)} bytes")
             return response.content
-            
+
         except Exception as e:
             logger.error(f"Failed to download Twilio recording {recording_sid}: {e}")
             return None
-    
+
     async def store_recording(self, user_id: str, call_id: str, audio_data: bytes) -> Optional[str]:
         """Store recording in object storage. Returns storage path."""
         if not self.storage_enabled:
             return None
-        
+
         try:
             # Generate storage path
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
             path = f"{APP_NAME}/recordings/{user_id}/{timestamp}/{call_id}.mp3"
-            
+
             result = await asyncio.to_thread(
                 put_object,
                 path,
                 audio_data,
                 "audio/mpeg"
             )
-            
+
             if result:
                 logger.info(f"Stored recording at {path}")
                 return result.get("path", path)
             return None
-            
+
         except Exception as e:
             logger.error(f"Failed to store recording: {e}")
             return None
-    
+
     async def transcribe_recording(self, audio_data: bytes, language: str = "en") -> Optional[Dict]:
         """Transcribe audio using Whisper API. Returns transcript data."""
         if not self.transcription_enabled or not self.stt:
             return None
-        
+
         try:
             # Create a file-like object for the audio data
             import io
             audio_file = io.BytesIO(audio_data)
             audio_file.name = "recording.mp3"
-            
+
             # Transcribe with timestamps
             response = await self.stt.transcribe(
                 file=audio_file,
@@ -1655,13 +1757,13 @@ class CallRecordingService:
                 language=language,
                 timestamp_granularities=["segment"]
             )
-            
+
             # Extract transcript and segments
             result = {
                 "text": response.text,
                 "segments": []
             }
-            
+
             if hasattr(response, 'segments'):
                 for segment in response.segments:
                     result["segments"].append({
@@ -1669,14 +1771,14 @@ class CallRecordingService:
                         "end": segment.end,
                         "text": segment.text
                     })
-            
+
             logger.info(f"Transcribed recording: {len(response.text)} chars, {len(result['segments'])} segments")
             return result
-            
+
         except Exception as e:
             logger.error(f"Failed to transcribe recording: {e}")
             return None
-    
+
     async def process_call_recording(
         self,
         call_id: str,
@@ -1694,57 +1796,57 @@ class CallRecordingService:
             "transcript_segments": None,
             "status": "pending"
         }
-        
+
         # Check if user has recording feature
         if not features.get("call_recording"):
             result["status"] = "feature_not_available"
             return result
-        
+
         try:
             # Update status to processing
             await db.calls.update_one(
                 {"id": call_id},
                 {"$set": {"transcription_status": "processing"}}
             )
-            
+
             # Step 1: Download from Twilio
             audio_data = await self.download_twilio_recording(recording_sid)
             if not audio_data:
                 result["status"] = "download_failed"
                 return result
-            
+
             # Step 2: Store in object storage
             storage_path = await self.store_recording(user_id, call_id, audio_data)
             if storage_path:
                 result["recording_url"] = storage_path
-            
+
             # Step 3: Transcribe (if user has transcription feature)
             if features.get("call_transcription"):
                 transcript_data = await self.transcribe_recording(audio_data)
                 if transcript_data:
                     result["full_transcript"] = transcript_data["text"]
                     result["transcript_segments"] = transcript_data["segments"]
-            
+
             result["status"] = "completed"
-            
+
             # Update call record with recording data
             update_data = {
                 "recording_url": result["recording_url"],
                 "transcription_status": result["status"]
             }
-            
+
             if result["full_transcript"]:
                 update_data["full_transcript"] = result["full_transcript"]
                 update_data["transcript_segments"] = result["transcript_segments"]
-            
+
             await db.calls.update_one(
                 {"id": call_id},
                 {"$set": update_data}
             )
-            
+
             logger.info(f"Processed recording for call {call_id}: {result['status']}")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error processing call recording: {e}")
             result["status"] = "failed"
@@ -1762,22 +1864,22 @@ class ICPScoringService:
     Service for scoring leads based on Ideal Customer Profile (ICP).
     Uses AI to analyze lead data and score fit before entering dialer queue.
     """
-    
+
     def __init__(self):
         self.api_key = os.environ.get("EMERGENT_LLM_KEY")
-    
+
     async def score_lead(self, lead: Dict, icp_config: Dict = None) -> Dict:
         """
         Score a lead based on ICP criteria.
         Returns a score breakdown with total 0-100 score.
-        
+
         Scoring categories (each 0-25 points):
         1. Industry Fit - Does the business industry match target?
         2. Company Size Fit - Is the company size in the sweet spot?
         3. Intent Signal Strength - How strong are the buying signals?
         4. Contact Quality - Is this likely a decision maker?
         """
-        
+
         # Default ICP config if none provided
         if not icp_config:
             icp_config = {
@@ -1786,18 +1888,18 @@ class ICPScoringService:
                 "high_value_signals": ["alternative", "switch", "looking for", "need help"],
                 "decision_maker_titles": ["owner", "manager", "director", "ceo", "president", "founder"]
             }
-        
+
         breakdown = {
             "industry_fit": 0,
             "company_size_fit": 0,
             "intent_strength": 0,
             "contact_quality": 0
         }
-        
+
         # 1. Industry Fit (0-25)
         target_industries = icp_config.get("target_industries", [])
         lead_industry = (lead.get("industry") or "").lower()
-        
+
         if not target_industries:  # No filter = full score
             breakdown["industry_fit"] = 20
         elif lead_industry:
@@ -1807,26 +1909,26 @@ class ICPScoringService:
                     break
             if breakdown["industry_fit"] == 0:
                 breakdown["industry_fit"] = 10  # Some points for having industry data
-        
+
         # 2. Company Size Fit (0-25)
         preferred_sizes = icp_config.get("preferred_company_sizes", [])
         lead_size = lead.get("company_size", "")
-        
+
         if not preferred_sizes:  # No preference = medium score
             breakdown["company_size_fit"] = 15
         elif lead_size in preferred_sizes:
             breakdown["company_size_fit"] = 25
         elif lead_size:
             breakdown["company_size_fit"] = 10  # Has size data but not preferred
-        
+
         # 3. Intent Signal Strength (0-25)
         intent_signals = lead.get("intent_signals", [])
         high_value_signals = icp_config.get("high_value_signals", [])
-        
+
         if intent_signals:
             signal_text = " ".join(intent_signals).lower()
             matches = sum(1 for sig in high_value_signals if sig.lower() in signal_text)
-            
+
             # Score based on signal matches
             if matches >= 3:
                 breakdown["intent_strength"] = 25
@@ -1838,19 +1940,19 @@ class ICPScoringService:
                 breakdown["intent_strength"] = 10  # Has signals, but not high-value
         else:
             breakdown["intent_strength"] = 5  # Minimal score for no signals
-        
+
         # 4. Contact Quality (0-25)
         contact_name = (lead.get("contact_name") or "").lower()
         business_name = (lead.get("business_name") or "").lower()
         decision_maker_titles = icp_config.get("decision_maker_titles", [])
-        
+
         # Check if contact name suggests decision maker
         is_likely_dm = False
         for title in decision_maker_titles:
             if title.lower() in contact_name:
                 is_likely_dm = True
                 break
-        
+
         if is_likely_dm:
             breakdown["contact_quality"] = 25
         elif contact_name:
@@ -1859,7 +1961,7 @@ class ICPScoringService:
             breakdown["contact_quality"] = 10  # Only business name
         else:
             breakdown["contact_quality"] = 5
-        
+
         # Check for business email (adds bonus)
         email = lead.get("email", "")
         if email and "@" in email:
@@ -1867,10 +1969,10 @@ class ICPScoringService:
             personal_domains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com"]
             if domain not in personal_domains:
                 breakdown["contact_quality"] = min(25, breakdown["contact_quality"] + 5)
-        
+
         # Calculate total score
         total_score = sum(breakdown.values())
-        
+
         # Determine tier
         if total_score >= 80:
             tier = "A"
@@ -1884,7 +1986,7 @@ class ICPScoringService:
         else:
             tier = "D"
             recommendation = "LOW FIT - May not match ICP, consider deprioritizing"
-        
+
         return {
             "total_score": total_score,
             "tier": tier,
@@ -1892,7 +1994,7 @@ class ICPScoringService:
             "recommendation": recommendation,
             "scored_at": datetime.now(timezone.utc).isoformat()
         }
-    
+
     async def score_lead_with_ai(self, lead: Dict, icp_config: Dict = None) -> Dict:
         """
         Use GPT to score lead with more nuanced analysis.
@@ -1901,13 +2003,13 @@ class ICPScoringService:
         if not self.api_key:
             # Fallback to rule-based scoring
             return await self.score_lead(lead, icp_config)
-        
+
         try:
             chat = LlmChat(
                 api_key=self.api_key,
                 session_id=f"icp-score-{uuid.uuid4().hex[:8]}",
                 system_message="""You are an ICP (Ideal Customer Profile) scoring expert for B2B sales.
-                
+
 Score leads on a 0-100 scale across these categories:
 1. Industry Fit (0-25): Does the business match target industries?
 2. Company Size Fit (0-25): Is the company size appropriate?
@@ -1927,7 +2029,7 @@ Return ONLY a JSON object with this structure:
     "recommendation": "<one sentence recommendation>"
 }"""
             ).with_model("openai", "gpt-5.2")
-            
+
             prompt = f"""Score this lead for ICP fit:
 
 Lead Data:
@@ -1947,7 +2049,7 @@ Return the JSON score."""
 
             user_message = UserMessage(text=prompt)
             response = await chat.send_message(user_message)
-            
+
             # Parse JSON from response
             import json
             # Try to extract JSON from response
@@ -1956,33 +2058,33 @@ Return the JSON score."""
                 response_text = response_text.split("```")[1]
                 if response_text.startswith("json"):
                     response_text = response_text[4:]
-            
+
             score_data = json.loads(response_text)
             score_data["scored_at"] = datetime.now(timezone.utc).isoformat()
             score_data["scoring_method"] = "ai"
-            
+
             return score_data
-            
+
         except Exception as e:
             logger.error(f"AI ICP scoring failed: {e}, falling back to rule-based")
             result = await self.score_lead(lead, icp_config)
             result["scoring_method"] = "rule_based_fallback"
             return result
-    
+
     async def batch_score_leads(self, lead_ids: List[str], icp_config: Dict = None, use_ai: bool = False) -> List[Dict]:
         """Score multiple leads and update their records"""
         results = []
-        
+
         for lead_id in lead_ids:
             lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
             if not lead:
                 continue
-            
+
             if use_ai:
                 score_result = await self.score_lead_with_ai(lead, icp_config)
             else:
                 score_result = await self.score_lead(lead, icp_config)
-            
+
             # Update lead with ICP score
             await db.leads.update_one(
                 {"id": lead_id},
@@ -1992,13 +2094,13 @@ Return the JSON score."""
                     "updated_at": datetime.now(timezone.utc).isoformat()
                 }}
             )
-            
+
             results.append({
                 "lead_id": lead_id,
                 "business_name": lead.get("business_name"),
                 **score_result
             })
-        
+
         return results
 
 icp_service = ICPScoringService()
@@ -2130,7 +2232,7 @@ STATE_CALLING_RESTRICTIONS = {
 class ComplianceService:
     """
     Service for TCPA-compliant call compliance checks.
-    
+
     Features:
     - Internal DNC list management
     - National DNC Registry integration (via Real Phone Validation API)
@@ -2142,14 +2244,14 @@ class ComplianceService:
     - Phone number verification
     - Usage tracking with tier-based allowances
     """
-    
+
     def __init__(self):
         # Real Phone Validation DNC Plus API
         # Sign up at: https://realphonevalidation.com/
         self.dnc_api_key = os.environ.get("DNC_API_KEY")
         self.dnc_api_url = os.environ.get("DNC_API_URL", "https://api.realvalidation.com/rpvWebService/DNCPlus.php")
         logger.info(f"ComplianceService initialized. DNC API: {'configured' if self.dnc_api_key else 'not configured (internal list only)'}")
-    
+
     def get_timezone_for_number(self, phone_number: str) -> tuple:
         """
         Get timezone and state from phone number area code.
@@ -2163,15 +2265,15 @@ class ComplianceService:
             area_code = clean_number[:3]
         else:
             return ("America/New_York", "UNKNOWN")
-        
+
         return AREA_CODE_TIMEZONES.get(area_code, ("America/New_York", "UNKNOWN"))
-    
+
     def check_calling_hours(self, phone_number: str) -> dict:
         """
         Check if it's within legal calling hours for the recipient's timezone.
         TCPA requires calls only between 8am-9pm local time.
         Some states have stricter requirements.
-        
+
         Returns:
             {
                 "is_allowed": bool,
@@ -2187,23 +2289,23 @@ class ComplianceService:
             from zoneinfo import ZoneInfo
         except ImportError:
             from backports.zoneinfo import ZoneInfo
-        
+
         timezone_name, state = self.get_timezone_for_number(phone_number)
-        
+
         try:
             tz = ZoneInfo(timezone_name)
             local_now = datetime.now(tz)
             local_hour = local_now.hour
-            
+
             # Get state-specific or default restrictions
             restriction = STATE_CALLING_RESTRICTIONS.get(state, STATE_CALLING_RESTRICTIONS["DEFAULT"])
             start_hour = restriction["start_hour"]
             end_hour = restriction["end_hour"]
             restriction_name = restriction["name"]
-            
+
             # Check if within allowed hours
             is_allowed = start_hour <= local_hour < end_hour
-            
+
             result = {
                 "is_allowed": is_allowed,
                 "reason": None,
@@ -2216,7 +2318,7 @@ class ComplianceService:
                 "end_hour": end_hour,
                 "next_allowed_time": None
             }
-            
+
             if not is_allowed:
                 if local_hour < start_hour:
                     # Too early - calculate when calling is allowed
@@ -2229,9 +2331,9 @@ class ComplianceService:
                     next_allowed = (local_now + timedelta(days=1)).replace(hour=start_hour, minute=0, second=0, microsecond=0)
                     result["reason"] = f"Too late to call {state} ({local_now.strftime('%I:%M %p')} local). {restriction_name} - try tomorrow at {start_hour}:00 AM"
                     result["next_allowed_time"] = next_allowed.isoformat()
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error checking calling hours for {phone_number}: {e}")
             # Default to allowed if timezone lookup fails (conservative approach would be to block)
@@ -2244,17 +2346,17 @@ class ComplianceService:
                 "restriction": "Federal TCPA (8am-9pm)",
                 "error": str(e)
             }
-    
+
     async def check_dnc(self, phone_number: str) -> bool:
         """Check if number is on internal DNC list"""
         dnc_entry = await db.dnc_list.find_one({"phone_number": phone_number}, {"_id": 0})
         return dnc_entry is not None
-    
+
     async def check_national_dnc(self, phone_number: str, user_id: str = None) -> dict:
         """
         Check if number is on the National Do Not Call Registry.
         Uses Real Phone Validation DNC Plus API.
-        
+
         Returns:
             {
                 "on_national_dnc": bool,
@@ -2272,12 +2374,12 @@ class ComplianceService:
         clean_number = ''.join(filter(str.isdigit, phone_number))
         if clean_number.startswith('1') and len(clean_number) == 11:
             clean_number = clean_number[1:]  # Remove country code
-        
+
         formatted_number = f"+1{clean_number}"
-        
+
         # Check cache first (DNC status cached for 30 days per FTC requirements)
         cached = await db.national_dnc_checks.find_one(
-            {"phone_number": formatted_number}, 
+            {"phone_number": formatted_number},
             {"_id": 0}
         )
         if cached:
@@ -2289,7 +2391,7 @@ class ComplianceService:
                     return cached
             except Exception:
                 pass
-        
+
         result = {
             "phone_number": formatted_number,
             "on_national_dnc": False,
@@ -2303,7 +2405,7 @@ class ComplianceService:
             "error": None,
             "billable": False
         }
-        
+
         # If Real Phone Validation API is configured, use it
         if self.dnc_api_key:
             try:
@@ -2318,10 +2420,10 @@ class ComplianceService:
                         },
                         timeout=10.0
                     )
-                    
+
                     if response.status_code == 200:
                         data = response.json()
-                        
+
                         # Check response status
                         if data.get("status") == "connected":
                             result["on_national_dnc"] = data.get("national_dnc") == "Y"
@@ -2332,7 +2434,7 @@ class ComplianceService:
                             result["checked"] = True
                             result["source"] = "real_phone_validation"
                             result["billable"] = True
-                            
+
                             logger.info(f"DNC check: {formatted_number} -> National:{result['on_national_dnc']}, State:{result['on_state_dnc']}, Litigator:{result['is_litigator']}")
                         elif data.get("status") == "invalid-phone":
                             result["error"] = "Invalid phone number"
@@ -2346,7 +2448,7 @@ class ComplianceService:
                     else:
                         result["error"] = f"DNC API HTTP error: {response.status_code}"
                         logger.error(f"DNC API error: {response.text}")
-                        
+
             except Exception as e:
                 result["error"] = str(e)
                 logger.error(f"DNC API exception: {e}")
@@ -2364,7 +2466,7 @@ class ComplianceService:
             else:
                 result["checked"] = True
                 result["source"] = "internal_lists"
-        
+
         # Always check internal litigator list (even if external API is used)
         litigator = await db.tcpa_litigators.find_one(
             {"phone_number": formatted_number},
@@ -2379,25 +2481,25 @@ class ComplianceService:
                 "risk_level": litigator.get("risk_level", "high")
             }
             logger.warning(f"TCPA LITIGATOR DETECTED: {formatted_number}")
-        
+
         # Cache the result
         await db.national_dnc_checks.update_one(
             {"phone_number": formatted_number},
             {"$set": result},
             upsert=True
         )
-        
+
         # Track DNC usage for billing if this was a billable check
         if result.get("billable") and user_id:
             await self.track_dnc_usage(user_id)
-        
+
         return result
-    
+
     async def track_dnc_usage(self, user_id: str):
         """Track DNC check usage for the current billing month"""
         now = datetime.now(timezone.utc)
         month_key = f"{now.year}-{now.month:02d}"
-        
+
         await db.dnc_usage.update_one(
             {"user_id": user_id, "month": month_key},
             {
@@ -2406,28 +2508,28 @@ class ComplianceService:
             },
             upsert=True
         )
-    
+
     async def get_dnc_usage(self, user_id: str) -> dict:
         """Get DNC check usage for the current billing month"""
         now = datetime.now(timezone.utc)
         month_key = f"{now.year}-{now.month:02d}"
-        
+
         usage = await db.dnc_usage.find_one(
             {"user_id": user_id, "month": month_key},
             {"_id": 0}
         )
-        
+
         return {
             "month": month_key,
             "checks_used": usage.get("checks", 0) if usage else 0
         }
-    
+
     async def add_to_dnc(self, phone_number: str, reason: str = "user_request", added_by: str = None):
         """Add number to internal DNC list"""
         existing = await db.dnc_list.find_one({"phone_number": phone_number})
         if existing:
             return False  # Already on list
-        
+
         dnc_entry = {
             "id": str(uuid.uuid4()),
             "phone_number": phone_number,
@@ -2439,12 +2541,12 @@ class ComplianceService:
         await db.dnc_list.insert_one(dnc_entry)
         logger.info(f"Added {phone_number} to DNC list. Reason: {reason}")
         return True
-    
+
     async def remove_from_dnc(self, phone_number: str):
         """Remove number from internal DNC list"""
         result = await db.dnc_list.delete_one({"phone_number": phone_number})
         return result.deleted_count > 0
-    
+
     async def verify_number(self, phone_number: str) -> Dict:
         """
         Verify phone number type using Twilio Lookup API.
@@ -2456,7 +2558,7 @@ class ComplianceService:
         if not clean_number.startswith('1') and len(clean_number) == 10:
             clean_number = '1' + clean_number
         formatted_number = f"+{clean_number}"
-        
+
         # Check cache first (saves money!)
         cached = await db.number_verifications.find_one({"phone_number": formatted_number}, {"_id": 0})
         if cached:
@@ -2468,7 +2570,7 @@ class ComplianceService:
                     return cached
             except Exception:
                 pass
-        
+
         # Use Twilio Lookup API for real verification
         verification = {
             "phone_number": formatted_number,
@@ -2480,7 +2582,7 @@ class ComplianceService:
             "error": None,
             "verified_at": datetime.now(timezone.utc).isoformat()
         }
-        
+
         try:
             if twilio_client:
                 # Twilio Lookup API v2 with Line Type Intelligence
@@ -2489,40 +2591,40 @@ class ComplianceService:
                     twilio_client.lookups.v2.phone_numbers(formatted_number).fetch,
                     fields='line_type_intelligence'
                 )
-                
+
                 verification["is_valid"] = lookup_result.valid
                 verification["calling_country_code"] = lookup_result.calling_country_code
                 verification["national_format"] = lookup_result.national_format
-                
+
                 # Extract line type intelligence
                 line_type_info = lookup_result.line_type_intelligence or {}
                 verification["line_type"] = line_type_info.get("type") or "unknown"
                 verification["carrier"] = line_type_info.get("carrier_name")
                 verification["carrier_type"] = line_type_info.get("mobile_network_code")
-                
+
                 # Determine if mobile (higher pickup rates)
                 line_type = (verification["line_type"] or "unknown").lower()
                 verification["is_mobile"] = line_type in ["mobile", "cellphone", "wireless"]
                 verification["is_landline"] = line_type in ["landline", "fixedline", "fixed", "fixedvoip"]
                 verification["is_voip"] = line_type in ["voip", "non-fixed voip", "virtual", "nonFixedVoip"]
-                
+
                 # Priority score for dialing (mobile > landline > voip > unknown)
-                priority_map = {"mobile": 100, "cellphone": 100, "wireless": 100, 
+                priority_map = {"mobile": 100, "cellphone": 100, "wireless": 100,
                                "landline": 60, "fixedline": 60, "fixed": 60, "fixedvoip": 55,
                                "voip": 30, "non-fixed voip": 20, "nonfixedvoip": 20, "virtual": 20}
                 verification["dial_priority"] = priority_map.get(line_type, 40)
-                
+
                 logger.info(f"Twilio Lookup: {formatted_number} -> {verification['line_type']} (valid: {verification['is_valid']})")
             else:
                 verification["error"] = "Twilio client not configured"
                 verification["is_valid"] = True  # Assume valid if can't verify
                 verification["dial_priority"] = 50
                 logger.warning("Twilio client not available for phone verification")
-                
+
         except Exception as e:
             error_msg = str(e)
             verification["error"] = error_msg
-            
+
             # Check if number is invalid based on error
             if "not a valid phone number" in error_msg.lower():
                 verification["is_valid"] = False
@@ -2531,29 +2633,29 @@ class ComplianceService:
                 # Network error - assume valid but log it
                 verification["is_valid"] = True
                 verification["dial_priority"] = 40
-            
+
             logger.error(f"Phone verification error for {formatted_number}: {e}")
-        
+
         # Cache the result (even errors, to avoid repeated lookups)
         await db.number_verifications.update_one(
             {"phone_number": formatted_number},
             {"$set": verification},
             upsert=True
         )
-        
+
         return verification
-    
+
     async def pre_call_compliance_check(self, phone_number: str, user_id: str = None) -> Dict:
         """
         Perform all TCPA compliance checks before making a call.
-        
+
         Checks performed:
         1. Calling hours (8am-9pm local time, state-specific restrictions)
         2. Internal DNC list
         3. National DNC Registry (if configured)
         4. Phone number verification (line type, validity)
         5. Call frequency limits (max 3 calls per 7 days)
-        
+
         Returns whether call is allowed, reasons if not, and dial priority.
         """
         checks_performed = []
@@ -2563,20 +2665,20 @@ class ComplianceService:
         dial_priority = 50  # Default priority
         calling_hours_info = None
         national_dnc_info = None
-        
+
         # 1. CHECK CALLING HOURS (TCPA requirement)
         checks_performed.append("calling_hours")
         calling_hours_info = self.check_calling_hours(phone_number)
         if not calling_hours_info.get("is_allowed"):
             is_allowed = False
             reasons.append(calling_hours_info.get("reason", "Outside legal calling hours"))
-        
+
         # 2. Check internal DNC list
         checks_performed.append("internal_dnc")
         if await self.check_dnc(phone_number):
             is_allowed = False
             reasons.append("Number is on internal Do Not Call list")
-        
+
         # 3. CHECK NATIONAL DNC REGISTRY (TCPA requirement)
         checks_performed.append("national_dnc")
         national_dnc_info = await self.check_national_dnc(phone_number, user_id)
@@ -2588,27 +2690,27 @@ class ComplianceService:
             if national_dnc_info.get("on_state_dnc"):
                 dnc_reasons.append("State DNC")
             reasons.append(f"Number is on {' and '.join(dnc_reasons)} Registry")
-        
+
         # Warn about litigators (very high risk!)
         if national_dnc_info.get("is_litigator"):
             is_allowed = False
             reasons.append("CAUTION: Known TCPA litigator - high lawsuit risk")
-        
+
         if national_dnc_info.get("warning"):
             warnings.append(national_dnc_info.get("warning"))
-        
+
         # 4. Verify number with Twilio Lookup (landline vs mobile vs voip)
         checks_performed.append("number_verification")
         verification = await self.verify_number(phone_number)
-        
+
         # Check if number is valid
         if not verification.get("is_valid", True):
             is_allowed = False
             reasons.append(f"Invalid phone number: {verification.get('error', 'verification failed')}")
-        
+
         # Get dial priority from verification
         dial_priority = verification.get("dial_priority", 50)
-        
+
         # Add warnings for low-priority number types (but still allow)
         line_type = verification.get("line_type", "unknown")
         if verification.get("is_voip"):
@@ -2619,7 +2721,7 @@ class ComplianceService:
         elif verification.get("is_mobile"):
             # Mobile is preferred - no warning needed
             pass
-        
+
         # 5. Check recent call history (don't call too frequently)
         checks_performed.append("call_frequency")
         recent_calls = await db.calls.count_documents({
@@ -2631,7 +2733,7 @@ class ComplianceService:
             reasons.append("Called 3+ times in last 7 days - cooling off period")
         elif recent_calls >= 2:
             warnings.append(f"Called {recent_calls} times in last 7 days - consider spacing calls")
-        
+
         # Log the compliance check
         check_result = {
             "id": str(uuid.uuid4()),
@@ -2648,7 +2750,7 @@ class ComplianceService:
             "checked_at": datetime.now(timezone.utc).isoformat()
         }
         await db.compliance_checks.insert_one(check_result)
-        
+
         return {
             "phone_number": phone_number,
             "is_allowed": is_allowed,
@@ -2677,13 +2779,101 @@ class ComplianceService:
 
 compliance_service = ComplianceService()
 
+
+# ============================================================
+# Voicemail script — variable resolution + speech normalization
+# ============================================================
+# Any literal like `{callback_number}` or `[your callback number]` MUST be
+# stripped before speaking. See generate_voicemail_twiml() guard.
+_PLACEHOLDER_LITERAL_RE = re.compile(r"[\{\[][a-zA-Z_][a-zA-Z0-9_ ]*[\}\]]")
+
+# The canonical default voicemail script pre-filled into new campaigns.
+VM_DEFAULT_SCRIPT = (
+    "Hi, this is {agent_name} with {company_name}. I was reviewing businesses "
+    "in your area and noticed a few Google visibility opportunities that may "
+    "be worth a quick conversation. You can reach me at {callback_number}. "
+    "Again, that's {callback_number}. Thanks."
+)
+
+
+def normalize_phone_for_speech(phone: Optional[str]) -> str:
+    """Turn '+14045557777' into '4 0 4, 5 5 5, 7 7 7 7' so TTS reads it
+    digit-by-digit with natural pauses. Non-US / non-E.164 falls through.
+    """
+    if not phone:
+        return ""
+    digits = re.sub(r"\D", "", phone)
+    # US / NANP with country code 1
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]  # drop the leading 1
+    if len(digits) == 10:
+        a, b, c = digits[:3], digits[3:6], digits[6:]
+        return f"{' '.join(a)}, {' '.join(b)}, {' '.join(c)}"
+    # Fallback: space every digit, group by comma every 3
+    return ", ".join(" ".join(digits[i:i + 3]) for i in range(0, len(digits), 3))
+
+
+async def resolve_callback_number(
+    db_handle: Any, campaign: Dict[str, Any], user_id: str
+) -> Optional[str]:
+    """Return the raw E.164/free-form callback number for this campaign, or None.
+
+    Order:
+      1. campaign.callback_number (explicit per-campaign override)
+      2. user.phone_number (from profile)
+      3. TWILIO_PHONE_NUMBER env (outbound caller ID)
+    """
+    n = (campaign or {}).get("callback_number")
+    if n and str(n).strip():
+        return str(n).strip()
+    user = await db_handle.users.find_one({"user_id": user_id}) if user_id else None
+    if user and user.get("phone_number"):
+        return str(user["phone_number"]).strip()
+    if twilio_phone_number:
+        return twilio_phone_number
+    return None
+
+
+async def resolve_agent_name(
+    db_handle: Any, campaign: Dict[str, Any], user_id: str
+) -> str:
+    """Return the linked agent's name, falling back to the user's profile name."""
+    agent_id = (campaign or {}).get("agent_id")
+    if agent_id:
+        agent = await db_handle.agents.find_one({"id": agent_id, "user_id": user_id})
+        if agent and agent.get("name"):
+            return str(agent["name"]).strip()
+    user = await db_handle.users.find_one({"user_id": user_id}) if user_id else None
+    if user:
+        for key in ("name", "full_name", "display_name"):
+            if user.get(key):
+                return str(user[key]).strip()
+    return "your account rep"
+
+
+async def hydrate_campaign_for_vm(
+    db_handle: Any, campaign: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Attach resolved agent name + spoken callback number to a campaign dict
+    for consumption by generate_voicemail_twiml(). Non-destructive — returns
+    a shallow copy.
+    """
+    hydrated = dict(campaign or {})
+    user_id = hydrated.get("user_id") or ""
+    hydrated["_resolved_agent_name"] = await resolve_agent_name(db_handle, hydrated, user_id)
+    raw = await resolve_callback_number(db_handle, hydrated, user_id)
+    hydrated["_resolved_callback_number_spoken"] = normalize_phone_for_speech(raw) if raw else ""
+    hydrated["_resolved_callback_number_raw"] = raw or ""
+    return hydrated
+
+
 # ============== TWILIO CALLING SERVICE ==============
 class TwilioCallingService:
     """Service for making real outbound calls via Twilio with AMD + Voicemail Drop"""
-    
+
     def __init__(self):
         self.is_configured = twilio_client is not None and twilio_phone_number is not None
-    
+
     async def make_outbound_call_with_amd(
         self,
         to_number: str,
@@ -2697,21 +2887,21 @@ class TwilioCallingService:
         AMD detects if human or voicemail answers, allowing us to:
         - If human: Connect to full AI conversation
         - If machine: Drop pre-recorded voicemail (saves AI costs)
-        
+
         Cost: AMD adds ~$0.02 per call but saves ~$0.14 on voicemail calls
         """
         if not self.is_configured:
             raise HTTPException(status_code=503, detail="Twilio not configured. Add TWILIO credentials to .env")
-        
+
         try:
             # Get external URL for callbacks
             external_url = os.environ.get('EXTERNAL_URL') or callback_url
             external_url = external_url.rstrip("/")
-            
+
             # AMD callback URL - Twilio will call this when it determines human vs machine
             amd_callback_url = f"{external_url}/api/twilio/amd/{call_id}"
             status_callback_url = f"{external_url}/api/twilio/status"
-            
+
             # Use AsyncAmd for better detection without blocking call connection
             # machine_detection options:
             # - "Enable": Basic detection, waits for determination
@@ -2733,9 +2923,9 @@ class TwilioCallingService:
                 record=True,
                 recording_status_callback=f"{external_url}/api/twilio/recording"
             )
-            
+
             logger.info(f"Twilio call with AMD initiated: {call.sid} to {to_number}")
-            
+
             return {
                 "call_sid": call.sid,
                 "status": call.status,
@@ -2743,11 +2933,11 @@ class TwilioCallingService:
                 "from": twilio_phone_number,
                 "amd_enabled": True
             }
-            
+
         except Exception as e:
             logger.error(f"Twilio call with AMD failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
-    
+
     async def make_outbound_call(
         self,
         to_number: str,
@@ -2761,12 +2951,12 @@ class TwilioCallingService:
         """
         if not self.is_configured:
             raise HTTPException(status_code=503, detail="Twilio not configured. Add TWILIO credentials to .env")
-        
+
         try:
             # Generate TwiML directly (more reliable than webhook)
             twiml = self.generate_simple_twiml(lead, campaign)
             status_callback_url = f"{callback_url}/api/twilio/status"
-            
+
             call = twilio_client.calls.create(
                 to=to_number,
                 from_=twilio_phone_number,
@@ -2776,36 +2966,65 @@ class TwilioCallingService:
                 record=True,
                 recording_status_callback=f"{callback_url}/api/twilio/recording"
             )
-            
+
             logger.info(f"Twilio call initiated: {call.sid} to {to_number}")
-            
+
             return {
                 "call_sid": call.sid,
                 "status": call.status,
                 "to": to_number,
                 "from": twilio_phone_number
             }
-            
+
         except Exception as e:
             logger.error(f"Twilio call failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
-    
+
     def generate_voicemail_twiml(self, lead: Dict, campaign: Dict) -> str:
-        """Generate TwiML for voicemail drop - short, professional message"""
+        """Generate TwiML for voicemail drop - short, professional message.
+
+        If the campaign has a `voicemail_audio_url` (cloned-voice MP3 generated
+        by services.vm_cloned_audio on save), we <Play> it. Otherwise we fall
+        back to the Polly.Matthew-Neural <Say> path.
+
+        Variables interpolated in the Polly fallback:
+          {business_name}, {contact_name}, {company_name},
+          {agent_name}, {callback_number}
+        """
         response = VoiceResponse()
-        
+
+        # ---- Preferred path: cloned-voice MP3 via <Play> ----
+        vm_audio_url = (
+            campaign.get("_lead_voicemail_audio_url")
+            or campaign.get("voicemail_audio_url")
+        )
+        if vm_audio_url:
+            try:
+                response.play(vm_audio_url)
+                response.pause(length=1)
+                response.hangup()
+                return str(response)
+            except Exception as _play_err:
+                # Never let a Play failure lose the voicemail — fall through to Say.
+                logger.error(f"[vm_cloned] <Play> emit failed, falling back to Polly: {_play_err}")
+
+        # ---- Fallback path: Polly.Matthew-Neural <Say> ----
+
         company_name = campaign.get('company_name', 'our team')
         business_name = lead.get('business_name', 'your company')
         contact_name = lead.get('contact_name', '')
-        
+        agent_name = campaign.get('_resolved_agent_name') or 'your account rep'
+        callback_number_spoken = campaign.get('_resolved_callback_number_spoken') or ''
+
         # Use custom voicemail message if provided, otherwise use default
         custom_vm = campaign.get('voicemail_message')
-        
+
         if custom_vm:
-            # Use custom message with variable substitution
             message = custom_vm.replace('{business_name}', business_name)
             message = message.replace('{contact_name}', contact_name)
             message = message.replace('{company_name}', company_name)
+            message = message.replace('{agent_name}', agent_name)
+            message = message.replace('{callback_number}', callback_number_spoken)
         else:
             # Default professional voicemail
             greeting = f"Hi {contact_name}, " if contact_name else "Hi, "
@@ -2815,35 +3034,43 @@ class TwilioCallingService:
                 "I'll try you again, or feel free to call us back at your convenience. "
                 "Thank you, have a great day!"
             )
-        
-        # Use best Twilio voice for voicemail
+
+        # Guard: if the interpolated message still contains a literal placeholder,
+        # log loudly and strip it before speaking. Prevents "[your callback number]"
+        # from ever reaching a prospect.
+        if _PLACEHOLDER_LITERAL_RE.search(message):
+            leftover = _PLACEHOLDER_LITERAL_RE.findall(message)
+            logger.error(
+                f"[vm] Unresolved placeholder(s) in voicemail message; "
+                f"campaign={campaign.get('id')} placeholders={leftover}"
+            )
+            message = _PLACEHOLDER_LITERAL_RE.sub("", message)
+            message = re.sub(r"\s{2,}", " ", message)
+
         response.say(message, voice='Polly.Matthew-Neural')
-        
-        # Pause then hang up
         response.pause(length=1)
         response.hangup()
-        
         return str(response)
-    
+
     def generate_human_twiml(self, lead: Dict, campaign: Dict, call_id: str) -> str:
         """Generate TwiML for when human answers - connect to AI conversation"""
         response = VoiceResponse()
-        
+
         company_name = campaign.get('company_name', 'our company')
         business_name = lead.get('business_name', 'your company')
         wait_seconds = campaign.get('response_wait_seconds', 4)  # Configurable wait time
-        
+
         voice = 'Polly.Matthew-Neural'
-        
+
         # Compliance disclosure (REQUIRED by FCC)
         response.say(
             f"Hi, this is an AI assistant calling on behalf of {company_name}. "
             "This is an automated business call.",
             voice=voice
         )
-        
+
         response.pause(length=1)
-        
+
         # Main pitch
         response.say(
             f"I'm reaching out to {business_name} because we help businesses increase their profits "
@@ -2851,10 +3078,10 @@ class TwilioCallingService:
             "Would you be interested in learning more?",
             voice=voice
         )
-        
+
         # Wait for caller response (configurable)
         response.pause(length=wait_seconds)
-        
+
         # Follow up
         response.say(
             "If you'd like to learn more, one of our specialists will follow up with you shortly. "
@@ -2862,31 +3089,31 @@ class TwilioCallingService:
             "Thank you for your time, have a great day!",
             voice=voice
         )
-        
+
         return str(response)
-    
+
     def generate_simple_twiml(self, lead: Dict, campaign: Dict) -> str:
         """Generate simple TwiML for AI call with compliance disclosure"""
         response = VoiceResponse()
-        
+
         company_name = campaign.get('company_name', 'our company')
         business_name = lead.get('business_name', 'your company')
         wait_seconds = campaign.get('response_wait_seconds', 4)  # Configurable wait time
-        
+
         # Use better Twilio neural voice (Polly Neural voices sound much better)
         # Options: Polly.Matthew-Neural, Polly.Joanna-Neural, Polly.Amy-Neural
         voice = 'Polly.Matthew-Neural'  # Professional male voice
-        
+
         # Compliance disclosure (REQUIRED by FCC)
         response.say(
             f"Hi, this is an AI assistant calling on behalf of {company_name}. "
             "This is an automated business call.",
             voice=voice
         )
-        
+
         # Pause for natural flow
         response.pause(length=1)
-        
+
         # Main pitch
         response.say(
             f"I'm reaching out to {business_name} because we help businesses increase their profits "
@@ -2894,10 +3121,10 @@ class TwilioCallingService:
             "Would you be interested in learning more?",
             voice=voice
         )
-        
+
         # Wait for caller response (configurable)
         response.pause(length=wait_seconds)
-        
+
         # Follow up
         response.say(
             "If you'd like to learn more, one of our specialists will follow up with you shortly. "
@@ -2905,51 +3132,51 @@ class TwilioCallingService:
             "Thank you for your time, have a great day!",
             voice=voice
         )
-        
+
         response.hangup()
         return str(response)
-    
+
     async def generate_elevenlabs_twiml(self, lead: Dict, campaign: Dict, base_url: str) -> str:
         """Generate TwiML using ElevenLabs for ultra-realistic voice"""
         if not eleven_client:
             # Fallback to Twilio voice if ElevenLabs not configured
             return self.generate_simple_twiml(lead, campaign)
-        
+
         # This method is kept for future use with hosted audio URLs
         # Currently falls back to neural voice for reliability
         return self.generate_simple_twiml(lead, campaign)
-    
+
     def generate_ai_greeting_twiml(self, lead: Dict, campaign: Dict) -> str:
         """Generate TwiML for AI greeting with compliance disclosure"""
         response = VoiceResponse()
-        
+
         # Compliance disclosure (REQUIRED)
         disclosure = f"Hi, this is an AI assistant calling on behalf of {campaign.get('company_name', 'our company')}. This is an automated business call."
-        
+
         # Add ElevenLabs voice or use Twilio's built-in
         # For now, use Twilio's voice (Alice is most natural)
         response.say(disclosure, voice='Polly.Joanna', language='en-US')
-        
+
         # Greeting
         greeting = f"Am I speaking with someone at {lead.get('business_name', 'your company')}?"
-        
+
         # Use Gather to wait for response
         gather = Gather(
             input='speech dtmf',
             timeout=5,
-            speech_timeout='auto',
+            speech_timeout="auto",
             action='/api/twilio/gather',
             method='POST'
         )
         gather.say(greeting, voice='Polly.Joanna')
         response.append(gather)
-        
+
         # If no response, try again
         response.say("I didn't catch that. Let me try again.", voice='Polly.Joanna')
         response.redirect('/api/twilio/retry')
-        
+
         return str(response)
-    
+
     def generate_dnc_twiml(self) -> str:
         """Generate TwiML for DNC acknowledgment"""
         response = VoiceResponse()
@@ -3020,17 +3247,17 @@ class CRMIntegrationService:
     - GoHighLevel
     - Salesforce
     - HubSpot
-    
+
     Handles OAuth flows, API key auth, token refresh, and lead pushing.
     """
-    
+
     def __init__(self):
         # Generate encryption key from JWT secret for secure credential storage
         jwt_secret = os.environ.get('JWT_SECRET_KEY', 'intentbrain_default_secret_key')
         # Use a consistent key derivation
         key_bytes = jwt_secret.encode()[:32].ljust(32, b'0')
         self.cipher = Fernet(base64.urlsafe_b64encode(key_bytes))
-        
+
         # Provider-specific endpoints
         self.endpoints = {
             CRMProvider.GOHIGHLEVEL: {
@@ -3049,13 +3276,13 @@ class CRMIntegrationService:
                 "token_url": "https://api.hubapi.com/oauth/v1/token",
             },
         }
-        
+
         logger.info("CRM Integration Service initialized")
-    
+
     def encrypt_credential(self, credential: str) -> str:
         """Encrypt a credential for secure storage"""
         return self.cipher.encrypt(credential.encode()).decode()
-    
+
     def decrypt_credential(self, encrypted: str) -> str:
         """Decrypt a stored credential"""
         try:
@@ -3063,17 +3290,17 @@ class CRMIntegrationService:
         except Exception as e:
             logger.error(f"Failed to decrypt credential: {e}")
             return None
-    
-    async def save_credentials(self, user_id: str, provider: CRMProvider, 
+
+    async def save_credentials(self, user_id: str, provider: CRMProvider,
                                access_token: str = None, refresh_token: str = None,
                                api_key: str = None, **kwargs) -> Dict:
         """Save CRM credentials securely to database"""
-        
+
         # Check if credentials already exist
         existing = await db.crm_credentials.find_one(
             {"user_id": user_id, "provider": provider.value}, {"_id": 0}
         )
-        
+
         credential_data = {
             "user_id": user_id,
             "provider": provider.value,
@@ -3081,19 +3308,19 @@ class CRMIntegrationService:
             "is_connected": True,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         if access_token:
             credential_data["encrypted_access_token"] = self.encrypt_credential(access_token)
         if refresh_token:
             credential_data["encrypted_refresh_token"] = self.encrypt_credential(refresh_token)
         if api_key:
             credential_data["encrypted_api_key"] = self.encrypt_credential(api_key)
-        
+
         # Add provider-specific info
         for key in ["instance_url", "portal_id", "location_id", "token_expires_at"]:
             if kwargs.get(key):
                 credential_data[key] = kwargs[key]
-        
+
         if existing:
             await db.crm_credentials.update_one(
                 {"user_id": user_id, "provider": provider.value},
@@ -3104,20 +3331,20 @@ class CRMIntegrationService:
             credential_data["created_at"] = datetime.now(timezone.utc).isoformat()
             credential_data["total_leads_pushed"] = 0
             await db.crm_credentials.insert_one(credential_data)
-        
+
         logger.info(f"CRM credentials saved for user {user_id}, provider {provider.value}")
         return {"status": "connected", "provider": provider.value}
-    
+
     async def get_credentials(self, user_id: str, provider: CRMProvider) -> Optional[Dict]:
         """Get and decrypt CRM credentials for a user"""
         credential = await db.crm_credentials.find_one(
             {"user_id": user_id, "provider": provider.value, "is_active": True},
             {"_id": 0}
         )
-        
+
         if not credential:
             return None
-        
+
         # Decrypt tokens
         result = dict(credential)
         if credential.get("encrypted_access_token"):
@@ -3126,9 +3353,9 @@ class CRMIntegrationService:
             result["refresh_token"] = self.decrypt_credential(credential["encrypted_refresh_token"])
         if credential.get("encrypted_api_key"):
             result["api_key"] = self.decrypt_credential(credential["encrypted_api_key"])
-        
+
         return result
-    
+
     async def disconnect(self, user_id: str, provider: CRMProvider) -> Dict:
         """Disconnect CRM integration"""
         await db.crm_credentials.update_one(
@@ -3141,16 +3368,16 @@ class CRMIntegrationService:
         )
         logger.info(f"CRM disconnected for user {user_id}, provider {provider.value}")
         return {"status": "disconnected", "provider": provider.value}
-    
+
     async def refresh_token(self, user_id: str, provider: CRMProvider) -> Optional[str]:
         """Refresh OAuth access token"""
         credentials = await self.get_credentials(user_id, provider)
         if not credentials or not credentials.get("refresh_token"):
             return None
-        
+
         refresh_token = credentials["refresh_token"]
         endpoints = self.endpoints.get(provider)
-        
+
         # Provider-specific refresh logic
         try:
             async with httpx.AsyncClient() as client:
@@ -3187,49 +3414,49 @@ class CRMIntegrationService:
                         },
                         timeout=30.0
                     )
-                
+
                 if response.status_code == 200:
                     token_data = response.json()
                     new_access_token = token_data.get("access_token")
                     new_refresh_token = token_data.get("refresh_token", refresh_token)
-                    
+
                     # Save new tokens
                     await self.save_credentials(
                         user_id, provider,
                         access_token=new_access_token,
                         refresh_token=new_refresh_token
                     )
-                    
+
                     return new_access_token
                 else:
                     logger.error(f"Token refresh failed: {response.text}")
                     return None
-                    
+
         except Exception as e:
             logger.error(f"Token refresh error for {provider.value}: {e}")
             return None
-    
+
     async def push_lead_to_crm(self, user_id: str, provider: CRMProvider, lead: Dict) -> Dict:
         """Push a qualified lead to the user's CRM"""
         credentials = await self.get_credentials(user_id, provider)
-        
+
         if not credentials:
             return {"status": "error", "message": f"No {provider.value} credentials found"}
-        
+
         access_token = credentials.get("access_token") or credentials.get("api_key")
         if not access_token:
             return {"status": "error", "message": "No valid access token or API key"}
-        
+
         try:
             result = None
-            
+
             if provider == CRMProvider.GOHIGHLEVEL:
                 result = await self._push_to_gohighlevel(access_token, lead, credentials)
             elif provider == CRMProvider.SALESFORCE:
                 result = await self._push_to_salesforce(access_token, lead, credentials)
             elif provider == CRMProvider.HUBSPOT:
                 result = await self._push_to_hubspot(access_token, lead, credentials)
-            
+
             # Log the push
             log_entry = {
                 "id": str(uuid.uuid4()),
@@ -3243,7 +3470,7 @@ class CRMIntegrationService:
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
             await db.crm_lead_push_logs.insert_one(log_entry)
-            
+
             # Update push count
             if result and result.get("success"):
                 await db.crm_credentials.update_one(
@@ -3253,19 +3480,19 @@ class CRMIntegrationService:
                         "$set": {"last_sync_at": datetime.now(timezone.utc).isoformat()}
                     }
                 )
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error pushing lead to {provider.value}: {e}")
             return {"status": "error", "message": str(e), "success": False}
-    
+
     async def _push_to_gohighlevel(self, access_token: str, lead: Dict, credentials: Dict) -> Dict:
         """Push lead to GoHighLevel"""
         location_id = credentials.get("location_id")
         if not location_id:
             return {"success": False, "error": "Location ID not configured"}
-        
+
         try:
             async with httpx.AsyncClient() as client:
                 # Create contact in GHL
@@ -3278,7 +3505,7 @@ class CRMIntegrationService:
                     "source": "IntentBrain.ai",
                     "tags": ["qualified-lead", "ai-cold-call"],
                 }
-                
+
                 response = await client.post(
                     "https://services.leadconnectorhq.com/contacts/",
                     headers={
@@ -3289,7 +3516,7 @@ class CRMIntegrationService:
                     json=payload,
                     timeout=30.0
                 )
-                
+
                 if response.status_code in [200, 201]:
                     data = response.json()
                     return {
@@ -3299,22 +3526,22 @@ class CRMIntegrationService:
                     }
                 else:
                     return {"success": False, "error": f"GHL API error: {response.text}"}
-                    
+
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def _push_to_salesforce(self, access_token: str, lead: Dict, credentials: Dict) -> Dict:
         """Push lead to Salesforce"""
         instance_url = credentials.get("instance_url")
         if not instance_url:
             return {"success": False, "error": "Salesforce instance URL not configured"}
-        
+
         try:
             async with httpx.AsyncClient() as client:
                 # Create Lead in Salesforce
                 contact_name = lead.get("contact_name", "Unknown")
                 name_parts = contact_name.split()
-                
+
                 payload = {
                     "FirstName": name_parts[0] if name_parts else "",
                     "LastName": " ".join(name_parts[1:]) if len(name_parts) > 1 else contact_name,
@@ -3326,7 +3553,7 @@ class CRMIntegrationService:
                     "Rating": "Warm",
                     "Industry": lead.get("industry", ""),
                 }
-                
+
                 response = await client.post(
                     f"{instance_url}/services/data/v59.0/sobjects/Lead",
                     headers={
@@ -3336,7 +3563,7 @@ class CRMIntegrationService:
                     json=payload,
                     timeout=30.0
                 )
-                
+
                 if response.status_code in [200, 201]:
                     data = response.json()
                     return {
@@ -3346,10 +3573,10 @@ class CRMIntegrationService:
                     }
                 else:
                     return {"success": False, "error": f"Salesforce API error: {response.text}"}
-                    
+
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def _push_to_hubspot(self, access_token: str, lead: Dict, credentials: Dict) -> Dict:
         """Push lead to HubSpot"""
         try:
@@ -3357,7 +3584,7 @@ class CRMIntegrationService:
                 # Create contact in HubSpot
                 contact_name = lead.get("contact_name", "Unknown")
                 name_parts = contact_name.split()
-                
+
                 payload = {
                     "properties": {
                         "firstname": name_parts[0] if name_parts else "",
@@ -3369,7 +3596,7 @@ class CRMIntegrationService:
                         "lifecyclestage": "lead"
                     }
                 }
-                
+
                 response = await client.post(
                     "https://api.hubapi.com/crm/v3/objects/contacts",
                     headers={
@@ -3379,7 +3606,7 @@ class CRMIntegrationService:
                     json=payload,
                     timeout=30.0
                 )
-                
+
                 if response.status_code in [200, 201]:
                     data = response.json()
                     return {
@@ -3397,29 +3624,29 @@ class CRMIntegrationService:
                     }
                 else:
                     return {"success": False, "error": f"HubSpot API error: {response.text}"}
-                    
+
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def auto_push_qualified_lead(self, user_id: str, lead: Dict) -> List[Dict]:
         """
         Automatically push a qualified lead to all connected CRMs.
         Called when a lead status changes to 'qualified'.
         """
         results = []
-        
+
         # Get all connected CRMs for this user
         cursor = db.crm_credentials.find(
             {"user_id": user_id, "is_active": True, "is_connected": True},
             {"_id": 0}
         )
-        
+
         async for credential in cursor:
             provider = CRMProvider(credential["provider"])
             result = await self.push_lead_to_crm(user_id, provider, lead)
             result["provider"] = credential["provider"]
             results.append(result)
-        
+
         return results
 
 crm_service = CRMIntegrationService()
@@ -3444,11 +3671,11 @@ async def get_session_from_token(session_token: str) -> Optional[Dict]:
     """Validate session token and return user data"""
     if not session_token:
         return None
-    
+
     session_doc = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
     if not session_doc:
         return None
-    
+
     # Check expiry
     expires_at = session_doc.get("expires_at")
     if isinstance(expires_at, str):
@@ -3457,7 +3684,7 @@ async def get_session_from_token(session_token: str) -> Optional[Dict]:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < datetime.now(timezone.utc):
         return None
-    
+
     # Get user
     user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
     return user_doc
@@ -3465,21 +3692,21 @@ async def get_session_from_token(session_token: str) -> Optional[Dict]:
 async def get_current_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict:
     """Get current user from session - checks cookies first, then Authorization header"""
     session_token = None
-    
+
     # Check cookie first
     session_token = request.cookies.get("session_token")
-    
+
     # Fall back to Authorization header
     if not session_token and credentials:
         session_token = credentials.credentials
-    
+
     if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     user = await get_session_from_token(session_token)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-    
+
     return user
 
 async def get_optional_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[Dict]:
@@ -3675,19 +3902,19 @@ async def get_monthly_usage(user_id: str) -> Dict:
     # Get start of current month
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    
+
     # Count leads created this month
     leads_this_month = await db.leads.count_documents({
         "user_id": user_id,
         "created_at": {"$gte": month_start.isoformat()}
     })
-    
+
     # Count calls made this month
     calls_this_month = await db.calls.count_documents({
         "user_id": user_id,
         "created_at": {"$gte": month_start.isoformat()}
     })
-    
+
     return {
         "leads_used": leads_this_month,
         "calls_used": calls_this_month,
@@ -3701,11 +3928,11 @@ async def check_subscription_limit(user: Dict, resource_type: str, count: int = 
     """
     features = get_tier_features(user)
     usage = await get_monthly_usage(user["user_id"])
-    
+
     if resource_type == "leads":
         limit = features["max_leads_per_month"]
         used = usage["leads_used"]
-        
+
         # BYL plan has no lead discovery (they upload their own)
         if user.get("subscription_tier") == "byl":
             return {
@@ -3714,7 +3941,7 @@ async def check_subscription_limit(user: Dict, resource_type: str, count: int = 
                 "limit": 0,
                 "used": used
             }
-        
+
         if limit != -1 and used + count > limit:
             return {
                 "allowed": False,
@@ -3722,11 +3949,11 @@ async def check_subscription_limit(user: Dict, resource_type: str, count: int = 
                 "limit": limit,
                 "used": used
             }
-    
+
     elif resource_type == "calls":
         limit = features["max_calls_per_month"]
         used = usage["calls_used"]
-        
+
         if limit != -1 and used + count > limit:
             return {
                 "allowed": False,
@@ -3734,11 +3961,11 @@ async def check_subscription_limit(user: Dict, resource_type: str, count: int = 
                 "limit": limit,
                 "used": used
             }
-    
+
     elif resource_type == "campaigns":
         limit = features["max_campaigns"]
         current_count = await db.campaigns.count_documents({"user_id": user["user_id"]})
-        
+
         if limit != -1 and current_count >= limit:
             return {
                 "allowed": False,
@@ -3746,11 +3973,11 @@ async def check_subscription_limit(user: Dict, resource_type: str, count: int = 
                 "limit": limit,
                 "used": current_count
             }
-    
+
     elif resource_type == "agents":
         limit = features["max_agents"]
         current_count = await db.agents.count_documents({"user_id": user["user_id"]})
-        
+
         if limit != -1 and current_count >= limit:
             return {
                 "allowed": False,
@@ -3758,7 +3985,7 @@ async def check_subscription_limit(user: Dict, resource_type: str, count: int = 
                 "limit": limit,
                 "used": current_count
             }
-    
+
     return {"allowed": True, "reason": None, "limit": -1, "used": 0}
 
 async def check_low_balance_and_notify(user: Dict):
@@ -3767,30 +3994,30 @@ async def check_low_balance_and_notify(user: Dict):
     user_settings = await db.settings.find_one({"user_id": user.get("user_id")}, {"_id": 0})
     if user_settings and not user_settings.get("low_balance_alerts_enabled", True):
         return  # Alerts disabled by user
-    
+
     lead_credits = user.get("lead_credits_remaining", 0)
     call_credits = user.get("call_credits_remaining", 0)
-    
+
     # Use user-configurable thresholds or defaults
     LOW_LEAD_THRESHOLD = user_settings.get("low_lead_threshold", 20) if user_settings else 20
     LOW_CALL_THRESHOLD = user_settings.get("low_call_threshold", 20) if user_settings else 20
-    
+
     notifications = []
-    
+
     if lead_credits <= LOW_LEAD_THRESHOLD and lead_credits > 0:
         notifications.append({
             "type": "low_lead_credits",
             "message": f"You have only {lead_credits} lead credits remaining.",
             "threshold": LOW_LEAD_THRESHOLD
         })
-    
+
     if call_credits <= LOW_CALL_THRESHOLD and call_credits > 0:
         notifications.append({
             "type": "low_call_credits",
             "message": f"You have only {call_credits} call credits remaining.",
             "threshold": LOW_CALL_THRESHOLD
         })
-    
+
     # Check if we've already notified recently (within 24 hours)
     if notifications:
         user_id = user["user_id"]
@@ -3798,12 +4025,12 @@ async def check_low_balance_and_notify(user: Dict):
             {"user_id": user_id},
             sort=[("sent_at", -1)]
         )
-        
+
         if last_notification:
             sent_at = datetime.fromisoformat(last_notification["sent_at"].replace("Z", "+00:00"))
             if datetime.now(timezone.utc) - sent_at < timedelta(hours=24):
                 return  # Don't spam notifications
-        
+
         # Send email notification if Resend is configured
         if notification_service.is_configured and user.get("email"):
             try:
@@ -3813,7 +4040,7 @@ async def check_low_balance_and_notify(user: Dict):
                     lead_credits=lead_credits,
                     call_credits=call_credits
                 )
-                
+
                 # Record that we sent notification
                 await db.low_balance_notifications.insert_one({
                     "user_id": user_id,
@@ -3829,7 +4056,7 @@ def get_trial_status(user: Dict) -> Dict:
     Returns trial remaining time, usage stats, and whether trial is expired.
     """
     subscription_tier = user.get("subscription_tier")
-    
+
     # Paid users don't have trial limits
     if subscription_tier and subscription_tier not in [None, "free", "free_trial"]:
         return {
@@ -3843,20 +4070,20 @@ def get_trial_status(user: Dict) -> Dict:
             "usage_percent": 0,
             "can_make_calls": True
         }
-    
+
     # Free trial users
     trial_minutes_total = user.get("trial_minutes_total", 15.0)
     trial_seconds_used = user.get("trial_seconds_used", 0.0)
     trial_expired = user.get("trial_expired", False)
-    
+
     total_seconds = trial_minutes_total * 60
     seconds_remaining = max(0, total_seconds - trial_seconds_used)
     minutes_remaining = seconds_remaining / 60
     usage_percent = min(100, (trial_seconds_used / total_seconds) * 100) if total_seconds > 0 else 100
-    
+
     # Trial is expired if all time used OR explicitly marked expired
     is_expired = trial_expired or seconds_remaining <= 0
-    
+
     return {
         "is_trial": True,
         "trial_active": not is_expired,
@@ -3877,21 +4104,21 @@ async def deduct_trial_time(user_id: str, seconds: float) -> Dict:
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not user:
         return {"error": "User not found"}
-    
+
     trial_status = get_trial_status(user)
-    
+
     # Skip if not a trial user
     if not trial_status["is_trial"]:
         return trial_status
-    
+
     # Skip if trial already expired
     if trial_status["trial_expired"]:
         return trial_status
-    
+
     new_seconds_used = user.get("trial_seconds_used", 0.0) + seconds
     total_seconds = user.get("trial_minutes_total", 15.0) * 60
     is_now_expired = new_seconds_used >= total_seconds
-    
+
     # Update user's trial usage
     await db.users.update_one(
         {"user_id": user_id},
@@ -3901,7 +4128,7 @@ async def deduct_trial_time(user_id: str, seconds: float) -> Dict:
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     # Get updated status
     updated_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     return get_trial_status(updated_user)
@@ -3935,20 +4162,20 @@ async def send_phone_verification(request: PhoneVerificationRequest):
     Checks if phone has already been used for a trial.
     """
     phone = normalize_phone_number(request.phone_number)
-    
+
     # Check if email already registered
     existing_user = await db.users.find_one({"email": request.email}, {"_id": 0})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     # Check if phone number already used for a trial (abuse prevention)
     existing_trial = await db.trial_phone_numbers.find_one({"phone_number": phone})
     if existing_trial:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="This phone number has already been used for a free trial. Please subscribe to continue."
         )
-    
+
     # Check if there's a recent verification request (rate limiting)
     recent_request = await db.phone_verifications.find_one({
         "phone_number": phone,
@@ -3956,13 +4183,13 @@ async def send_phone_verification(request: PhoneVerificationRequest):
     })
     if recent_request:
         raise HTTPException(
-            status_code=429, 
+            status_code=429,
             detail="Please wait 1 minute before requesting another code"
         )
-    
+
     # Generate 6-digit verification code
     verification_code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-    
+
     # Store verification code (expires in 10 minutes)
     await db.phone_verifications.delete_many({"phone_number": phone})  # Remove old codes
     await db.phone_verifications.insert_one({
@@ -3973,7 +4200,7 @@ async def send_phone_verification(request: PhoneVerificationRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
     })
-    
+
     # Send SMS via Twilio
     if twilio_service.is_configured:
         try:
@@ -3989,7 +4216,7 @@ async def send_phone_verification(request: PhoneVerificationRequest):
     else:
         # For development/testing without Twilio
         logger.warning(f"Twilio not configured. Verification code for {phone}: {verification_code}")
-    
+
     return {
         "message": "Verification code sent",
         "phone_number": phone,
@@ -4002,24 +4229,24 @@ async def verify_phone_code(request: PhoneVerificationConfirm):
     Verify the SMS code. Returns a verification token to use during registration.
     """
     phone = normalize_phone_number(request.phone_number)
-    
+
     # Find verification record
     verification = await db.phone_verifications.find_one({"phone_number": phone})
-    
+
     if not verification:
         raise HTTPException(status_code=400, detail="No verification code found. Please request a new one.")
-    
+
     # Check if expired
     expires_at = datetime.fromisoformat(verification["expires_at"].replace("Z", "+00:00"))
     if datetime.now(timezone.utc) > expires_at:
         await db.phone_verifications.delete_one({"phone_number": phone})
         raise HTTPException(status_code=400, detail="Verification code expired. Please request a new one.")
-    
+
     # Check attempts (max 5)
     if verification.get("attempts", 0) >= 5:
         await db.phone_verifications.delete_one({"phone_number": phone})
         raise HTTPException(status_code=400, detail="Too many failed attempts. Please request a new code.")
-    
+
     # Verify code
     if verification["code"] != request.code:
         await db.phone_verifications.update_one(
@@ -4028,10 +4255,10 @@ async def verify_phone_code(request: PhoneVerificationConfirm):
         )
         remaining = 5 - verification.get("attempts", 0) - 1
         raise HTTPException(status_code=400, detail=f"Invalid code. {remaining} attempts remaining.")
-    
+
     # Code is correct - generate verification token
     verification_token = f"phone_verified_{uuid.uuid4().hex}"
-    
+
     # Update verification record with token
     await db.phone_verifications.update_one(
         {"phone_number": phone},
@@ -4041,7 +4268,7 @@ async def verify_phone_code(request: PhoneVerificationConfirm):
             "verified_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     return {
         "message": "Phone verified successfully",
         "phone_number": phone,
@@ -4064,32 +4291,32 @@ async def verify_phone_for_oauth_user(
     """
     phone = normalize_phone_number(request.phone_number)
     user_id = current_user["user_id"]
-    
+
     # Check if user already has verified phone
     if current_user.get("phone_verified"):
         raise HTTPException(status_code=400, detail="Phone already verified")
-    
+
     # Verify the verification token
     verification = await db.phone_verifications.find_one({
         "phone_number": phone,
         "verified": True,
         "verification_token": request.verification_code
     })
-    
+
     if not verification:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Invalid or expired phone verification. Please verify your phone number first."
         )
-    
+
     # Check if phone number already used for a trial
     existing_trial = await db.trial_phone_numbers.find_one({"phone_number": phone})
     if existing_trial:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="This phone number has already been used for a free trial. Please subscribe to continue."
         )
-    
+
     # Update user with verified phone
     await db.users.update_one(
         {"user_id": user_id},
@@ -4099,7 +4326,7 @@ async def verify_phone_for_oauth_user(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     # Record phone number as used for trial
     await db.trial_phone_numbers.insert_one({
         "phone_number": phone,
@@ -4107,10 +4334,10 @@ async def verify_phone_for_oauth_user(
         "email": current_user["email"],
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    
+
     # Clean up verification records
     await db.phone_verifications.delete_many({"phone_number": phone})
-    
+
     return {
         "message": "Phone verified successfully. You can now use your free trial!",
         "phone_number": phone,
@@ -4121,37 +4348,37 @@ async def verify_phone_for_oauth_user(
 async def register(user_data: UserCreate):
     """Register a new user with email/password. Requires verified phone number."""
     phone = normalize_phone_number(user_data.phone_number)
-    
+
     # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     # Verify phone verification code
     verification = await db.phone_verifications.find_one({
         "phone_number": phone,
         "verified": True,
         "verification_token": user_data.verification_code
     })
-    
+
     if not verification:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Invalid or expired phone verification. Please verify your phone number first."
         )
-    
+
     # Check if phone number already used for a trial (double-check for race conditions)
     existing_trial = await db.trial_phone_numbers.find_one({"phone_number": phone})
     if existing_trial:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="This phone number has already been used for a free trial. Please subscribe to continue."
         )
-    
+
     # Hash password and create user
     password_hashed = hash_password(user_data.password)
     user_id = f"user_{uuid.uuid4().hex[:12]}"
-    
+
     user_doc = {
         "user_id": user_id,
         "email": user_data.email,
@@ -4175,9 +4402,9 @@ async def register(user_data: UserCreate):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.users.insert_one(user_doc)
-    
+
     # Record phone number as used for trial (prevent reuse)
     await db.trial_phone_numbers.insert_one({
         "phone_number": phone,
@@ -4185,10 +4412,10 @@ async def register(user_data: UserCreate):
         "email": user_data.email,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    
+
     # Clean up verification records
     await db.phone_verifications.delete_many({"phone_number": phone})
-    
+
     # Create session
     session_token = f"sess_{uuid.uuid4().hex}"
     session_doc = {
@@ -4198,11 +4425,11 @@ async def register(user_data: UserCreate):
         "created_at": datetime.now(timezone.utc)
     }
     await db.user_sessions.insert_one(session_doc)
-    
+
     # Return user without password
     user_doc.pop("password_hash", None)
     user_doc.pop("_id", None)
-    
+
     return {
         "user": user_doc,
         "session_token": session_token
@@ -4214,15 +4441,15 @@ async def login(user_data: UserLogin, response: Response):
     user_doc = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    
+
     # Check password
     if not user_doc.get("password_hash"):
         raise HTTPException(status_code=401, detail="Please use Google OAuth to login")
-    
+
     # Verify password
     if not verify_password(user_data.password, user_doc["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    
+
     # Create session
     session_token = f"sess_{uuid.uuid4().hex}"
     session_doc = {
@@ -4232,7 +4459,7 @@ async def login(user_data: UserLogin, response: Response):
         "created_at": datetime.now(timezone.utc)
     }
     await db.user_sessions.insert_one(session_doc)
-    
+
     # Set cookie
     response.set_cookie(
         key="session_token",
@@ -4243,10 +4470,10 @@ async def login(user_data: UserLogin, response: Response):
         max_age=7 * 24 * 60 * 60,  # 7 days
         path="/"
     )
-    
+
     # Return user without password
     user_doc.pop("password_hash", None)
-    
+
     return {
         "user": user_doc,
         "session_token": session_token
@@ -4257,10 +4484,10 @@ async def exchange_session_id(request: Request, response: Response):
     """Exchange Emergent OAuth session_id for our session token"""
     body = await request.json()
     session_id = body.get("session_id")
-    
+
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id required")
-    
+
     # Call Emergent Auth to validate session_id and get user data
     # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     async with httpx.AsyncClient() as client:
@@ -4270,18 +4497,18 @@ async def exchange_session_id(request: Request, response: Response):
                 headers={"X-Session-ID": session_id},
                 timeout=10.0
             )
-            
+
             if auth_response.status_code != 200:
                 raise HTTPException(status_code=401, detail="Invalid session_id")
-            
+
             auth_data = auth_response.json()
         except httpx.RequestError as e:
             logger.error(f"Failed to validate session with Emergent Auth: {e}")
             raise HTTPException(status_code=500, detail="Authentication service unavailable")
-    
+
     # Check if user exists, create if not
     user_doc = await db.users.find_one({"email": auth_data["email"]}, {"_id": 0})
-    
+
     if not user_doc:
         # Create new user from OAuth - requires phone verification before trial
         user_id = f"user_{uuid.uuid4().hex[:12]}"
@@ -4319,7 +4546,7 @@ async def exchange_session_id(request: Request, response: Response):
             }}
         )
         user_doc = await db.users.find_one({"email": auth_data["email"]}, {"_id": 0})
-    
+
     # Create our own session
     session_token = f"sess_{uuid.uuid4().hex}"
     session_doc = {
@@ -4329,7 +4556,7 @@ async def exchange_session_id(request: Request, response: Response):
         "created_at": datetime.now(timezone.utc)
     }
     await db.user_sessions.insert_one(session_doc)
-    
+
     # Set httpOnly cookie
     response.set_cookie(
         key="session_token",
@@ -4340,9 +4567,9 @@ async def exchange_session_id(request: Request, response: Response):
         max_age=7 * 24 * 60 * 60,  # 7 days
         path="/"
     )
-    
+
     user_doc.pop("password_hash", None)
-    
+
     return {
         "user": user_doc,
         "session_token": session_token
@@ -4352,14 +4579,14 @@ async def exchange_session_id(request: Request, response: Response):
 async def get_me(current_user: Dict = Depends(get_current_user)):
     """Get current authenticated user"""
     current_user.pop("password_hash", None)
-    
+
     # Check for low balance and potentially send notification
     await check_low_balance_and_notify(current_user)
-    
+
     # Add trial status to response
     trial_status = get_trial_status(current_user)
     current_user["trial_status"] = trial_status
-    
+
     return current_user
 
 @api_router.get("/subscription/features")
@@ -4367,10 +4594,10 @@ async def get_subscription_features(current_user: Dict = Depends(get_current_use
     """Get current user's subscription features and limits"""
     features = get_tier_features(current_user)
     usage = await get_monthly_usage(current_user["user_id"])
-    
+
     tier = current_user.get("subscription_tier") or "free_trial"
     plan_info = SUBSCRIPTION_PLANS.get(tier, {})
-    
+
     response = {
         "tier": tier,
         "plan_name": plan_info.get("name", "Free Trial"),
@@ -4387,7 +4614,7 @@ async def get_subscription_features(current_user: Dict = Depends(get_current_use
             "call_credits": current_user.get("call_credits_remaining", 0)
         }
     }
-    
+
     # Add PAYG specific info
     if tier == "payg" or features.get("is_payg"):
         response["payg_info"] = {
@@ -4395,7 +4622,7 @@ async def get_subscription_features(current_user: Dict = Depends(get_current_use
             "cost_per_call": features.get("cost_per_call", 0.50),
             "available_packs": PAYG_CREDIT_PACKS
         }
-    
+
     return response
 
 @api_router.get("/user/trial-status")
@@ -4406,10 +4633,10 @@ async def get_user_trial_status(current_user: Dict = Depends(get_current_user)):
     """
     trial_status = get_trial_status(current_user)
     phone_verified = current_user.get("phone_verified", False)
-    
+
     # Trial users need phone verification before they can make calls
     can_use_trial = phone_verified if trial_status["is_trial"] else True
-    
+
     return {
         **trial_status,
         "user_id": current_user["user_id"],
@@ -4427,7 +4654,7 @@ async def get_user_trial_status(current_user: Dict = Depends(get_current_user)):
 async def get_crm_status(current_user: Dict = Depends(get_current_user)):
     """Get status of all CRM integrations for current user"""
     user_id = current_user["user_id"]
-    
+
     # Check feature access
     features = get_tier_features(current_user)
     if not features.get("crm_integration"):
@@ -4437,14 +4664,14 @@ async def get_crm_status(current_user: Dict = Depends(get_current_user)):
             "upgrade_required": True,
             "connections": []
         }
-    
+
     connections = []
     for provider in CRMProvider:
         credential = await db.crm_credentials.find_one(
             {"user_id": user_id, "provider": provider.value},
             {"_id": 0, "encrypted_access_token": 0, "encrypted_refresh_token": 0, "encrypted_api_key": 0}
         )
-        
+
         connections.append({
             "provider": provider.value,
             "name": provider.value.replace("gohighlevel", "GoHighLevel").replace("salesforce", "Salesforce").replace("hubspot", "HubSpot"),
@@ -4454,7 +4681,7 @@ async def get_crm_status(current_user: Dict = Depends(get_current_user)):
             "last_sync_at": credential.get("last_sync_at") if credential else None,
             "last_error": credential.get("last_error") if credential else None,
         })
-    
+
     return {
         "enabled": True,
         "connections": connections
@@ -4467,7 +4694,7 @@ async def connect_crm(
 ):
     """Connect a CRM using API key authentication"""
     user_id = current_user["user_id"]
-    
+
     # Check feature access
     features = get_tier_features(current_user)
     if not features.get("crm_integration"):
@@ -4475,20 +4702,20 @@ async def connect_crm(
             status_code=403,
             detail="CRM integration requires Professional plan or higher"
         )
-    
+
     provider = request.provider
-    
+
     # For API key authentication (simpler than OAuth)
     if request.api_key:
         # Validate the API key by making a test request
         is_valid = await _validate_crm_api_key(provider, request.api_key, request.instance_url)
-        
+
         if not is_valid["valid"]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid API key: {is_valid.get('error', 'Unknown error')}"
             )
-        
+
         # Save credentials
         await crm_service.save_credentials(
             user_id=user_id,
@@ -4498,13 +4725,13 @@ async def connect_crm(
             location_id=is_valid.get("location_id"),
             portal_id=is_valid.get("portal_id")
         )
-        
+
         return {
             "status": "connected",
             "provider": provider.value,
             "message": f"Successfully connected to {provider.value}"
         }
-    
+
     # For OAuth - return authorization URL
     else:
         auth_url = _get_oauth_authorization_url(provider, user_id)
@@ -4536,7 +4763,7 @@ async def _validate_crm_api_key(provider: CRMProvider, api_key: str, instance_ur
                         "location_id": locations[0].get("id") if locations else None
                     }
                 return {"valid": False, "error": "Invalid GoHighLevel API key"}
-                
+
             elif provider == CRMProvider.SALESFORCE:
                 if not instance_url:
                     return {"valid": False, "error": "Salesforce instance URL required"}
@@ -4548,7 +4775,7 @@ async def _validate_crm_api_key(provider: CRMProvider, api_key: str, instance_ur
                 if response.status_code == 200:
                     return {"valid": True}
                 return {"valid": False, "error": "Invalid Salesforce access token"}
-                
+
             elif provider == CRMProvider.HUBSPOT:
                 response = await client.get(
                     "https://api.hubapi.com/crm/v3/objects/contacts?limit=1",
@@ -4560,7 +4787,7 @@ async def _validate_crm_api_key(provider: CRMProvider, api_key: str, instance_ur
                     portal_id = response.headers.get("X-HubSpot-Portal-Id", "unknown")
                     return {"valid": True, "portal_id": portal_id}
                 return {"valid": False, "error": "Invalid HubSpot API key"}
-                
+
     except Exception as e:
         return {"valid": False, "error": str(e)}
 
@@ -4568,7 +4795,7 @@ def _get_oauth_authorization_url(provider: CRMProvider, user_id: str) -> str:
     """Generate OAuth authorization URL for CRM"""
     external_url = os.environ.get('EXTERNAL_URL', 'http://localhost:8001')
     callback_url = f"{external_url}/api/crm/oauth/callback"
-    
+
     if provider == CRMProvider.GOHIGHLEVEL:
         client_id = os.environ.get("GHL_CLIENT_ID", "")
         return (
@@ -4593,7 +4820,7 @@ def _get_oauth_authorization_url(provider: CRMProvider, user_id: str) -> str:
             f"scope=crm.objects.contacts.read crm.objects.contacts.write&"
             f"state={user_id}_{provider.value}"
         )
-    
+
     return ""
 
 @api_router.get("/crm/oauth/callback")
@@ -4607,13 +4834,13 @@ async def crm_oauth_callback(
         parts = state.rsplit("_", 1)
         if len(parts) != 2:
             raise HTTPException(status_code=400, detail="Invalid state parameter")
-        
+
         user_id, provider_str = parts
         provider = CRMProvider(provider_str)
-        
+
         external_url = os.environ.get('EXTERNAL_URL', 'http://localhost:8001')
         callback_url = f"{external_url}/api/crm/oauth/callback"
-        
+
         # Exchange code for tokens
         async with httpx.AsyncClient() as client:
             if provider == CRMProvider.GOHIGHLEVEL:
@@ -4653,13 +4880,13 @@ async def crm_oauth_callback(
                     },
                     timeout=30.0
                 )
-            
+
             if response.status_code != 200:
                 logger.error(f"OAuth token exchange failed: {response.text}")
                 raise HTTPException(status_code=400, detail="OAuth token exchange failed")
-            
+
             token_data = response.json()
-            
+
             # Save credentials
             await crm_service.save_credentials(
                 user_id=user_id,
@@ -4669,11 +4896,11 @@ async def crm_oauth_callback(
                 instance_url=token_data.get("instance_url"),  # Salesforce
                 location_id=token_data.get("locationId"),  # GHL
             )
-        
+
         # Redirect to frontend success page
         frontend_url = os.environ.get('EXTERNAL_URL', 'http://localhost:3000')
         return RedirectResponse(url=f"{frontend_url}/app?crm_connected={provider.value}")
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -4687,12 +4914,12 @@ async def disconnect_crm(
 ):
     """Disconnect a CRM integration"""
     user_id = current_user["user_id"]
-    
+
     try:
         crm_provider = CRMProvider(provider)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid CRM provider: {provider}")
-    
+
     result = await crm_service.disconnect(user_id, crm_provider)
     return result
 
@@ -4704,7 +4931,7 @@ async def push_lead_to_crm(
 ):
     """Manually push a lead to a specific CRM"""
     user_id = current_user["user_id"]
-    
+
     # Check feature access
     features = get_tier_features(current_user)
     if not features.get("crm_integration"):
@@ -4712,22 +4939,22 @@ async def push_lead_to_crm(
             status_code=403,
             detail="CRM integration requires Professional plan or higher"
         )
-    
+
     try:
         crm_provider = CRMProvider(provider)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid CRM provider: {provider}")
-    
+
     # Get lead
     lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     result = await crm_service.push_lead_to_crm(user_id, crm_provider, lead)
-    
+
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to push lead"))
-    
+
     return result
 
 @api_router.get("/crm/push-logs")
@@ -4738,14 +4965,14 @@ async def get_crm_push_logs(
 ):
     """Get CRM lead push logs"""
     user_id = current_user["user_id"]
-    
+
     query = {"user_id": user_id}
     if provider:
         query["provider"] = provider
-    
+
     cursor = db.crm_lead_push_logs.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
     logs = await cursor.to_list(length=limit)
-    
+
     return {"logs": logs, "count": len(logs)}
 
 # ============== PAY-AS-YOU-GO ENDPOINTS ==============
@@ -4754,7 +4981,7 @@ async def get_crm_push_logs(
 async def get_pricing_plans():
     """Get all available pricing plans (public endpoint)"""
     plans = []
-    
+
     for tier_id, plan in SUBSCRIPTION_PLANS.items():
         plan_data = {
             "id": tier_id,
@@ -4765,17 +4992,17 @@ async def get_pricing_plans():
             "leads_per_month": plan.get("leads_per_month", 0),
             "calls_per_month": plan.get("calls_per_month", 0),
         }
-        
+
         # Add PAYG credit costs
         if tier_id == "payg":
             plan_data["credit_cost"] = plan.get("credit_cost", {})
             plan_data["is_payg"] = True
-        
+
         plans.append(plan_data)
-    
+
     # Sort by price
     plans.sort(key=lambda x: x["price"])
-    
+
     return {
         "plans": plans,
         "payg_packs": PAYG_CREDIT_PACKS,
@@ -4812,11 +5039,11 @@ async def purchase_payg_pack(
     pack = next((p for p in PAYG_CREDIT_PACKS if p["id"] == pack_id), None)
     if not pack:
         raise HTTPException(status_code=404, detail="Credit pack not found")
-    
+
     # Add credits to user account (works for any tier as top-up)
     lead_credits = pack.get("leads", 0)
     call_credits = pack.get("calls", 0)
-    
+
     await db.users.update_one(
         {"user_id": current_user["user_id"]},
         {
@@ -4829,7 +5056,7 @@ async def purchase_payg_pack(
             }
         }
     )
-    
+
     # Log the purchase
     purchase_record = {
         "id": str(uuid.uuid4()),
@@ -4842,10 +5069,10 @@ async def purchase_payg_pack(
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.credit_purchases.insert_one(purchase_record)
-    
+
     # Get updated balance
     user = await db.users.find_one({"user_id": current_user["user_id"]}, {"_id": 0})
-    
+
     return {
         "message": f"Successfully purchased {pack['name']}",
         "pack": pack,
@@ -4866,14 +5093,14 @@ async def upgrade_to_payg(current_user: Dict = Depends(get_current_user)):
     This allows them to purchase credits without a monthly subscription.
     """
     current_tier = current_user.get("subscription_tier")
-    
+
     # Only allow upgrade from free trial (None)
     if current_tier and current_tier not in [None, "free_trial"]:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="You already have an active subscription. Contact support to change plans."
         )
-    
+
     # Update user to PAYG tier
     await db.users.update_one(
         {"user_id": current_user["user_id"]},
@@ -4884,7 +5111,7 @@ async def upgrade_to_payg(current_user: Dict = Depends(get_current_user)):
             }
         }
     )
-    
+
     return {
         "message": "Successfully upgraded to Pay-as-you-go plan",
         "tier": "payg",
@@ -4900,10 +5127,10 @@ async def get_payg_balance(current_user: Dict = Depends(get_current_user)):
         {"user_id": current_user["user_id"]},
         {"_id": 0}
     ).sort("created_at", -1).limit(10).to_list(10)
-    
+
     # Get usage stats
     usage = await get_monthly_usage(current_user["user_id"])
-    
+
     return {
         "balance": {
             "lead_credits": current_user.get("lead_credits_remaining", 0),
@@ -4924,12 +5151,12 @@ async def get_payg_balance(current_user: Dict = Depends(get_current_user)):
 async def logout(request: Request, response: Response):
     """Logout and clear session"""
     session_token = request.cookies.get("session_token")
-    
+
     if session_token:
         await db.user_sessions.delete_one({"session_token": session_token})
-    
+
     response.delete_cookie(key="session_token", path="/")
-    
+
     return {"message": "Logged out successfully"}
 
 # ----- User Keywords Management -----
@@ -4944,7 +5171,7 @@ async def save_user_keywords(
     """Save user's intent keywords (up to 100)"""
     # Validate and clean keywords
     keywords = [kw.strip() for kw in request.keywords[:100] if kw and kw.strip()]
-    
+
     await db.users.update_one(
         {"user_id": current_user["user_id"]},
         {"$set": {
@@ -4952,7 +5179,7 @@ async def save_user_keywords(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     return {
         "message": f"Saved {len(keywords)} keywords",
         "keywords": keywords
@@ -4997,46 +5224,46 @@ async def get_setup_status(current_user: Dict = Depends(get_current_user)):
     Returns completion status for all required setup steps.
     """
     user_id = current_user["user_id"]
-    
+
     # Check Twilio configuration from settings
     settings = await db.settings.find_one({}, {"_id": 0})
     twilio_configured = settings.get("twilio_configured", False) if settings else False
-    
+
     # Also check if Twilio env vars are set
     twilio_account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     twilio_auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
     twilio_phone_number = os.environ.get("TWILIO_PHONE_NUMBER")
     twilio_env_configured = all([twilio_account_sid, twilio_auth_token, twilio_phone_number])
-    
+
     # Check ElevenLabs configuration (BYOK or env)
     elevenlabs_env_configured = bool(os.environ.get("ELEVENLABS_API_KEY"))
     elevenlabs_byok_connected = current_user.get("elevenlabs_connected", False)
     elevenlabs_configured = elevenlabs_env_configured or elevenlabs_byok_connected
-    
+
     # Check if user has any agents with Calendly links
     agents_with_calendly = await db.agents.count_documents({
         "user_id": user_id,
         "calendly_link": {"$exists": True, "$nin": ["", None]}
     })
     calendly_configured = agents_with_calendly > 0
-    
+
     # Check compliance status
     compliance_acknowledged = current_user.get("compliance_acknowledged", False)
-    
+
     # Check if user has any agents
     agent_count = await db.agents.count_documents({"user_id": user_id})
     has_agent = agent_count > 0
-    
+
     # Check if user has any campaigns
     campaign_count = await db.campaigns.count_documents({"user_id": user_id})
     has_campaign = campaign_count > 0
-    
+
     # Check CRM status (optional)
     crm_connected = await db.crm_credentials.count_documents({
         "user_id": user_id,
         "is_connected": True
     }) > 0
-    
+
     # Build steps list
     steps = [
         {
@@ -5082,15 +5309,15 @@ async def get_setup_status(current_user: Dict = Depends(get_current_user)):
             "required": False
         }
     ]
-    
+
     # Calculate completion
     required_steps = [s for s in steps if s["required"]]
     completed_required = [s for s in required_steps if s["completed"]]
     all_required_complete = len(completed_required) == len(required_steps)
-    
+
     total_completed = len([s for s in steps if s["completed"]])
     completion_percentage = round((total_completed / len(steps)) * 100)
-    
+
     return {
         "steps": steps,
         "completion_percentage": completion_percentage,
@@ -5111,7 +5338,7 @@ async def check_can_call(current_user: Dict = Depends(get_current_user)):
     return {
         "can_make_calls": setup_status["all_required_complete"],
         "missing_steps": [
-            s["title"] for s in setup_status["steps"] 
+            s["title"] for s in setup_status["steps"]
             if s["required"] and not s["completed"]
         ]
     }
@@ -5127,7 +5354,7 @@ async def help_chat(
     current_user: Dict = Depends(get_current_user)
 ):
     """AI-powered help chat that guides users through the system"""
-    
+
     system_prompt = """You are IntentBrain.ai's helpful assistant. You guide sales agents through using the AI cold calling platform.
 
 PLATFORM OVERVIEW:
@@ -5253,7 +5480,7 @@ Be helpful, concise, and guide users step-by-step. If they seem stuck, ask what 
             session_id=f"help-{current_user['user_id']}-{uuid.uuid4().hex[:8]}",
             system_message=system_prompt
         ).with_model("openai", "gpt-5.2")
-        
+
         # Add context about user's current state
         user_context = f"""
 User Info:
@@ -5267,15 +5494,15 @@ User Info:
 
 User's question: {request.message}
 """
-        
+
         user_message = UserMessage(text=user_context)
         response = await chat.send_message(user_message)
-        
+
         return {
             "response": response,
             "suggested_actions": []  # Can add contextual action buttons
         }
-        
+
     except Exception as e:
         logger.error(f"Help chat error: {e}")
         return {
@@ -5289,20 +5516,20 @@ async def get_dashboard_stats(current_user: Dict = Depends(get_current_user)):
     """Get dashboard stats - filtered by user_id for multi-tenancy"""
     user_id = current_user["user_id"]
     user_filter = {"user_id": user_id}
-    
+
     total_leads = await db.leads.count_documents(user_filter)
     qualified_leads = await db.leads.count_documents({"user_id": user_id, "status": LeadStatus.QUALIFIED})
     booked_leads = await db.leads.count_documents({"user_id": user_id, "status": LeadStatus.BOOKED})
     total_calls = await db.calls.count_documents(user_filter)
     active_campaigns = await db.campaigns.count_documents({"user_id": user_id, "status": CampaignStatus.ACTIVE})
     total_agents = await db.agents.count_documents({"user_id": user_id, "is_active": True})
-    
+
     # Get recent calls for this user only
     recent_calls = await db.calls.find(
         user_filter,
         {"_id": 0}
     ).sort("created_at", -1).limit(5).to_list(5)
-    
+
     return {
         "total_leads": total_leads,
         "qualified_leads": qualified_leads,
@@ -5345,7 +5572,7 @@ async def preview_lead_examples(
     custom_keywords = None
     if request.custom_keywords:
         custom_keywords = [kw.strip() for kw in request.custom_keywords[:100] if kw and kw.strip()]
-    
+
     # Generate preview leads (only 3, and don't save them)
     preview_leads = await ai_service.gpt_intent_search(
         query=request.search_query,
@@ -5355,7 +5582,7 @@ async def preview_lead_examples(
         custom_keywords=custom_keywords,
         exclude_industries=request.exclude_industries
     )
-    
+
     return {
         "preview": True,
         "count": len(preview_leads),
@@ -5368,13 +5595,13 @@ async def preview_lead_examples(
 async def discover_leads(request: LeadDiscoveryRequest, current_user: Dict = Depends(get_current_user)):
     """Discover new leads using AI-powered research (legacy endpoint)"""
     user_id = current_user["user_id"]
-    
+
     discovered = await ai_service.gpt_intent_search(
         query=request.search_query,
         location=request.location,
         max_results=request.max_results
     )
-    
+
     created_leads = []
     for biz in discovered:
         lead_data = Lead(
@@ -5386,7 +5613,7 @@ async def discover_leads(request: LeadDiscoveryRequest, current_user: Dict = Dep
         )
         await db.leads.insert_one(lead_data.model_dump())
         created_leads.append(lead_data)
-    
+
     return {
         "discovered": len(created_leads),
         "leads": [lead.model_dump() for lead in created_leads]
@@ -5401,32 +5628,32 @@ async def gpt_intent_search(
     user_id = current_user["user_id"]
     leads_requested = request.max_results
     leads_remaining = current_user.get("lead_credits_remaining", 0)
-    
+
     # Check subscription tier limits
     limit_check = await check_subscription_limit(current_user, "leads", leads_requested)
     if not limit_check["allowed"]:
         raise HTTPException(status_code=403, detail=limit_check["reason"])
-    
+
     # Validate custom keywords based on tier
     features = get_tier_features(current_user)
     max_keywords = features.get("max_custom_keywords", 10)
-    
+
     custom_keywords = None
     if request.custom_keywords:
         custom_keywords = [kw.strip() for kw in request.custom_keywords[:max_keywords] if kw and kw.strip()]
         if len(request.custom_keywords) > max_keywords:
             raise HTTPException(
-                status_code=403, 
+                status_code=403,
                 detail=f"Your plan allows up to {max_keywords} custom keywords. Upgrade to use more."
             )
-    
+
     # Check if user has enough credits
     if leads_remaining < leads_requested:
         raise HTTPException(
             status_code=402,
             detail=f"Insufficient lead credits. You have {leads_remaining} credits but requested {leads_requested} leads. Please purchase more credits."
         )
-    
+
     discovered = await ai_service.gpt_intent_search(
         query=request.search_query,
         industry=request.industry,
@@ -5435,13 +5662,13 @@ async def gpt_intent_search(
         custom_keywords=custom_keywords,
         exclude_industries=request.exclude_industries
     )
-    
+
     created_leads = []
     skipped_duplicates = 0
     for biz in discovered:
         phone = (biz.get("phone") or "").strip()
         biz_name = biz.get("name", "Unknown Business")
-        
+
         # Dedupe: skip if this user already has a lead with same phone OR same business name
         if phone or biz_name:
             or_conditions = []
@@ -5455,7 +5682,7 @@ async def gpt_intent_search(
                 if existing:
                     skipped_duplicates += 1
                     continue
-        
+
         lead_data = Lead(
             business_name=biz_name,
             phone=phone,
@@ -5469,9 +5696,9 @@ async def gpt_intent_search(
         lead_dict["user_id"] = user_id
         await db.leads.insert_one(lead_dict)
         created_leads.append(lead_dict)
-    
+
     leads_discovered = len(created_leads)
-    
+
     # Deduct credits for leads actually discovered
     if leads_discovered > 0:
         new_balance = leads_remaining - leads_discovered
@@ -5482,7 +5709,7 @@ async def gpt_intent_search(
                 "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
             }
         )
-        
+
         # Log usage event for analytics
         await log_usage_event(
             user_id=user_id,
@@ -5490,7 +5717,7 @@ async def gpt_intent_search(
             amount=leads_discovered,
             credits_after=new_balance
         )
-    
+
     return {
         "discovered": leads_discovered,
         "skipped_duplicates": skipped_duplicates,
@@ -5516,7 +5743,7 @@ async def backfill_orphan_leads(
     """
     user_id = current_user["user_id"]
     cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    
+
     adopt_query = {
         "$or": [{"user_id": {"$exists": False}}, {"user_id": None}],
         "source": {"$in": ["gpt_intent_search", "ai_discovery"]},
@@ -5526,7 +5753,7 @@ async def backfill_orphan_leads(
         adopt_query,
         {"$set": {"user_id": user_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     campaign_assigned = 0
     if request.campaign_id:
         campaign = await db.campaigns.find_one(
@@ -5534,7 +5761,7 @@ async def backfill_orphan_leads(
         )
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         campaign_query = {
             "user_id": user_id,
             "$or": [{"campaign_id": {"$exists": False}}, {"campaign_id": None}, {"campaign_id": ""}]
@@ -5544,9 +5771,9 @@ async def backfill_orphan_leads(
             {"$set": {"campaign_id": request.campaign_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
         campaign_assigned = campaign_result.modified_count
-    
+
     total_user_leads = await db.leads.count_documents({"user_id": user_id})
-    
+
     return {
         "success": True,
         "adopted_orphan_leads": adopt_result.modified_count,
@@ -5564,34 +5791,34 @@ async def deduplicate_leads(current_user: Dict = Depends(get_current_user)):
     Preserves any lead that has been actioned (status != 'new').
     """
     user_id = current_user["user_id"]
-    
+
     leads = await db.leads.find(
         {"user_id": user_id}, {"_id": 0}
     ).sort("created_at", 1).to_list(50000)
-    
+
     seen_phones = {}
     seen_names = {}
     to_delete = []
-    
+
     for lead in leads:
         lead_id = lead.get("id")
         phone = (lead.get("phone") or "").strip()
         name = (lead.get("business_name") or "").strip().lower()
         status = lead.get("status", "new")
-        
+
         if status != "new":
             if phone:
                 seen_phones[phone] = lead_id
             if name:
                 seen_names[name] = lead_id
             continue
-        
+
         is_dup = False
         if phone and phone in seen_phones:
             is_dup = True
         elif name and name in seen_names and name != "unknown business":
             is_dup = True
-        
+
         if is_dup:
             to_delete.append(lead_id)
         else:
@@ -5599,7 +5826,7 @@ async def deduplicate_leads(current_user: Dict = Depends(get_current_user)):
                 seen_phones[phone] = lead_id
             if name:
                 seen_names[name] = lead_id
-    
+
     deleted_count = 0
     if to_delete:
         result = await db.leads.delete_many({
@@ -5608,9 +5835,9 @@ async def deduplicate_leads(current_user: Dict = Depends(get_current_user)):
             "status": "new"
         })
         deleted_count = result.deleted_count
-    
+
     remaining = await db.leads.count_documents({"user_id": user_id})
-    
+
     return {
         "success": True,
         "duplicates_removed": deleted_count,
@@ -5631,13 +5858,13 @@ async def get_leads(
     query = {"user_id": current_user["user_id"]}
     if status:
         query["status"] = status
-    
+
     leads = await db.leads.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
     return leads
 
 @api_router.get("/leads/export-csv")
 async def export_leads_csv(
-    status: Optional[LeadStatus] = None, 
+    status: Optional[LeadStatus] = None,
     line_type: Optional[str] = Query(default=None, description="Filter by line type: mobile, landline, voip"),
     current_user: Dict = Depends(get_current_user)
 ):
@@ -5651,27 +5878,27 @@ async def export_leads_csv(
     features = get_tier_features(current_user)
     if not features.get("csv_export"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="CSV export is not available on your plan. Upgrade to Starter or higher."
         )
-    
+
     query = {"user_id": current_user["user_id"]}
     if status:
         query["status"] = status
     if line_type:
         query["line_type"] = line_type
-    
+
     leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
-    
+
     if not leads:
         raise HTTPException(status_code=404, detail="No leads found matching filters")
-    
+
     # Create CSV in memory
     output = io.StringIO()
     fieldnames = ['business_name', 'contact_name', 'phone', 'email', 'status', 'line_type', 'carrier', 'source', 'intent_signals', 'qualification_score', 'created_at']
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
-    
+
     for lead in leads:
         writer.writerow({
             'business_name': lead.get('business_name', ''),
@@ -5686,9 +5913,9 @@ async def export_leads_csv(
             'qualification_score': lead.get('qualification_score', ''),
             'created_at': lead.get('created_at', '')
         })
-    
+
     output.seek(0)
-    
+
     # Generate filename based on filters
     filename_parts = ["leads"]
     if line_type:
@@ -5697,7 +5924,7 @@ async def export_leads_csv(
         filename_parts.append(status)
     filename_parts.append(datetime.now().strftime('%Y%m%d_%H%M%S'))
     filename = "_".join(filename_parts) + ".csv"
-    
+
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -5717,25 +5944,25 @@ async def export_mobile_leads_csv(
     features = get_tier_features(current_user)
     if not features.get("csv_export"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="CSV export is not available on your plan. Upgrade to Starter or higher."
         )
-    
+
     query = {"user_id": current_user["user_id"], "line_type": "mobile"}
     if status:
         query["status"] = status
-    
+
     leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
-    
+
     if not leads:
         raise HTTPException(status_code=404, detail="No mobile leads found")
-    
+
     # Create CSV optimized for SMS/mobile campaigns
     output = io.StringIO()
     fieldnames = ['phone', 'business_name', 'contact_name', 'email', 'carrier', 'status', 'qualification_score']
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
-    
+
     for lead in leads:
         writer.writerow({
             'phone': lead.get('phone', ''),
@@ -5746,9 +5973,9 @@ async def export_mobile_leads_csv(
             'status': lead.get('status', ''),
             'qualification_score': lead.get('qualification_score', '')
         })
-    
+
     output.seek(0)
-    
+
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -5763,7 +5990,7 @@ async def get_lead_phone_stats(
     Get statistics about lead phone types (mobile vs landline vs VoIP).
     """
     user_id = current_user["user_id"]
-    
+
     # Count by line type
     pipeline = [
         {"$match": {"user_id": user_id}},
@@ -5772,9 +5999,9 @@ async def get_lead_phone_stats(
             "count": {"$sum": 1}
         }}
     ]
-    
+
     results = await db.leads.aggregate(pipeline).to_list(100)
-    
+
     stats = {
         "mobile": 0,
         "landline": 0,
@@ -5782,7 +6009,7 @@ async def get_lead_phone_stats(
         "unknown": 0,
         "total": 0
     }
-    
+
     for r in results:
         line_type = r["_id"] or "unknown"
         if line_type in stats:
@@ -5790,7 +6017,7 @@ async def get_lead_phone_stats(
         else:
             stats["unknown"] += r["count"]
         stats["total"] += r["count"]
-    
+
     return {
         "stats": stats,
         "percentages": {
@@ -5832,18 +6059,18 @@ async def verify_lead_phone(
     Uses Twilio Lookup to determine phone type and carrier.
     """
     user_id = current_user["user_id"]
-    
+
     lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     phone = lead.get("phone")
     if not phone:
         raise HTTPException(status_code=400, detail="Lead has no phone number")
-    
+
     # Perform verification
     verification = await compliance_service.verify_number(phone)
-    
+
     # Update lead with phone info
     update_data = {
         "line_type": verification.get("line_type", "unknown"),
@@ -5852,12 +6079,12 @@ async def verify_lead_phone(
         "dial_priority": verification.get("dial_priority", 50),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.leads.update_one(
         {"id": lead_id, "user_id": user_id},
         {"$set": update_data}
     )
-    
+
     return {
         "lead_id": lead_id,
         "phone": phone,
@@ -5886,30 +6113,30 @@ async def verify_leads_phones_bulk(
     Bulk verify phone numbers for multiple leads.
     - lead_ids: List of specific lead IDs to verify
     - verify_all_unverified: If true, verify all leads that haven't been verified yet
-    
+
     Note: Uses Twilio Lookup which has per-lookup costs.
     """
     user_id = current_user["user_id"]
     lead_ids = request.lead_ids
     verify_all_unverified = request.verify_all_unverified
-    
+
     query = {"user_id": user_id}
-    
+
     if lead_ids:
         query["id"] = {"$in": lead_ids}
     elif verify_all_unverified:
         query["phone_verified"] = {"$ne": True}
     else:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Provide lead_ids or set verify_all_unverified=true"
         )
-    
+
     leads = await db.leads.find(query, {"_id": 0}).to_list(500)  # Limit to 500 at a time
-    
+
     if not leads:
         return {"message": "No leads to verify", "verified": 0}
-    
+
     results = {
         "total": len(leads),
         "verified": 0,
@@ -5919,16 +6146,16 @@ async def verify_leads_phones_bulk(
         "unknown": 0,
         "failed": 0
     }
-    
+
     for lead in leads:
         phone = lead.get("phone")
         if not phone:
             results["failed"] += 1
             continue
-        
+
         try:
             verification = await compliance_service.verify_number(phone)
-            
+
             line_type = verification.get("line_type", "unknown")
             update_data = {
                 "line_type": line_type,
@@ -5937,12 +6164,12 @@ async def verify_leads_phones_bulk(
                 "dial_priority": verification.get("dial_priority", 50),
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
-            
+
             await db.leads.update_one(
                 {"id": lead["id"], "user_id": user_id},
                 {"$set": update_data}
             )
-            
+
             results["verified"] += 1
             if line_type in ["mobile", "cellphone", "wireless"]:
                 results["mobile"] += 1
@@ -5952,11 +6179,11 @@ async def verify_leads_phones_bulk(
                 results["voip"] += 1
             else:
                 results["unknown"] += 1
-                
+
         except Exception as e:
             logger.error(f"Failed to verify phone for lead {lead['id']}: {e}")
             results["failed"] += 1
-    
+
     return {
         "message": f"Verified {results['verified']} of {results['total']} leads",
         "results": results,
@@ -5965,22 +6192,22 @@ async def verify_leads_phones_bulk(
 
 @api_router.put("/leads/{lead_id}", response_model=Lead)
 async def update_lead(
-    lead_id: str, 
-    updates: Dict[str, Any], 
+    lead_id: str,
+    updates: Dict[str, Any],
     background_tasks: BackgroundTasks,
     current_user: Dict = Depends(get_current_user)
 ):
     """Update a lead (must belong to current user)"""
     user_id = current_user["user_id"]
-    
+
     # Get current lead to check status change
     current_lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
     if not current_lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     old_status = current_lead.get("status")
     new_status = updates.get("status")
-    
+
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.leads.update_one(
         {"id": lead_id, "user_id": user_id},
@@ -5988,9 +6215,9 @@ async def update_lead(
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
-    
+
     # Auto-push to CRM when lead becomes qualified
     if new_status == "qualified" and old_status != "qualified":
         features = get_tier_features(current_user)
@@ -6002,7 +6229,7 @@ async def update_lead(
                 lead
             )
             logger.info(f"Queued CRM push for qualified lead {lead_id}")
-    
+
     return lead
 
 @api_router.delete("/leads/{lead_id}")
@@ -6021,39 +6248,39 @@ async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = De
     features = get_tier_features(current_user)
     if not features.get("csv_upload"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="CSV upload is not available on your plan. Upgrade to Professional or Bring Your List plan."
         )
-    
+
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be a CSV")
-    
+
     user_id = current_user["user_id"]
-    
+
     try:
         content = await file.read()
         decoded = content.decode('utf-8-sig').strip()
         reader = csv.DictReader(io.StringIO(decoded))
-        
+
         created_leads = []
         errors = []
-        
+
         for idx, row in enumerate(reader):
             try:
                 # Strip whitespace from all keys and values, normalize to lowercase
                 row = {k.strip().lower(): (v.strip() if v else v) for k, v in row.items() if k}
-                
+
                 business_name = row.get('business_name') or row.get('company_name') or row.get('company name') or row.get('company') or row.get('name') or row.get('business name')
                 phone = row.get('phone') or row.get('phone_number') or row.get('phone number') or row.get('telephone') or row.get('tel') or row.get('mobile')
                 email = row.get('email') or row.get('email_address') or row.get('e-mail')
                 contact_name = row.get('contact_name') or row.get('contact name') or row.get('contact') or row.get('first name') or row.get('full name')
                 industry = row.get('industry')
                 company_size = row.get('company_size') or row.get('size')
-                
+
                 if not business_name or not phone:
                     errors.append(f"Row {idx + 1}: Missing business_name or phone")
                     continue
-                
+
                 lead_data = Lead(
                     user_id=user_id,  # Assign to current user
                     business_name=business_name,
@@ -6067,17 +6294,17 @@ async def upload_leads_csv(file: UploadFile = File(...), current_user: Dict = De
                 )
                 await db.leads.insert_one(lead_data.model_dump())
                 created_leads.append(lead_data)
-                
+
             except Exception as e:
                 errors.append(f"Row {idx + 1}: {str(e)}")
-        
+
         return {
             "uploaded": len(created_leads),
             "errors": len(errors),
             "error_details": errors[:10] if errors else [],
             "message": f"Successfully uploaded {len(created_leads)} leads"
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
 
@@ -6100,7 +6327,7 @@ async def verify_phone_number(
     Cost: $0.005 per lookup (cached for 30 days).
     """
     verification = await compliance_service.verify_number(request.phone_number)
-    
+
     return {
         "phone_number": verification.get("phone_number"),
         "is_valid": verification.get("is_valid", False),
@@ -6118,10 +6345,10 @@ def _get_dial_recommendation(verification: Dict) -> str:
     """Generate human-readable dial recommendation based on verification"""
     if not verification.get("is_valid", True):
         return "DO NOT CALL - Invalid number"
-    
+
     priority = verification.get("dial_priority", 50)
     line_type = verification.get("line_type", "unknown")
-    
+
     if priority >= 80:
         return f"HIGH PRIORITY - Mobile number ({line_type}) - expect 70-80% pickup rate"
     elif priority >= 50:
@@ -6144,17 +6371,17 @@ async def verify_email_address(
     issues = []
     is_valid = True
     quality_score = 100
-    
+
     # 1. Basic syntax check
     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     if not re.match(email_pattern, email):
         is_valid = False
         issues.append("Invalid email syntax")
         quality_score -= 50
-    
+
     # 2. Extract domain
     domain = email.split('@')[-1] if '@' in email else None
-    
+
     if domain:
         # 3. Check for disposable/temp email domains
         disposable_domains = [
@@ -6165,13 +6392,13 @@ async def verify_email_address(
         if domain in disposable_domains:
             issues.append("Disposable/temporary email domain detected")
             quality_score -= 30
-        
+
         # 4. Check for catch-all suspicious domains
         catch_all_patterns = ['noreply', 'no-reply', 'donotreply', 'test', 'example']
         if any(pattern in email.split('@')[0] for pattern in catch_all_patterns):
             issues.append("Email appears to be a no-reply or test address")
             quality_score -= 20
-        
+
         # 5. Check for common typos in major domains
         typo_corrections = {
             'gmial.com': 'gmail.com', 'gmal.com': 'gmail.com', 'gamil.com': 'gmail.com',
@@ -6182,14 +6409,14 @@ async def verify_email_address(
         if domain in typo_corrections:
             issues.append(f"Possible typo - did you mean {typo_corrections[domain]}?")
             quality_score -= 15
-        
+
         # 6. Check for business vs personal domain
         personal_domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com']
         is_business_email = domain not in personal_domains
-        
+
         if is_business_email:
             quality_score += 10  # Business emails are preferred for B2B
-    
+
     return {
         "email": email,
         "is_valid": is_valid and len(issues) == 0,
@@ -6225,9 +6452,9 @@ async def verify_lead_contact_info(
     lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     results = {"lead_id": lead_id}
-    
+
     # Verify phone
     if lead.get("phone"):
         phone_verification = await compliance_service.verify_number(lead["phone"])
@@ -6238,7 +6465,7 @@ async def verify_lead_contact_info(
             "dial_priority": phone_verification.get("dial_priority"),
             "recommendation": _get_dial_recommendation(phone_verification)
         }
-    
+
     # Verify email (using the same logic as the endpoint)
     if lead.get("email"):
         email = lead["email"].strip().lower()
@@ -6246,13 +6473,13 @@ async def verify_lead_contact_info(
         is_valid_email = bool(re.match(email_pattern, email))
         domain = email.split('@')[-1] if '@' in email else None
         personal_domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com']
-        
+
         results["email"] = {
             "address": email,
             "is_valid": is_valid_email,
             "is_business_email": domain not in personal_domains if domain else False
         }
-    
+
     # Calculate overall lead quality score
     lead_quality = 50  # Base score
     if results.get("phone", {}).get("is_valid"):
@@ -6261,9 +6488,9 @@ async def verify_lead_contact_info(
         lead_quality += 20
         if results["email"].get("is_business_email"):
             lead_quality += 10
-    
+
     results["lead_quality_score"] = min(100, int(lead_quality))
-    
+
     # Update lead with verification data (with user_id filter for safety)
     await db.leads.update_one(
         {"id": lead_id, "user_id": current_user["user_id"]},
@@ -6273,7 +6500,7 @@ async def verify_lead_contact_info(
             "verified_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     return results
 
 # ----- ICP Scoring Endpoints -----
@@ -6295,40 +6522,40 @@ async def score_lead_icp(
     """
     Score a single lead based on ICP (Ideal Customer Profile).
     Returns 0-100 score with breakdown by category.
-    
+
     Scoring categories:
     - Industry Fit (0-25)
     - Company Size Fit (0-25)
     - Intent Strength (0-25)
     - Contact Quality (0-25)
-    
+
     use_ai=true for more accurate but costs ~$0.002/lead
     """
     # Check feature access
     features = get_tier_features(current_user)
     if not features.get("icp_scoring"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="ICP scoring is not available on your plan. Upgrade to Starter or higher."
         )
-    
+
     # AI scoring requires Professional+
     if use_ai and not features.get("ai_icp_scoring"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="AI-powered ICP scoring requires Professional or higher plan."
         )
-    
+
     # Multi-tenancy: Only access leads belonging to current user
     lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     if use_ai:
         score_result = await icp_service.score_lead_with_ai(lead)
     else:
         score_result = await icp_service.score_lead(lead)
-    
+
     # Update lead with ICP score
     await db.leads.update_one(
         {"id": lead_id},
@@ -6338,7 +6565,7 @@ async def score_lead_icp(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     return {
         "lead_id": lead_id,
         "business_name": lead.get("business_name"),
@@ -6358,37 +6585,37 @@ async def batch_score_leads_icp(
     features = get_tier_features(current_user)
     if not features.get("icp_scoring"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="ICP scoring is not available on your plan. Upgrade to Starter or higher."
         )
-    
+
     # AI scoring requires Professional+
     if request.use_ai and not features.get("ai_icp_scoring"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="AI-powered ICP scoring requires Professional or higher plan."
         )
-    
+
     if len(request.lead_ids) > 100:
         raise HTTPException(status_code=400, detail="Maximum 100 leads per batch")
-    
+
     results = await icp_service.batch_score_leads(
         request.lead_ids,
         request.icp_config,
         request.use_ai
     )
-    
+
     # Summary stats
     total = len(results)
     tier_counts = {"A": 0, "B": 0, "C": 0, "D": 0}
     avg_score = 0
-    
+
     for r in results:
         tier_counts[r.get("tier", "D")] += 1
         avg_score += r.get("total_score", 0)
-    
+
     avg_score = avg_score / total if total > 0 else 0
-    
+
     return {
         "scored_count": total,
         "average_score": round(avg_score, 1),
@@ -6410,7 +6637,7 @@ async def get_leads_by_icp_score(
     # Multi-tenancy: Include user_id in all queries
     user_id = current_user["user_id"]
     query = {"user_id": user_id, "icp_score": {"$exists": True, "$gte": min_score}}
-    
+
     if tier:
         tier_ranges = {
             "A": {"$gte": 80},
@@ -6420,9 +6647,9 @@ async def get_leads_by_icp_score(
         }
         if tier.upper() in tier_ranges:
             query["icp_score"] = tier_ranges[tier.upper()]
-    
+
     leads = await db.leads.find(query, {"_id": 0}).sort("icp_score", -1).limit(limit).to_list(limit)
-    
+
     return {
         "count": len(leads),
         "filter": {"min_score": min_score, "tier": tier},
@@ -6443,7 +6670,7 @@ async def score_campaign_leads(
     campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # Get leads assigned to this campaign (also verify user ownership)
     user_id = current_user["user_id"]
     leads = await db.leads.find(
@@ -6453,30 +6680,30 @@ async def score_campaign_leads(
         ]},
         {"_id": 0, "id": 1}
     ).to_list(500)
-    
+
     if not leads:
         return {"message": "No leads assigned to this campaign", "scored_count": 0}
-    
+
     lead_ids = [lead["id"] for lead in leads]
     icp_config = campaign.get("icp_config")
-    
+
     results = await icp_service.batch_score_leads(lead_ids, icp_config, use_ai)
-    
+
     # Calculate dial priority combining ICP score and phone verification
     for result in results:
         lead = await db.leads.find_one({"id": result["lead_id"], "user_id": user_id}, {"_id": 0})
         if lead:
             phone_priority = lead.get("verification", {}).get("dial_priority", 50)
             icp_score = result["total_score"]
-            
+
             # Combined priority: 60% ICP + 40% phone quality
             dial_priority = int(icp_score * 0.6 + phone_priority * 0.4)
-            
+
             await db.leads.update_one(
                 {"id": result["lead_id"], "user_id": user_id},
                 {"$set": {"dial_priority": dial_priority}}
             )
-    
+
     return {
         "campaign_id": campaign_id,
         "scored_count": len(results),
@@ -6506,7 +6733,7 @@ async def create_agent(agent: AgentCreate, current_user: Dict = Depends(get_curr
     limit_check = await check_subscription_limit(current_user, "agents")
     if not limit_check["allowed"]:
         raise HTTPException(status_code=403, detail=limit_check["reason"])
-    
+
     agent_obj = Agent(**agent.model_dump(), user_id=current_user["user_id"])
     await db.agents.insert_one(agent_obj.model_dump())
     return agent_obj
@@ -6520,7 +6747,7 @@ async def update_agent(agent_id: str, updates: Dict[str, Any], current_user: Dic
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     agent = await db.agents.find_one({"id": agent_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return agent
 
@@ -6575,37 +6802,37 @@ async def clone_voice(
     """
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs not configured. Add ELEVENLABS_API_KEY to .env")
-    
+
     if len(files) < 1 or len(files) > 5:
         raise HTTPException(status_code=400, detail="Please upload 1-5 audio files")
-    
+
     # Check subscription tier (voice cloning is a premium feature)
     tier = current_user.get("subscription_tier")
     if tier not in ["pro", "unlimited", "enterprise"]:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Voice cloning is available on Pro and higher plans. Please upgrade to use this feature."
         )
-    
+
     # Check if user already has max cloned voices (limit to 5)
     existing_count = await db.cloned_voices.count_documents({"user_id": current_user["user_id"]})
     if existing_count >= 5:
         raise HTTPException(status_code=400, detail="Maximum 5 cloned voices allowed. Please delete one before creating a new one.")
-    
+
     try:
         # Prepare files for ElevenLabs
         file_tuples = []
         for file in files:
             content = await file.read()
             file_tuples.append((file.filename, content))
-        
+
         # Clone voice using ElevenLabs IVC
-        voice = eleven_client.clone(
+        voice = eleven_client.voices.ivc.create(
             name=f"{voice_name}_{current_user['user_id'][:8]}",
             description=description or f"Cloned voice for {current_user['email']}",
             files=file_tuples
         )
-        
+
         # Save to database
         cloned_voice_doc = {
             "id": str(uuid.uuid4()),
@@ -6616,16 +6843,16 @@ async def clone_voice(
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.cloned_voices.insert_one(cloned_voice_doc)
-        
+
         logger.info(f"Voice cloned successfully for user {current_user['user_id']}: {voice.voice_id}")
-        
+
         return {
             "message": "Voice cloned successfully",
             "voice_id": voice.voice_id,
             "name": voice_name,
             "id": cloned_voice_doc["id"]
         }
-        
+
     except Exception as e:
         logger.error(f"Voice cloning failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Voice cloning failed: {str(e)}")
@@ -6637,26 +6864,26 @@ async def delete_cloned_voice(voice_id: str, current_user: Dict = Depends(get_cu
         "id": voice_id,
         "user_id": current_user["user_id"]
     }, {"_id": 0})
-    
+
     if not voice:
         raise HTTPException(status_code=404, detail="Cloned voice not found")
-    
+
     # Try to delete from ElevenLabs
     if eleven_client and voice.get("elevenlabs_voice_id"):
         try:
             eleven_client.voices.delete(voice["elevenlabs_voice_id"])
         except Exception as e:
             logger.warning(f"Failed to delete voice from ElevenLabs: {e}")
-    
+
     # Delete from database
     await db.cloned_voices.delete_one({"id": voice_id, "user_id": current_user["user_id"]})
-    
+
     # Update any agents using this voice to use default
     await db.agents.update_many(
         {"user_id": current_user["user_id"], "cloned_voice_id": voice.get("elevenlabs_voice_id")},
         {"$set": {"voice_type": "preset", "cloned_voice_id": None, "cloned_voice_name": None}}
     )
-    
+
     return {"message": "Cloned voice deleted"}
 
 @api_router.post("/voices/preview")
@@ -6668,7 +6895,7 @@ async def preview_voice(
     """Generate a voice preview sample"""
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs not configured")
-    
+
     try:
         audio_generator = eleven_client.text_to_speech.convert(
             text=text[:500],  # Limit preview text
@@ -6681,21 +6908,21 @@ async def preview_voice(
                 use_speaker_boost=True
             )
         )
-        
+
         # Collect audio data
         audio_data = b""
         for chunk in audio_generator:
             audio_data += chunk
-        
+
         # Return as base64
         import base64
         audio_b64 = base64.b64encode(audio_data).decode()
-        
+
         return {
             "audio": f"data:audio/mpeg;base64,{audio_b64}",
             "text": text[:500]
         }
-        
+
     except Exception as e:
         logger.error(f"Voice preview failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Voice preview failed: {str(e)}")
@@ -6714,7 +6941,7 @@ async def update_agent_voice(
     agent = await db.agents.find_one({"id": agent_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     update_data = {
         "voice_type": voice_type,
         "voice_settings": {
@@ -6723,7 +6950,7 @@ async def update_agent_voice(
             "style": style
         }
     }
-    
+
     if voice_type == "preset":
         update_data["preset_voice_id"] = voice_id
         update_data["cloned_voice_id"] = None
@@ -6738,12 +6965,12 @@ async def update_agent_voice(
             raise HTTPException(status_code=400, detail="Cloned voice not found")
         update_data["cloned_voice_id"] = voice_id
         update_data["cloned_voice_name"] = cloned.get("name")
-    
+
     await db.agents.update_one(
         {"id": agent_id, "user_id": current_user["user_id"]},
         {"$set": update_data}
     )
-    
+
     return {"message": "Agent voice updated", "voice_type": voice_type, "voice_id": voice_id}
 
 # ----- Campaigns CRUD -----
@@ -6752,6 +6979,188 @@ async def get_campaigns(current_user: Dict = Depends(get_current_user)):
     """Get campaigns belonging to the current user"""
     campaigns = await db.campaigns.find({"user_id": current_user["user_id"]}, {"_id": 0}).to_list(100)
     return campaigns
+
+@api_router.get("/campaigns/{campaign_id}/voicemail-status")
+async def get_campaign_voicemail_status(campaign_id: str, current_user: Dict = Depends(get_current_user)):
+    campaign = await db.campaigns.find_one(
+        {"id": campaign_id, "user_id": current_user["user_id"]},
+        {"_id": 0, "voicemail_audio_url": 1, "voicemail_audio_key": 1, "agent_id": 1}
+    )
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    logger.info(
+        f"[vm_status] campaign={campaign_id} ready={bool(campaign.get('voicemail_audio_url'))} "
+        f"url={campaign.get('voicemail_audio_url')}"
+    )
+
+    return {
+        "ready": bool(campaign.get("voicemail_audio_url")),
+        "voicemail_audio_url": campaign.get("voicemail_audio_url"),
+        "voicemail_audio_key": campaign.get("voicemail_audio_key"),
+        "agent_id": campaign.get("agent_id"),
+    }
+
+@api_router.get("/campaigns/{campaign_id}/leads/count")
+async def get_campaign_lead_count(
+    campaign_id: str,
+    current_user: Dict = Depends(get_current_user),
+):
+    campaign = await db.campaigns.find_one(
+        {"id": campaign_id, "user_id": current_user["user_id"]},
+        {"_id": 0, "id": 1},
+    )
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    count = await db.leads.count_documents({
+        "user_id": current_user["user_id"],
+        "campaign_id": campaign_id,
+    })
+
+    return {"campaign_id": campaign_id, "count": count}
+
+
+@api_router.post("/campaigns/{campaign_id}/import-leads")
+async def import_campaign_leads(
+    campaign_id: str,
+    request: Request,
+    current_user: Dict = Depends(get_current_user),
+):
+    import csv
+    import io
+    import re
+    import uuid
+
+    campaign = await db.campaigns.find_one(
+        {"id": campaign_id, "user_id": current_user["user_id"]},
+        {"_id": 0, "id": 1, "status": 1},
+    )
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    form = await request.form()
+    upload = form.get("file")
+
+    if upload is None:
+        raise HTTPException(status_code=400, detail="CSV file is required")
+
+    raw = await upload.read()
+
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded")
+
+    reader = csv.DictReader(io.StringIO(text))
+
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV has no header row")
+
+    headers = {
+        str(h).strip().lower().replace("_", " "): h
+        for h in reader.fieldnames if h
+    }
+
+    business_col = (
+        headers.get("business name")
+        or headers.get("company name")
+        or headers.get("business")
+        or headers.get("company")
+    )
+
+    phone_col = (
+        headers.get("phone")
+        or headers.get("phone number")
+        or headers.get("telephone")
+    )
+
+    if not business_col or not phone_col:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV must include Business Name and Phone columns",
+        )
+
+    def normalize_phone(value):
+        digits = re.sub(r"\D", "", str(value or ""))
+        if len(digits) == 10:
+            return "+1" + digits
+        if len(digits) == 11 and digits.startswith("1"):
+            return "+" + digits
+        return str(value or "").strip()
+
+    now = datetime.now(timezone.utc).isoformat()
+    inserted = updated = skipped = 0
+
+    for row in reader:
+        name = str(row.get(business_col) or "").strip()
+        phone = normalize_phone(row.get(phone_col))
+
+        if not name or not phone:
+            skipped += 1
+            continue
+
+        existing = await db.leads.find_one(
+            {"user_id": current_user["user_id"], "campaign_id": campaign_id, "phone": phone},
+            {"_id": 0, "id": 1},
+        )
+
+        if existing:
+            await db.leads.update_one(
+                {"id": existing["id"], "user_id": current_user["user_id"]},
+                {"$set": {
+                    "business_name": name,
+                    "campaign_id": campaign_id,
+                    "source": "campaign_csv_import",
+                    "status": "new",
+                    "updated_at": now,
+                }},
+            )
+            updated += 1
+        else:
+            await db.leads.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": current_user["user_id"],
+                "business_name": name,
+                "contact_name": None,
+                "phone": phone,
+                "email": None,
+                "industry": None,
+                "company_size": None,
+                "source": "campaign_csv_import",
+                "intent_signals": [],
+                "status": "new",
+                "qualification_score": None,
+                "is_decision_maker": None,
+                "interest_level": None,
+                "line_type": None,
+                "carrier": None,
+                "phone_verified": False,
+                "icp_score": None,
+                "icp_breakdown": None,
+                "dial_priority": None,
+                "notes": [],
+                "created_at": now,
+                "updated_at": now,
+                "campaign_id": campaign_id,
+            })
+            inserted += 1
+
+    campaign_leads = await db.leads.count_documents({
+        "user_id": current_user["user_id"],
+        "campaign_id": campaign_id,
+    })
+
+    return {
+        "ok": True,
+        "inserted": inserted,
+        "updated": updated,
+        "skipped": skipped,
+        "campaign_leads": campaign_leads,
+        "campaign_status": campaign.get("status"),
+        "calls_started": 0,
+    }
+
 
 @api_router.get("/campaigns/{campaign_id}", response_model=Campaign)
 async def get_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
@@ -6768,38 +7177,136 @@ async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends
     limit_check = await check_subscription_limit(current_user, "campaigns")
     if not limit_check["allowed"]:
         raise HTTPException(status_code=403, detail=limit_check["reason"])
-    
+
     # Check feature access for voicemail drop
     features = get_tier_features(current_user)
     campaign_data = campaign.model_dump()
-    
+
     if campaign_data.get("voicemail_enabled") and not features.get("voicemail_drop"):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Voicemail drop is not available on your plan. Upgrade to Starter or higher to use this feature."
         )
-    
+
+    # SAFETY: if voicemail is enabled, the campaign MUST be able to resolve a real
+    # callback number before we let the voicemail path run. A literal placeholder
+    # (e.g. "{callback_number}" or "[your callback number]") must NEVER reach a
+    # prospect's voicemail box.
+    if campaign_data.get("voicemail_enabled"):
+        _cb = await resolve_callback_number(db, campaign_data, current_user["user_id"])
+        if not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+        # Also refuse if the voicemail_message still references {callback_number}
+        # but no number will be usable at speak time.
+        _msg = campaign_data.get("voicemail_message") or ""
+        if "{callback_number}" in _msg and not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+
     campaign_obj = Campaign(**campaign_data, user_id=current_user["user_id"])
     await db.campaigns.insert_one(campaign_obj.model_dump())
+
+    # Cloned-voice VM audio (isolated, non-fatal on any failure)
+    try:
+        from services.vm_cloned_audio import refresh_campaign_vm_audio
+        _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
+        if _backend_url:
+            await refresh_campaign_vm_audio(
+                db=db, eleven_client=eleven_client,
+                backend_public_url=_backend_url,
+                campaign_id=campaign_obj.id,
+                user_id=current_user["user_id"],
+            )
+    except Exception as _vm_err:
+        logger.error(f"[vm_cloned] refresh on create failed for {campaign_obj.id}: {_vm_err}")
+
     return campaign_obj
 
 @api_router.put("/campaigns/{campaign_id}", response_model=Campaign)
 async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
     """Update a campaign (must belong to current user)"""
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # SAFETY: if the update leaves voicemail enabled, the effective campaign
+    # (existing row merged with updates) must have a resolvable callback number.
+    existing = await db.campaigns.find_one(
+        {"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # Any change affecting cloned voicemail invalidates the previous MP3.
+    # The fresh audio generated below must succeed before launch is allowed.
+    _vm_inputs = {
+        "voicemail_message", "voicemail_enabled", "agent_id",
+        "company_name", "callback_number",
+    }
+    if any(k in updates for k in _vm_inputs):
+        updates["voicemail_audio_url"] = None
+        updates["voicemail_audio_key"] = None
+
+    effective = {**existing, **updates}
+    if effective.get("voicemail_enabled"):
+        _cb = await resolve_callback_number(db, effective, current_user["user_id"])
+        if not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+
     result = await db.campaigns.update_one(
         {"id": campaign_id, "user_id": current_user["user_id"]},
         {"$set": updates}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
+    # Regenerate cloned-voice VM audio if any input that affects the baked
+    # MP3 changed: message, VM flag, linked agent, company/callback number.
+    _regen_keys = (
+        "voicemail_message", "voicemail_enabled", "agent_id",
+        "company_name", "callback_number",
+    )
+    if any(k in updates for k in _regen_keys):
+        try:
+            from services.vm_cloned_audio import refresh_campaign_vm_audio
+            _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
+            if _backend_url:
+                await refresh_campaign_vm_audio(
+                    db=db, eleven_client=eleven_client,
+                    backend_public_url=_backend_url,
+                    campaign_id=campaign_id,
+                    user_id=current_user["user_id"],
+                )
+        except Exception as _vm_err:
+            logger.error(f"[vm_cloned] refresh on update failed for {campaign_id}: {_vm_err}")
+
     campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return campaign
 
 @api_router.post("/campaigns/{campaign_id}/start")
 async def start_campaign(campaign_id: str, current_user: Dict = Depends(get_current_user)):
     """Start a campaign (must belong to current user)"""
+    # SAFETY: block launch if voicemail is enabled but no callback number
+    # can be resolved. Placeholder text must never reach a prospect.
+    existing = await db.campaigns.find_one(
+        {"id": campaign_id, "user_id": current_user["user_id"]}, {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if existing.get("voicemail_enabled", True):
+        _cb = await resolve_callback_number(db, existing, current_user["user_id"])
+        if not _cb:
+            raise HTTPException(
+                status_code=400,
+                detail="Add a callback number before enabling voicemail drops.",
+            )
+
     result = await db.campaigns.update_one(
         {"id": campaign_id, "user_id": current_user["user_id"]},
         {"$set": {"status": CampaignStatus.ACTIVE, "updated_at": datetime.now(timezone.utc).isoformat()}}
@@ -6850,7 +7357,7 @@ async def get_calls(
         query["status"] = status
     if campaign_id:
         query["campaign_id"] = campaign_id
-    
+
     calls = await db.calls.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     return calls
 
@@ -6870,7 +7377,7 @@ async def get_analytics(
 ):
     """Get call analytics for the current user"""
     user_id = current_user["user_id"]
-    
+
     # Calculate date range
     now = datetime.now(timezone.utc)
     if range == "7d":
@@ -6881,15 +7388,15 @@ async def get_analytics(
         start_date = now - timedelta(days=90)
     else:
         start_date = datetime(2020, 1, 1, tzinfo=timezone.utc)
-    
+
     # Query calls
     query = {
         "user_id": user_id,
         "created_at": {"$gte": start_date.isoformat()}
     }
-    
+
     calls = await db.calls.find(query, {"_id": 0}).to_list(10000)
-    
+
     # Calculate metrics
     total_calls = len(calls)
     answered_calls = len([c for c in calls if c.get("status") == "completed" and c.get("answered_by") != "voicemail"])
@@ -6897,24 +7404,24 @@ async def get_analytics(
     voicemail_calls = len([c for c in calls if c.get("voicemail_dropped") or c.get("answered_by") == "voicemail"])
     failed_calls = len([c for c in calls if c.get("status") == "failed"])
     no_answer_calls = len([c for c in calls if c.get("status") == "no_answer"])
-    
+
     # Get bookings
     bookings_query = {
         "user_id": user_id,
         "created_at": {"$gte": start_date.isoformat()}
     }
     bookings = await db.bookings.count_documents(bookings_query)
-    
+
     # Calculate rates
     answer_rate = (answered_calls / total_calls * 100) if total_calls > 0 else 0
     qualification_rate = (qualified_leads / answered_calls * 100) if answered_calls > 0 else 0
     booking_rate = (bookings / qualified_leads * 100) if qualified_leads > 0 else 0
-    
+
     # Calculate average duration
     durations = [c.get("duration_seconds", 0) for c in calls if c.get("duration_seconds")]
     avg_duration = sum(durations) / len(durations) if durations else 0
     total_talk_time = sum(durations)
-    
+
     # Calls by day (last 7 days)
     calls_by_day = []
     for i in range(6, -1, -1):
@@ -6922,16 +7429,16 @@ async def get_analytics(
         day_str = day.strftime("%a")
         day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day_start + timedelta(days=1)
-        
+
         day_calls = [c for c in calls if day_start.isoformat() <= c.get("created_at", "") < day_end.isoformat()]
         day_qualified = len([c for c in day_calls if c.get("qualification_result", {}).get("is_qualified")])
-        
+
         calls_by_day.append({
             "date": day_str,
             "calls": len(day_calls),
             "qualified": day_qualified
         })
-    
+
     # Calls by outcome
     calls_by_outcome = [
         {"outcome": "Qualified", "count": qualified_leads, "color": "bg-emerald-500"},
@@ -6940,7 +7447,7 @@ async def get_analytics(
         {"outcome": "Voicemail", "count": voicemail_calls, "color": "bg-blue-400"},
         {"outcome": "Failed", "count": failed_calls, "color": "bg-red-500"}
     ]
-    
+
     # Top campaigns
     campaign_stats = {}
     for call in calls:
@@ -6951,7 +7458,7 @@ async def get_analytics(
             campaign_stats[cid]["calls"] += 1
             if call.get("qualification_result", {}).get("is_qualified"):
                 campaign_stats[cid]["qualified"] += 1
-    
+
     # Get campaign names
     top_campaigns = []
     for cid, stats in sorted(campaign_stats.items(), key=lambda x: x[1]["qualified"], reverse=True)[:4]:
@@ -6964,7 +7471,7 @@ async def get_analytics(
             "qualified": stats["qualified"],
             "rate": round(rate, 1)
         })
-    
+
     # Best call times (mock data based on general industry patterns)
     best_call_times = [
         {"hour": "9 AM", "success_rate": 28 + (qualified_leads % 10)},
@@ -6975,7 +7482,7 @@ async def get_analytics(
         {"hour": "3 PM", "success_rate": 29 + (qualified_leads % 5)},
         {"hour": "4 PM", "success_rate": 26 + (qualified_leads % 8)}
     ]
-    
+
     return {
         "total_calls": total_calls,
         "total_calls_change": round((total_calls / 100 - 1) * 10, 1) if total_calls > 0 else 0,
@@ -7000,14 +7507,14 @@ async def get_analytics(
 
 @api_router.post("/calls/simulate")
 async def simulate_call(
-    lead_id: str, 
-    campaign_id: str, 
+    lead_id: str,
+    campaign_id: str,
     background_tasks: BackgroundTasks,
     current_user: Dict = Depends(get_current_user)
 ):
     """Simulate an AI cold call (MOCKED - real calls require Twilio credentials). Deducts from trial time or call credits."""
     user_id = current_user["user_id"]
-    
+
     # Check phone verification (required for all trial users)
     trial_status = get_trial_status(current_user)
     if trial_status["is_trial"] and not current_user.get("phone_verified", False):
@@ -7015,7 +7522,7 @@ async def simulate_call(
             status_code=403,
             detail="Phone verification required. Please verify your phone number to use your free trial."
         )
-    
+
     if trial_status["is_trial"]:
         # Trial user - check if they have time remaining
         if trial_status["trial_expired"] or not trial_status["can_make_calls"]:
@@ -7031,7 +7538,7 @@ async def simulate_call(
                 status_code=402,
                 detail=f"Insufficient call credits. You have {calls_remaining} credits. Please purchase more credits to make calls."
             )
-        
+
         # Deduct 1 call credit for paid users
         new_balance = calls_remaining - 1
         await db.users.update_one(
@@ -7041,7 +7548,7 @@ async def simulate_call(
                 "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
             }
         )
-        
+
         # Log usage event for analytics
         await log_usage_event(
             user_id=user_id,
@@ -7049,16 +7556,16 @@ async def simulate_call(
             amount=1,
             credits_after=new_balance
         )
-    
+
     # Get lead and campaign (with user ownership verification)
     lead = await db.leads.find_one({"id": lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     campaign = await db.campaigns.find_one({"id": campaign_id, "user_id": user_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # Create call record with user_id for multi-tenancy
     call = Call(
         user_id=user_id,
@@ -7068,22 +7575,22 @@ async def simulate_call(
         started_at=datetime.now(timezone.utc).isoformat()
     )
     await db.calls.insert_one(call.model_dump())
-    
+
     # Simulate the call in background (pass user_id for proper webhook filtering)
     background_tasks.add_task(process_simulated_call, call.id, lead, campaign, user_id)
-    
+
     response_data = {
-        "message": "Call started", 
-        "call_id": call.id, 
+        "message": "Call started",
+        "call_id": call.id,
         "status": "in_progress"
     }
-    
+
     if trial_status["is_trial"]:
         response_data["trial_minutes_remaining"] = trial_status["minutes_remaining"]
     else:
         response_data["credits_used"] = 1
         response_data["credits_remaining"] = current_user.get("call_credits_remaining", 0) - 1
-    
+
     return response_data
 
 async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_id: str = None):
@@ -7091,10 +7598,10 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_
     try:
         # Simulate AI conversation
         call_result = await ai_service.simulate_call_conversation(lead, campaign.get("ai_script", ""))
-        
+
         # Qualify the lead
         qualification = await ai_service.qualify_lead(call_result)
-        
+
         # Update call record
         await db.calls.update_one(
             {"id": call_id},
@@ -7106,7 +7613,7 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_
                 "ended_at": datetime.now(timezone.utc).isoformat()
             }}
         )
-        
+
         # Update lead with qualification
         new_status = LeadStatus.QUALIFIED if qualification.is_qualified else LeadStatus.NOT_QUALIFIED
         await db.leads.update_one(
@@ -7119,7 +7626,7 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }}
         )
-        
+
         # Update campaign stats
         update_query = {
             "$inc": {
@@ -7129,19 +7636,19 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_
             }
         }
         await db.campaigns.update_one({"id": campaign["id"]}, update_query)
-        
+
         # Send notification if lead is qualified
         if qualification.is_qualified:
             # Multi-tenancy: Filter webhooks by user_id
             webhook_query = {"event_type": "lead_qualified", "is_active": True}
             if user_id:
                 webhook_query["user_id"] = user_id
-            
+
             webhooks = await db.webhooks.find(
                 webhook_query,
                 {"_id": 0}
             ).to_list(100)
-            
+
             for webhook in webhooks:
                 if webhook.get("notification_emails"):
                     await notification_service.send_lead_qualified_notification(
@@ -7149,9 +7656,9 @@ async def process_simulated_call(call_id: str, lead: Dict, campaign: Dict, user_
                         qualification=qualification.model_dump(),
                         recipients=webhook["notification_emails"]
                     )
-        
+
         logger.info(f"Call {call_id} completed. Lead qualified: {qualification.is_qualified}")
-        
+
     except Exception as e:
         logger.error(f"Error processing call {call_id}: {str(e)}")
         await db.calls.update_one(
@@ -7171,7 +7678,7 @@ class BookMeetingRequest(BaseModel):
 async def book_meeting(request: BookMeetingRequest, background_tasks: BackgroundTasks, current_user: Dict = Depends(get_current_user)):
     """Book a meeting with an agent for a qualified lead - generates personalized Calendly link"""
     user_id = current_user["user_id"]
-    
+
     # Check feature access - calendar booking requires Professional+
     features = get_tier_features(current_user)
     if not features.get("calendar_booking"):
@@ -7179,19 +7686,19 @@ async def book_meeting(request: BookMeetingRequest, background_tasks: Background
             status_code=403,
             detail="Calendar booking integration requires Professional plan or higher."
         )
-    
+
     # Multi-tenancy: Verify lead and agent belong to current user
     lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     if lead.get("status") != LeadStatus.QUALIFIED:
         raise HTTPException(status_code=400, detail="Lead is not qualified for booking")
-    
+
     agent = await db.agents.find_one({"id": request.agent_id, "user_id": user_id}, {"_id": 0})
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     # Generate personalized booking link with lead data pre-filled
     personalized_link = calendly_service.generate_booking_link(
         calendly_link=agent["calendly_link"],
@@ -7199,7 +7706,7 @@ async def book_meeting(request: BookMeetingRequest, background_tasks: Background
         lead_email=lead.get("email"),
         lead_phone=lead.get("phone")
     )
-    
+
     # Create booking record
     booking = Booking(
         user_id=user_id,
@@ -7214,7 +7721,7 @@ async def book_meeting(request: BookMeetingRequest, background_tasks: Background
         notes=request.notes
     )
     await db.bookings.insert_one(booking.model_dump())
-    
+
     # Update lead status
     await db.leads.update_one(
         {"id": request.lead_id, "user_id": user_id},
@@ -7225,16 +7732,16 @@ async def book_meeting(request: BookMeetingRequest, background_tasks: Background
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     # Increment agent's booked meetings
     await db.agents.update_one(
         {"id": request.agent_id, "user_id": user_id},
         {"$inc": {"assigned_leads": 1, "booked_meetings": 1}}
     )
-    
+
     # Send meeting booked notification in background
     background_tasks.add_task(send_meeting_booked_notifications, lead, agent, user_id, personalized_link)
-    
+
     return {
         "message": "Meeting booked successfully",
         "booking_id": booking.id,
@@ -7257,7 +7764,7 @@ async def get_bookings(
         query["status"] = status
     if agent_id:
         query["agent_id"] = agent_id
-    
+
     bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     return bookings
 
@@ -7285,20 +7792,20 @@ async def update_booking_status(
         "status": status,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     if scheduled_time:
         update_data["scheduled_time"] = scheduled_time
     if calendly_event_uri:
         update_data["calendly_event_uri"] = calendly_event_uri
-    
+
     result = await db.bookings.update_one(
         {"id": booking_id, "user_id": current_user["user_id"]},
         {"$set": update_data}
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Booking not found")
-    
+
     booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     return booking
 
@@ -7313,15 +7820,15 @@ async def cancel_booking(
         {"id": booking_id, "user_id": current_user["user_id"]},
         {"_id": 0}
     )
-    
+
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    
+
     # If there's a Calendly event, try to cancel it
     if booking.get("calendly_event_uri") and calendly_service.is_configured:
         event_uuid = booking["calendly_event_uri"].split("/")[-1]
         await calendly_service.cancel_event(event_uuid, reason or "Cancelled by user")
-    
+
     # Update booking status
     await db.bookings.update_one(
         {"id": booking_id},
@@ -7331,7 +7838,7 @@ async def cancel_booking(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     # Update lead status back to qualified
     await db.leads.update_one(
         {"id": booking["lead_id"], "user_id": current_user["user_id"]},
@@ -7340,7 +7847,7 @@ async def cancel_booking(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     return {"message": "Booking cancelled", "booking_id": booking_id}
 
 @api_router.post("/calendly/webhook")
@@ -7353,22 +7860,22 @@ async def calendly_webhook(request: Request):
         event_data = await request.json()
         event_type = event_data.get("event")
         payload = event_data.get("payload", {})
-        
+
         logger.info(f"Calendly webhook received: {event_type}")
-        
+
         if event_type == "invitee.created":
             # Meeting was scheduled
             invitee_email = payload.get("invitee", {}).get("email", "").lower()
             scheduled_time = payload.get("scheduled_event", {}).get("start_time")
             event_uri = payload.get("scheduled_event", {}).get("uri")
-            
+
             # Find booking by lead email
             if invitee_email:
                 booking = await db.bookings.find_one(
                     {"lead_email": {"$regex": f"^{invitee_email}$", "$options": "i"}, "status": BookingStatus.PENDING},
                     {"_id": 0}
                 )
-                
+
                 if booking:
                     await db.bookings.update_one(
                         {"id": booking["id"]},
@@ -7380,14 +7887,14 @@ async def calendly_webhook(request: Request):
                         }}
                     )
                     logger.info(f"Booking {booking['id']} confirmed for {invitee_email}")
-        
+
         elif event_type == "invitee.canceled":
             # Meeting was cancelled
             event_uri = payload.get("scheduled_event", {}).get("uri")
-            
+
             if event_uri:
                 booking = await db.bookings.find_one({"calendly_event_uri": event_uri}, {"_id": 0})
-                
+
                 if booking:
                     await db.bookings.update_one(
                         {"id": booking["id"]},
@@ -7396,16 +7903,16 @@ async def calendly_webhook(request: Request):
                             "updated_at": datetime.now(timezone.utc).isoformat()
                         }}
                     )
-                    
+
                     # Update lead status back to qualified
                     await db.leads.update_one(
                         {"id": booking["lead_id"]},
                         {"$set": {"status": LeadStatus.QUALIFIED}}
                     )
                     logger.info(f"Booking {booking['id']} cancelled via Calendly")
-        
+
         return {"success": True, "message": "Webhook processed"}
-    
+
     except Exception as e:
         logger.error(f"Calendly webhook error: {str(e)}")
         return {"success": False, "error": str(e)}
@@ -7416,12 +7923,12 @@ async def get_calendly_status(current_user: Dict = Depends(get_current_user)):
     configured = calendly_service.is_configured
     user_info = None
     event_types = []
-    
+
     if configured:
         user_info = await calendly_service.get_current_user()
         if user_info:
             event_types = await calendly_service.get_event_types(user_info.get("uri"))
-    
+
     return {
         "configured": configured,
         "user": {
@@ -7442,7 +7949,7 @@ async def send_meeting_booked_notifications(lead: Dict, agent: Dict, user_id: st
             {"user_id": user_id, "event_type": "meeting_booked", "is_active": True},
             {"_id": 0}
         ).to_list(100)
-        
+
         for webhook in webhooks:
             if webhook.get("notification_emails"):
                 await notification_service.send_meeting_booked_notification(
@@ -7466,7 +7973,7 @@ async def create_webhook(webhook: WebhookConfigCreate, current_user: Dict = Depe
     """Create a new webhook configuration"""
     if webhook.event_type not in ["lead_qualified", "meeting_booked"]:
         raise HTTPException(status_code=400, detail="Invalid event_type. Must be 'lead_qualified' or 'meeting_booked'")
-    
+
     webhook_obj = WebhookConfig(**webhook.model_dump(), user_id=current_user["user_id"])
     await db.webhooks.insert_one(webhook_obj.model_dump())
     return webhook_obj
@@ -7481,7 +7988,7 @@ async def update_webhook(webhook_id: str, updates: Dict[str, Any], current_user:
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Webhook not found")
-    
+
     webhook = await db.webhooks.find_one({"id": webhook_id, "user_id": current_user["user_id"]}, {"_id": 0})
     return webhook
 
@@ -7501,10 +8008,10 @@ async def test_webhook(webhook_id: str, current_user: Dict = Depends(get_current
     webhook = await db.webhooks.find_one({"id": webhook_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
-    
+
     if not notification_service.is_configured:
         raise HTTPException(status_code=400, detail="Email notifications not configured. Add RESEND_API_KEY to .env")
-    
+
     # Send test notification
     test_lead = {
         "business_name": "Test Business Inc.",
@@ -7512,19 +8019,19 @@ async def test_webhook(webhook_id: str, current_user: Dict = Depends(get_current
         "phone": "+1-555-TEST",
         "email": "test@example.com"
     }
-    
+
     test_qualification = {
         "score": 85,
         "is_decision_maker": True,
         "interest_level": 8
     }
-    
+
     test_agent = {
         "name": "Test Agent",
         "email": "agent@example.com",
         "calendly_link": "https://calendly.com/test-agent"
     }
-    
+
     if webhook["event_type"] == "lead_qualified":
         result = await notification_service.send_lead_qualified_notification(
             lead=test_lead,
@@ -7537,7 +8044,7 @@ async def test_webhook(webhook_id: str, current_user: Dict = Depends(get_current
             agent=test_agent,
             recipients=webhook["notification_emails"]
         )
-    
+
     if result:
         return {"message": "Test notification sent successfully", "recipients": webhook["notification_emails"]}
     else:
@@ -7553,7 +8060,7 @@ async def search_twitter_intent(query: str = "credit card processing"):
         {"user": "@RestaurantMgr", "text": "Our POS system fees are killing us. Need to find alternatives", "intent_score": 8},
         {"user": "@RetailShop", "text": "Just opened a new store, need merchant services", "intent_score": 10},
     ]
-    
+
     return {
         "query": query,
         "results": mock_tweets,
@@ -7576,7 +8083,7 @@ async def get_settings():
         }
         await db.settings.insert_one(default_settings)
         return default_settings
-    
+
     # Always update the email notification status
     settings["email_notifications_configured"] = notification_service.is_configured
     return settings
@@ -7619,13 +8126,13 @@ async def get_account_usage(current_user: Dict = Depends(get_current_user)):
 async def get_team_members(current_user: Dict = Depends(get_current_user)):
     """Get all team members for the current user's organization"""
     user_id = current_user["user_id"]
-    
+
     # Get team members invited by this user
     members = await db.team_members.find(
         {"owner_id": user_id},
         {"_id": 0}
     ).to_list(100)
-    
+
     return members
 
 @api_router.post("/team/invite")
@@ -7637,13 +8144,13 @@ async def invite_team_member(
     user_id = current_user["user_id"]
     email = invite_data.get("email", "").lower().strip()
     role = invite_data.get("role", "member")
-    
+
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
-    
+
     if role not in ["member", "admin"]:
         raise HTTPException(status_code=400, detail="Invalid role")
-    
+
     # Check if already invited
     existing = await db.team_members.find_one({
         "owner_id": user_id,
@@ -7651,19 +8158,19 @@ async def invite_team_member(
     })
     if existing:
         raise HTTPException(status_code=400, detail="This email has already been invited")
-    
+
     # Check team seat limits based on subscription
     tier = current_user.get("subscription_tier", "starter")
     seat_limits = {"starter": 1, "professional": 5, "unlimited": 5, "bring_your_list": 3}
     max_seats = seat_limits.get(tier, 1)
-    
+
     current_members = await db.team_members.count_documents({"owner_id": user_id})
     if current_members >= max_seats - 1:  # -1 because owner counts as 1 seat
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Team seat limit reached ({max_seats} seats on {tier} plan). Upgrade to add more members."
         )
-    
+
     # Create team member record
     member = {
         "id": str(uuid.uuid4()),
@@ -7674,11 +8181,11 @@ async def invite_team_member(
         "invited_at": datetime.now(timezone.utc).isoformat(),
         "joined_at": None
     }
-    
+
     await db.team_members.insert_one(member)
-    
+
     # TODO: Send invitation email via Resend
-    
+
     return {"message": "Invitation sent", "member": {k: v for k, v in member.items() if k != "_id"}}
 
 @api_router.put("/team/members/{member_id}")
@@ -7689,22 +8196,22 @@ async def update_team_member(
 ):
     """Update a team member's role"""
     user_id = current_user["user_id"]
-    
+
     member = await db.team_members.find_one({
         "id": member_id,
         "owner_id": user_id
     })
-    
+
     if not member:
         raise HTTPException(status_code=404, detail="Team member not found")
-    
+
     new_role = update_data.get("role")
     if new_role and new_role in ["member", "admin"]:
         await db.team_members.update_one(
             {"id": member_id},
             {"$set": {"role": new_role}}
         )
-    
+
     return {"message": "Member updated"}
 
 @api_router.delete("/team/members/{member_id}")
@@ -7714,15 +8221,15 @@ async def remove_team_member(
 ):
     """Remove a team member"""
     user_id = current_user["user_id"]
-    
+
     result = await db.team_members.delete_one({
         "id": member_id,
         "owner_id": user_id
     })
-    
+
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Team member not found")
-    
+
     return {"message": "Team member removed"}
 
 @api_router.post("/packs/purchase")
@@ -7731,10 +8238,10 @@ async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_u
     # Find the pack from all pack types
     all_packs = LEAD_PACKS + CALL_PACKS + TOPUP_PACKS + COMBO_PACKS
     pack = next((p for p in all_packs if p["id"] == pack_id), None)
-    
+
     if not pack:
         raise HTTPException(status_code=404, detail="Pack not found")
-    
+
     # Create purchase record
     purchase = {
         "id": str(uuid.uuid4()),
@@ -7747,12 +8254,12 @@ async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_u
         "calls": pack.get("calls", 0),
         "purchased_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.purchases.insert_one(purchase)
-    
+
     # Update user credits based on pack type
     update_query = {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
-    
+
     if pack.get("type") == "leads":
         update_query["$inc"] = {"lead_credits_remaining": pack["quantity"]}
     elif pack.get("type") == "calls":
@@ -7769,12 +8276,12 @@ async def purchase_pack(pack_id: str, current_user: Dict = Depends(get_current_u
             "lead_credits_remaining": pack.get("leads", 0),
             "call_credits_remaining": pack.get("calls", 0)
         }
-    
+
     await db.users.update_one({"user_id": current_user["user_id"]}, update_query)
-    
+
     # Get updated user
     updated_user = await db.users.find_one({"user_id": current_user["user_id"]}, {"_id": 0, "password_hash": 0})
-    
+
     return {
         "message": f"Successfully purchased {pack['name']}",
         "purchase": purchase,
@@ -7786,15 +8293,15 @@ async def use_credits(credit_type: str, amount: int = 1, current_user: Dict = De
     """Deduct credits from user account"""
     if credit_type not in ["leads", "calls"]:
         raise HTTPException(status_code=400, detail="Invalid credit type")
-    
+
     field = f"{credit_type.rstrip('s')}_credits_remaining"
-    
+
     if current_user.get(field, 0) < amount:
         raise HTTPException(
-            status_code=402, 
+            status_code=402,
             detail=f"Insufficient {credit_type} credits. You have {current_user.get(field, 0)} remaining."
         )
-    
+
     await db.users.update_one(
         {"user_id": current_user["user_id"]},
         {
@@ -7802,7 +8309,7 @@ async def use_credits(credit_type: str, amount: int = 1, current_user: Dict = De
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
         }
     )
-    
+
     updated_user = await db.users.find_one({"user_id": current_user["user_id"]}, {"_id": 0, "password_hash": 0})
     return {
         "lead_credits_remaining": updated_user.get("lead_credits_remaining", 0),
@@ -7832,27 +8339,27 @@ async def log_usage_event(user_id: str, event_type: str, amount: int, credits_af
 async def get_usage_analytics(current_user: Dict = Depends(get_current_user)):
     """Get usage analytics for the current user"""
     user_id = current_user["user_id"]
-    
+
     # Get usage events for the last 30 days
     thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    
+
     events = await db.usage_events.find(
         {"user_id": user_id, "created_at": {"$gte": thirty_days_ago}},
         {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
-    
+
     # Calculate daily usage
     daily_usage = {}
     for event in events:
         date = event["created_at"][:10]  # Extract YYYY-MM-DD
         if date not in daily_usage:
             daily_usage[date] = {"leads": 0, "calls": 0}
-        
+
         if event["event_type"] == "lead_discovery":
             daily_usage[date]["leads"] += event["amount"]
         elif event["event_type"] == "call_made":
             daily_usage[date]["calls"] += event["amount"]
-    
+
     # Convert to sorted list for charts
     usage_trend = []
     for date in sorted(daily_usage.keys()):
@@ -7861,21 +8368,21 @@ async def get_usage_analytics(current_user: Dict = Depends(get_current_user)):
             "leads": daily_usage[date]["leads"],
             "calls": daily_usage[date]["calls"]
         })
-    
+
     # Calculate totals
     total_leads_used = sum(e["amount"] for e in events if e["event_type"] == "lead_discovery")
     total_calls_made = sum(e["amount"] for e in events if e["event_type"] == "call_made")
-    
+
     # Get recent activity (last 10 events)
     recent_activity = events[:10]
-    
+
     # Upgrade suggestions based on usage patterns
     suggestions = []
     avg_daily_leads = total_leads_used / 30 if total_leads_used > 0 else 0
     avg_daily_calls = total_calls_made / 30 if total_calls_made > 0 else 0
-    
+
     current_tier = current_user.get("subscription_tier")
-    
+
     if current_tier == "starter":
         if avg_daily_leads > 8 or avg_daily_calls > 8:
             suggestions.append({
@@ -7892,7 +8399,7 @@ async def get_usage_analytics(current_user: Dict = Depends(get_current_user)):
                 "description": "Heavy user alert! Unlimited plan gives you 5,000 leads + unlimited calls for max ROI.",
                 "action": "upgrade_unlimited"
             })
-    
+
     # Low balance warnings
     if current_user.get("lead_credits_remaining", 0) < 50:
         suggestions.append({
@@ -7901,7 +8408,7 @@ async def get_usage_analytics(current_user: Dict = Depends(get_current_user)):
             "description": f"Only {current_user.get('lead_credits_remaining', 0)} lead credits remaining. Add a top-up to avoid interruption.",
             "action": "buy_leads"
         })
-    
+
     if current_user.get("call_credits_remaining", 0) < 25:
         suggestions.append({
             "type": "warning",
@@ -7909,7 +8416,7 @@ async def get_usage_analytics(current_user: Dict = Depends(get_current_user)):
             "description": f"Only {current_user.get('call_credits_remaining', 0)} call credits remaining. Add more to keep calling.",
             "action": "buy_calls"
         })
-    
+
     return {
         "current_balance": {
             "lead_credits": current_user.get("lead_credits_remaining", 0),
@@ -7939,17 +8446,17 @@ async def track_usage(
     """Track a usage event (internal use)"""
     if event_type not in ["lead_discovery", "call_made", "lead_purchased", "call_purchased"]:
         raise HTTPException(status_code=400, detail="Invalid event type")
-    
+
     credits_field = "lead_credits_remaining" if "lead" in event_type else "call_credits_remaining"
     credits_after = current_user.get(credits_field, 0)
-    
+
     await log_usage_event(
         user_id=current_user["user_id"],
         event_type=event_type,
         amount=amount,
         credits_after=credits_after
     )
-    
+
     return {"status": "tracked"}
 
 # ----- Stripe Payment Endpoints -----
@@ -7968,7 +8475,7 @@ async def create_checkout_session(
     """Create a Stripe checkout session for subscriptions or packs"""
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     # Determine what's being purchased and get the amount
     item_type = request.item_type
     item_id = request.item_id
@@ -7976,17 +8483,17 @@ async def create_checkout_session(
     item_name = ""
     credits_to_add = {"leads": 0, "calls": 0}
     subscription_tier = None
-    
+
     if item_type == "subscription":
         # Get subscription plan
         if item_id not in SUBSCRIPTION_PLANS:
             raise HTTPException(status_code=400, detail="Invalid subscription plan")
-        
+
         plan = SUBSCRIPTION_PLANS[item_id]
         amount = float(plan["price"])
         item_name = f"{plan['name']} Plan"
         subscription_tier = item_id
-        
+
         # Apply prepay discounts
         if request.billing_cycle == "quarterly":
             amount = amount * 3 * 0.95  # 5% off
@@ -7994,12 +8501,12 @@ async def create_checkout_session(
         elif request.billing_cycle == "annual":
             amount = amount * 12 * 0.85  # 15% off
             item_name += " (Annual)"
-        
+
         credits_to_add = {
             "leads": plan["leads_per_month"],
             "calls": plan["calls_per_month"] if plan["calls_per_month"] > 0 else 999999
         }
-    
+
     elif item_type == "lead_pack":
         # Block BYOL users from purchasing packs
         user_tier = current_user.get("subscription_tier", "")
@@ -8011,7 +8518,7 @@ async def create_checkout_session(
         amount = float(pack["price"])
         item_name = pack["name"]
         credits_to_add = {"leads": pack["quantity"], "calls": 0}
-    
+
     elif item_type == "call_pack":
         # Block BYOL users from purchasing packs
         user_tier = current_user.get("subscription_tier", "")
@@ -8023,7 +8530,7 @@ async def create_checkout_session(
         amount = float(pack["price"])
         item_name = pack["name"]
         credits_to_add = {"leads": 0, "calls": pack["quantity"]}
-    
+
     elif item_type == "topup":
         # Block BYOL users from purchasing packs
         user_tier = current_user.get("subscription_tier", "")
@@ -8039,21 +8546,21 @@ async def create_checkout_session(
             credits_to_add = {"leads": pack["quantity"], "calls": 0}
         else:
             credits_to_add = {"leads": 0, "calls": pack["quantity"]}
-    
+
     else:
         raise HTTPException(status_code=400, detail="Invalid item type")
-    
+
     # Build URLs from frontend origin
     origin = request.origin_url.rstrip("/")
     success_url = f"{origin}/app/getting-started?session_id={{CHECKOUT_SESSION_ID}}&success=true"
     cancel_url = f"{origin}/app/packs?canceled=true"
-    
+
     # Create Stripe checkout
     host_url = str(http_request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
-    
+
     stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
-    
+
     checkout_request = CheckoutSessionRequest(
         amount=amount,
         currency="usd",
@@ -8071,10 +8578,10 @@ async def create_checkout_session(
             "subscription_tier": subscription_tier or ""
         }
     )
-    
+
     try:
         session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
-        
+
         # Create payment transaction record
         transaction = {
             "id": str(uuid.uuid4()),
@@ -8094,14 +8601,14 @@ async def create_checkout_session(
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.payment_transactions.insert_one(transaction)
-        
+
         return {
             "checkout_url": session.url,
             "session_id": session.session_id,
             "amount": amount,
             "item_name": item_name
         }
-        
+
     except Exception as e:
         logger.error(f"Stripe checkout error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
@@ -8115,16 +8622,16 @@ async def get_checkout_status(
     """Get the status of a checkout session and fulfill if paid"""
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     # Get the transaction record
     transaction = await db.payment_transactions.find_one(
         {"session_id": session_id, "user_id": current_user["user_id"]},
         {"_id": 0}
     )
-    
+
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    
+
     # Check if already processed
     if transaction.get("payment_status") == "paid":
         return {
@@ -8134,33 +8641,33 @@ async def get_checkout_status(
             "item_name": transaction.get("item_name"),
             "amount": transaction.get("amount")
         }
-    
+
     # Query Stripe for current status
     host_url = str(http_request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
     stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
-    
+
     try:
         status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
-        
+
         if status.payment_status == "paid":
             # Fulfill the order - add credits to user
             update_query = {
                 "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
             }
             inc_query = {}
-            
+
             leads_to_add = transaction.get("leads_to_add", 0)
             calls_to_add = transaction.get("calls_to_add", 0)
-            
+
             if leads_to_add > 0:
                 inc_query["lead_credits_remaining"] = leads_to_add
             if calls_to_add > 0:
                 inc_query["call_credits_remaining"] = calls_to_add
-            
+
             if inc_query:
                 update_query["$inc"] = inc_query
-            
+
             # Update subscription tier if applicable
             if transaction.get("subscription_tier"):
                 plan = SUBSCRIPTION_PLANS.get(transaction["subscription_tier"], {})
@@ -8168,9 +8675,9 @@ async def get_checkout_status(
                 update_query["$set"]["subscription_status"] = "active"
                 update_query["$set"]["monthly_lead_allowance"] = plan.get("leads_per_month", 0)
                 update_query["$set"]["monthly_call_allowance"] = plan.get("calls_per_month", 0)
-            
+
             await db.users.update_one({"user_id": current_user["user_id"]}, update_query)
-            
+
             # Update transaction status
             await db.payment_transactions.update_one(
                 {"session_id": session_id},
@@ -8179,7 +8686,7 @@ async def get_checkout_status(
                     "paid_at": datetime.now(timezone.utc).isoformat()
                 }}
             )
-            
+
             # Log usage event
             if leads_to_add > 0:
                 await log_usage_event(
@@ -8195,7 +8702,7 @@ async def get_checkout_status(
                     amount=calls_to_add,
                     credits_after=current_user.get("call_credits_remaining", 0) + calls_to_add
                 )
-            
+
             return {
                 "status": "complete",
                 "payment_status": "paid",
@@ -8205,7 +8712,7 @@ async def get_checkout_status(
                 "leads_added": leads_to_add,
                 "calls_added": calls_to_add
             }
-        
+
         elif status.status == "expired":
             await db.payment_transactions.update_one(
                 {"session_id": session_id},
@@ -8216,14 +8723,14 @@ async def get_checkout_status(
                 "payment_status": "expired",
                 "message": "Payment session expired. Please try again."
             }
-        
+
         else:
             return {
                 "status": status.status,
                 "payment_status": status.payment_status,
                 "message": "Payment is being processed..."
             }
-            
+
     except Exception as e:
         logger.error(f"Error checking checkout status: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error checking payment status: {str(e)}")
@@ -8233,51 +8740,51 @@ async def stripe_webhook(request: Request):
     """Handle Stripe webhook events"""
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
-    
+
     host_url = str(request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
     stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
-    
+
     try:
         webhook_response = await stripe_checkout.handle_webhook(body, signature)
-        
+
         if webhook_response.payment_status == "paid":
             # Get transaction and fulfill if not already done
             transaction = await db.payment_transactions.find_one(
                 {"session_id": webhook_response.session_id},
                 {"_id": 0}
             )
-            
+
             if transaction and transaction.get("payment_status") != "paid":
                 # Fulfill the order
                 user_id = webhook_response.metadata.get("user_id")
                 leads_to_add = int(webhook_response.metadata.get("leads_to_add", 0))
                 calls_to_add = int(webhook_response.metadata.get("calls_to_add", 0))
                 subscription_tier = webhook_response.metadata.get("subscription_tier")
-                
+
                 update_query = {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
                 inc_query = {}
-                
+
                 if leads_to_add > 0:
                     inc_query["lead_credits_remaining"] = leads_to_add
                 if calls_to_add > 0:
                     inc_query["call_credits_remaining"] = calls_to_add
-                
+
                 if inc_query:
                     update_query["$inc"] = inc_query
-                
+
                 if subscription_tier:
                     plan = SUBSCRIPTION_PLANS.get(subscription_tier, {})
                     update_query["$set"]["subscription_tier"] = subscription_tier
                     update_query["$set"]["subscription_status"] = "active"
                     update_query["$set"]["monthly_lead_allowance"] = plan.get("leads_per_month", 0)
                     update_query["$set"]["monthly_call_allowance"] = plan.get("calls_per_month", 0)
-                
+
                 await db.users.update_one({"user_id": user_id}, update_query)
-                
+
                 await db.payment_transactions.update_one(
                     {"session_id": webhook_response.session_id},
                     {"$set": {
@@ -8285,9 +8792,9 @@ async def stripe_webhook(request: Request):
                         "paid_at": datetime.now(timezone.utc).isoformat()
                     }}
                 )
-        
+
         return {"status": "success", "event_type": webhook_response.event_type}
-        
+
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}")
         return {"status": "error", "message": str(e)}
@@ -8299,7 +8806,7 @@ async def get_payment_history(current_user: Dict = Depends(get_current_user)):
         {"user_id": current_user["user_id"]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
-    
+
     return {"transactions": transactions}
 
 # ----- Synthflow-Style Subscription System -----
@@ -8321,11 +8828,11 @@ async def get_or_create_stripe_customer(user: Dict) -> str:
     """Get existing Stripe customer or create new one"""
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     # Check if user already has a Stripe customer ID
     if user.get("stripe_customer_id"):
         return user["stripe_customer_id"]
-    
+
     # Create new Stripe customer
     try:
         customer = stripe.Customer.create(
@@ -8336,13 +8843,13 @@ async def get_or_create_stripe_customer(user: Dict) -> str:
                 "platform": "intentbrain"
             }
         )
-        
+
         # Save customer ID to user record
         await db.users.update_one(
             {"user_id": user["user_id"]},
             {"$set": {"stripe_customer_id": customer.id}}
         )
-        
+
         return customer.id
     except Exception as e:
         logger.error(f"Failed to create Stripe customer: {e}")
@@ -8352,17 +8859,17 @@ async def get_or_create_stripe_price(plan_id: str, billing_cycle: str) -> str:
     """Get or create a Stripe Price for a subscription plan"""
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     plan = SUBSCRIPTION_PLANS.get(plan_id)
     if not plan:
         raise HTTPException(status_code=400, detail="Invalid plan")
-    
+
     price_key = f"{plan_id}_{billing_cycle}"
-    
+
     # Check cache
     if STRIPE_PRICE_IDS.get(price_key):
         return STRIPE_PRICE_IDS[price_key]
-    
+
     # Check if price exists in Stripe
     try:
         prices = stripe.Price.list(
@@ -8375,7 +8882,7 @@ async def get_or_create_stripe_price(plan_id: str, billing_cycle: str) -> str:
             return prices.data[0].id
     except Exception:
         pass
-    
+
     # Calculate price based on billing cycle
     monthly_price = plan["price"]
     if billing_cycle == "yearly":
@@ -8385,7 +8892,7 @@ async def get_or_create_stripe_price(plan_id: str, billing_cycle: str) -> str:
     else:
         yearly_price = int(monthly_price * 100)  # In cents
         interval = "month"
-    
+
     # Create product if needed
     try:
         products = stripe.Product.list(limit=100)
@@ -8394,14 +8901,14 @@ async def get_or_create_stripe_price(plan_id: str, billing_cycle: str) -> str:
             if p.metadata.get("plan_id") == plan_id:
                 product = p
                 break
-        
+
         if not product:
             product = stripe.Product.create(
                 name=f"IntentBrain {plan['name']}",
                 description=f"{plan.get('leads_per_month', 0)} leads/mo, {plan.get('calls_per_month', 0)} calls/mo",
                 metadata={"plan_id": plan_id}
             )
-        
+
         # Create price
         price = stripe.Price.create(
             product=product.id,
@@ -8411,10 +8918,10 @@ async def get_or_create_stripe_price(plan_id: str, billing_cycle: str) -> str:
             lookup_key=price_key,
             metadata={"plan_id": plan_id, "billing_cycle": billing_cycle}
         )
-        
+
         STRIPE_PRICE_IDS[price_key] = price.id
         return price.id
-        
+
     except Exception as e:
         logger.error(f"Failed to create Stripe price: {e}")
         raise HTTPException(status_code=500, detail="Failed to configure pricing")
@@ -8432,34 +8939,34 @@ async def create_subscription(
     """
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     if plan_id not in SUBSCRIPTION_PLANS:
         raise HTTPException(status_code=400, detail="Invalid subscription plan")
-    
+
     if billing_cycle not in ["monthly", "yearly"]:
         raise HTTPException(status_code=400, detail="Invalid billing cycle")
-    
+
     # Check if user already has active subscription
     if current_user.get("stripe_subscription_id"):
         existing_sub = stripe.Subscription.retrieve(current_user["stripe_subscription_id"])
         if existing_sub.status in ["active", "trialing"]:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="You already have an active subscription. Use the customer portal to manage it."
             )
-    
+
     try:
         # Get or create Stripe customer
         customer_id = await get_or_create_stripe_customer(current_user)
-        
+
         # Get or create price
         price_id = await get_or_create_stripe_price(plan_id, billing_cycle)
-        
+
         # Build URLs
         origin = request.headers.get("origin", "https://intentbrain.ai")
         success_url = f"{origin}/app/settings?subscription=success"
         cancel_url = f"{origin}/app/packs?subscription=canceled"
-        
+
         # Create checkout session for subscription
         checkout_session = stripe.checkout.Session.create(
             customer=customer_id,
@@ -8489,7 +8996,7 @@ async def create_subscription(
                 "type": "subscription"
             }
         )
-        
+
         # Record pending subscription
         subscription_record = {
             "id": str(uuid.uuid4()),
@@ -8501,12 +9008,12 @@ async def create_subscription(
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.subscription_records.insert_one(subscription_record)
-        
+
         return {
             "checkout_url": checkout_session.url,
             "session_id": checkout_session.id
         }
-        
+
     except stripe.error.StripeError as e:
         logger.error(f"Stripe error creating subscription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -8522,14 +9029,14 @@ async def get_customer_portal(
     """
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     customer_id = current_user.get("stripe_customer_id")
     if not customer_id:
         raise HTTPException(status_code=400, detail="No payment profile found. Please subscribe first.")
-    
+
     origin = request.headers.get("origin", "https://intentbrain.ai")
     return_url = f"{origin}/app/settings"
-    
+
     try:
         portal_session = stripe.billing_portal.Session.create(
             customer=customer_id,
@@ -8545,7 +9052,7 @@ async def get_current_subscription(current_user: Dict = Depends(get_current_user
     """Get current subscription details"""
     if not stripe_api_key:
         return {"subscription": None, "message": "Stripe not configured"}
-    
+
     subscription_id = current_user.get("stripe_subscription_id")
     if not subscription_id:
         return {
@@ -8553,10 +9060,10 @@ async def get_current_subscription(current_user: Dict = Depends(get_current_user
             "tier": current_user.get("subscription_tier"),
             "status": current_user.get("subscription_status", "inactive")
         }
-    
+
     try:
         subscription = stripe.Subscription.retrieve(subscription_id)
-        
+
         # Get upcoming invoice for next billing date
         upcoming_invoice = None
         try:
@@ -8568,7 +9075,7 @@ async def get_current_subscription(current_user: Dict = Depends(get_current_user
             }
         except Exception:
             pass
-        
+
         return {
             "subscription": {
                 "id": subscription.id,
@@ -8600,17 +9107,17 @@ async def get_subscription_invoices(
     """Get invoice history for the customer"""
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     customer_id = current_user.get("stripe_customer_id")
     if not customer_id:
         return {"invoices": []}
-    
+
     try:
         invoices = stripe.Invoice.list(
             customer=customer_id,
             limit=limit
         )
-        
+
         return {
             "invoices": [{
                 "id": inv.id,
@@ -8638,11 +9145,11 @@ async def stripe_subscription_webhook(request: Request):
     """
     if not stripe_api_key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    
+
     payload = await request.body()
     sig_header = request.headers.get("Stripe-Signature")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
-    
+
     try:
         if webhook_secret:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
@@ -8657,12 +9164,12 @@ async def stripe_subscription_webhook(request: Request):
     except stripe.error.SignatureVerificationError as e:
         logger.error(f"Invalid webhook signature: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
-    
+
     event_type = event.type
     data = event.data.object
-    
+
     logger.info(f"Stripe webhook received: {event_type}")
-    
+
     # Handle subscription events
     if event_type == "checkout.session.completed":
         # Subscription checkout completed
@@ -8671,10 +9178,10 @@ async def stripe_subscription_webhook(request: Request):
             plan_id = data.metadata.get("plan_id")
             billing_cycle = data.metadata.get("billing_cycle", "monthly")
             subscription_id = data.subscription
-            
+
             if user_id and subscription_id:
                 plan = SUBSCRIPTION_PLANS.get(plan_id, {})
-                
+
                 await db.users.update_one(
                     {"user_id": user_id},
                     {"$set": {
@@ -8690,7 +9197,7 @@ async def stripe_subscription_webhook(request: Request):
                         "updated_at": datetime.now(timezone.utc).isoformat()
                     }}
                 )
-                
+
                 # Update subscription record
                 await db.subscription_records.update_one(
                     {"checkout_session_id": data.id},
@@ -8700,9 +9207,9 @@ async def stripe_subscription_webhook(request: Request):
                         "activated_at": datetime.now(timezone.utc).isoformat()
                     }}
                 )
-                
+
                 logger.info(f"Subscription activated for user {user_id}: {plan_id}")
-    
+
     elif event_type == "invoice.paid":
         # Recurring invoice paid - refresh credits
         subscription_id = data.subscription
@@ -8712,11 +9219,11 @@ async def stripe_subscription_webhook(request: Request):
                 {"stripe_subscription_id": subscription_id},
                 {"_id": 0}
             )
-            
+
             if user:
                 plan_id = user.get("subscription_tier")
                 plan = SUBSCRIPTION_PLANS.get(plan_id, {})
-                
+
                 # Refresh monthly credits
                 await db.users.update_one(
                     {"user_id": user["user_id"]},
@@ -8727,7 +9234,7 @@ async def stripe_subscription_webhook(request: Request):
                         "updated_at": datetime.now(timezone.utc).isoformat()
                     }}
                 )
-                
+
                 # Record invoice in our database
                 await db.invoices.insert_one({
                     "id": str(uuid.uuid4()),
@@ -8739,9 +9246,9 @@ async def stripe_subscription_webhook(request: Request):
                     "invoice_pdf": data.invoice_pdf,
                     "created_at": datetime.now(timezone.utc).isoformat()
                 })
-                
+
                 logger.info(f"Invoice paid, credits refreshed for user {user['user_id']}")
-    
+
     elif event_type == "invoice.payment_failed":
         # Payment failed
         subscription_id = data.subscription
@@ -8750,7 +9257,7 @@ async def stripe_subscription_webhook(request: Request):
                 {"stripe_subscription_id": subscription_id},
                 {"_id": 0}
             )
-            
+
             if user:
                 await db.users.update_one(
                     {"user_id": user["user_id"]},
@@ -8760,7 +9267,7 @@ async def stripe_subscription_webhook(request: Request):
                     }}
                 )
                 logger.warning(f"Payment failed for user {user['user_id']}")
-    
+
     elif event_type == "customer.subscription.updated":
         # Subscription updated (plan change, cancellation scheduled, etc.)
         subscription_id = data.id
@@ -8768,22 +9275,22 @@ async def stripe_subscription_webhook(request: Request):
             {"stripe_subscription_id": subscription_id},
             {"_id": 0}
         )
-        
+
         if user:
             update_data = {
                 "subscription_status": data.status,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
-            
+
             if data.cancel_at_period_end:
                 update_data["subscription_canceling"] = True
                 update_data["subscription_cancel_at"] = datetime.fromtimestamp(data.current_period_end).isoformat()
-            
+
             await db.users.update_one(
                 {"user_id": user["user_id"]},
                 {"$set": update_data}
             )
-    
+
     elif event_type == "customer.subscription.deleted":
         # Subscription canceled/ended
         subscription_id = data.id
@@ -8791,7 +9298,7 @@ async def stripe_subscription_webhook(request: Request):
             {"stripe_subscription_id": subscription_id},
             {"_id": 0}
         )
-        
+
         if user:
             await db.users.update_one(
                 {"user_id": user["user_id"]},
@@ -8804,7 +9311,7 @@ async def stripe_subscription_webhook(request: Request):
                 }}
             )
             logger.info(f"Subscription canceled for user {user['user_id']}")
-    
+
     return {"status": "success", "event_type": event_type}
 
 # ----- Usage Tracking & Overage Billing -----
@@ -8812,7 +9319,7 @@ async def stripe_subscription_webhook(request: Request):
 @api_router.get("/usage/current-period")
 async def get_current_period_usage(current_user: Dict = Depends(get_current_user)):
     """Get usage for the current billing period"""
-    
+
     # Determine billing period
     subscription_started = current_user.get("subscription_started_at")
     if subscription_started:
@@ -8826,33 +9333,33 @@ async def get_current_period_usage(current_user: Dict = Depends(get_current_user
         # Default to start of current month
         now = datetime.now(timezone.utc)
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    
+
     # Count usage
     leads_used = await db.leads.count_documents({
         "user_id": current_user["user_id"],
         "created_at": {"$gte": period_start.isoformat()}
     })
-    
+
     calls_made = await db.calls.count_documents({
         "user_id": current_user["user_id"],
         "created_at": {"$gte": period_start.isoformat()}
     })
-    
+
     # Get allowances
     plan = SUBSCRIPTION_PLANS.get(current_user.get("subscription_tier"), {})
     leads_allowance = plan.get("leads_per_month", 0)
     calls_allowance = plan.get("calls_per_month", 0)
-    
+
     # Calculate overages
     leads_overage = max(0, leads_used - leads_allowance)
     calls_overage = max(0, calls_made - calls_allowance)
-    
+
     # Overage rates (per unit)
     leads_overage_rate = 0.12  # $0.12 per lead overage
     calls_overage_rate = 0.10  # $0.10 per call overage
-    
+
     overage_charges = (leads_overage * leads_overage_rate) + (calls_overage * calls_overage_rate)
-    
+
     return {
         "period_start": period_start.isoformat(),
         "usage": {
@@ -8889,20 +9396,20 @@ async def get_followups(
 ):
     """Get scheduled follow-up calls"""
     query = {"user_id": current_user["user_id"]}
-    
+
     if status:
         query["status"] = status
     if lead_id:
         query["lead_id"] = lead_id
     if campaign_id:
         query["campaign_id"] = campaign_id
-    
+
     followups = await db.followups.find(
         query, {"_id": 0}
     ).sort("scheduled_at", 1).skip(skip).limit(limit).to_list(limit)
-    
+
     total = await db.followups.count_documents(query)
-    
+
     return {
         "followups": followups,
         "total": total,
@@ -8923,7 +9430,7 @@ async def create_followup(
     })
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     # Create follow-up record
     followup_record = {
         "id": str(uuid.uuid4()),
@@ -8940,9 +9447,9 @@ async def create_followup(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.followups.insert_one(followup_record)
-    
+
     return {"message": "Follow-up scheduled", "followup": {k: v for k, v in followup_record.items() if k != "_id"}}
 
 @api_router.get("/followups/pending")
@@ -8951,13 +9458,13 @@ async def get_pending_followups(
 ):
     """Get follow-ups that are due to be executed"""
     now = datetime.now(timezone.utc).isoformat()
-    
+
     followups = await db.followups.find({
         "user_id": current_user["user_id"],
         "status": "scheduled",
         "scheduled_at": {"$lte": now}
     }, {"_id": 0}).sort("scheduled_at", 1).to_list(100)
-    
+
     return {"pending_followups": followups, "count": len(followups)}
 
 @api_router.post("/followups/{followup_id}/execute")
@@ -8970,30 +9477,30 @@ async def execute_followup(
         "id": followup_id,
         "user_id": current_user["user_id"]
     })
-    
+
     if not followup:
         raise HTTPException(status_code=404, detail="Follow-up not found")
-    
+
     if followup["status"] != "scheduled":
         raise HTTPException(status_code=400, detail=f"Follow-up is {followup['status']}, not scheduled")
-    
+
     # Update status to in_progress
     await db.followups.update_one(
         {"id": followup_id},
         {"$set": {"status": "in_progress", "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     # Get lead and campaign
     lead = await db.leads.find_one({"id": followup["lead_id"]}, {"_id": 0})
     campaign = await db.campaigns.find_one({"id": followup["campaign_id"]}, {"_id": 0})
-    
+
     if not lead or not campaign:
         await db.followups.update_one(
             {"id": followup_id},
             {"$set": {"status": "failed", "notes": "Lead or campaign not found"}}
         )
         raise HTTPException(status_code=404, detail="Lead or campaign not found")
-    
+
     # Check if lead is still callable (not converted, not DNC)
     if lead.get("status") in ["converted", "dnc", "unsubscribed"]:
         await db.followups.update_one(
@@ -9001,7 +9508,7 @@ async def execute_followup(
             {"$set": {"status": "skipped", "notes": f"Lead status: {lead.get('status')}"}}
         )
         return {"message": "Follow-up skipped", "reason": f"Lead status: {lead.get('status')}"}
-    
+
     # Initiate the call (similar to /calls/initiate but with follow-up context)
     try:
         # Create call record
@@ -9018,20 +9525,20 @@ async def execute_followup(
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.calls.insert_one(call_record)
-        
+
         # Update follow-up with call reference
         await db.followups.update_one(
             {"id": followup_id},
             {"$set": {"result_call_id": call_record["id"]}}
         )
-        
+
         return {
             "message": "Follow-up call initiated",
             "call_id": call_record["id"],
             "followup_id": followup_id,
             "lead": {"name": lead.get("contact_name") or lead.get("business_name"), "phone": lead.get("phone")}
         }
-        
+
     except Exception as e:
         await db.followups.update_one(
             {"id": followup_id},
@@ -9051,31 +9558,31 @@ async def complete_followup(
         "id": followup_id,
         "user_id": current_user["user_id"]
     })
-    
+
     if not followup:
         raise HTTPException(status_code=404, detail="Follow-up not found")
-    
+
     update_data = {
         "status": "completed",
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.followups.update_one({"id": followup_id}, {"$set": update_data})
-    
+
     # Schedule retry if requested and attempts remaining
     if schedule_retry and outcome in ["no_answer", "voicemail"] and followup["attempt_number"] < followup["max_attempts"]:
         # Get campaign follow-up settings
         campaign = await db.campaigns.find_one({"id": followup["campaign_id"]})
         delay_hours = 24  # Default 24 hours
-        
+
         if campaign and campaign.get("followup_settings"):
             settings = campaign["followup_settings"]
             if outcome == "no_answer":
                 delay_hours = settings.get("no_answer_retry_delay_hours", 24)
             elif outcome == "voicemail":
                 delay_hours = settings.get("voicemail_followup_delay_hours", 48)
-        
+
         # Create new follow-up
         retry_followup = {
             "id": str(uuid.uuid4()),
@@ -9094,7 +9601,7 @@ async def complete_followup(
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         await db.followups.insert_one(retry_followup)
-        
+
         return {
             "message": "Follow-up completed, retry scheduled",
             "outcome": outcome,
@@ -9102,7 +9609,7 @@ async def complete_followup(
             "retry_at": retry_followup["scheduled_at"],
             "attempt": retry_followup["attempt_number"]
         }
-    
+
     return {"message": "Follow-up completed", "outcome": outcome, "retry_scheduled": False}
 
 @api_router.delete("/followups/{followup_id}")
@@ -9115,10 +9622,10 @@ async def cancel_followup(
         {"id": followup_id, "user_id": current_user["user_id"], "status": "scheduled"},
         {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Follow-up not found or already processed")
-    
+
     return {"message": "Follow-up cancelled"}
 
 @api_router.post("/followups/schedule-callback")
@@ -9134,7 +9641,7 @@ async def schedule_callback(
     lead = await db.leads.find_one({"id": lead_id, "user_id": current_user["user_id"]})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     followup = {
         "id": str(uuid.uuid4()),
         "user_id": current_user["user_id"],
@@ -9150,15 +9657,15 @@ async def schedule_callback(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.followups.insert_one(followup)
-    
+
     # Update lead status
     await db.leads.update_one(
         {"id": lead_id},
         {"$set": {"status": "callback_scheduled", "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return {"message": "Callback scheduled", "followup": {k: v for k, v in followup.items() if k != "_id"}}
 
 @api_router.get("/followups/stats")
@@ -9170,21 +9677,21 @@ async def get_followup_stats(
     query = {"user_id": current_user["user_id"]}
     if campaign_id:
         query["campaign_id"] = campaign_id
-    
+
     # Count by status
     pipeline = [
         {"$match": query},
         {"$group": {"_id": "$status", "count": {"$sum": 1}}}
     ]
     status_counts = await db.followups.aggregate(pipeline).to_list(10)
-    
+
     # Count by reason
     reason_pipeline = [
         {"$match": query},
         {"$group": {"_id": "$reason", "count": {"$sum": 1}}}
     ]
     reason_counts = await db.followups.aggregate(reason_pipeline).to_list(10)
-    
+
     # Upcoming follow-ups (next 24 hours)
     tomorrow = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
     upcoming = await db.followups.count_documents({
@@ -9192,7 +9699,7 @@ async def get_followup_stats(
         "status": "scheduled",
         "scheduled_at": {"$lte": tomorrow}
     })
-    
+
     # Overdue follow-ups
     now = datetime.now(timezone.utc).isoformat()
     overdue = await db.followups.count_documents({
@@ -9200,7 +9707,7 @@ async def get_followup_stats(
         "status": "scheduled",
         "scheduled_at": {"$lt": now}
     })
-    
+
     return {
         "by_status": {item["_id"]: item["count"] for item in status_counts},
         "by_reason": {item["_id"]: item["count"] for item in reason_counts},
@@ -9229,12 +9736,12 @@ async def create_followup_sequence(
 ):
     """Create a multi-touch follow-up sequence"""
     import json as json_module
-    
+
     try:
         steps_list = json_module.loads(steps)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid steps JSON")
-    
+
     sequence = {
         "id": str(uuid.uuid4()),
         "user_id": current_user["user_id"],
@@ -9248,9 +9755,9 @@ async def create_followup_sequence(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.followup_sequences.insert_one(sequence)
-    
+
     return {"message": "Sequence created", "sequence": {k: v for k, v in sequence.items() if k != "_id"}}
 
 @api_router.put("/campaigns/{campaign_id}/followup-settings")
@@ -9270,10 +9777,10 @@ async def update_campaign_followup_settings(
         "id": campaign_id,
         "user_id": current_user["user_id"]
     })
-    
+
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     followup_settings = {
         "enabled": enabled,
         "no_answer_retry_enabled": no_answer_retry_enabled,
@@ -9283,12 +9790,12 @@ async def update_campaign_followup_settings(
         "voicemail_followup_delay_hours": voicemail_followup_delay_hours,
         "sequence_id": sequence_id
     }
-    
+
     await db.campaigns.update_one(
         {"id": campaign_id},
         {"$set": {"followup_settings": followup_settings, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return {"message": "Follow-up settings updated", "settings": followup_settings}
 
 @api_router.get("/campaigns/{campaign_id}/followup-settings")
@@ -9301,10 +9808,10 @@ async def get_campaign_followup_settings(
         "id": campaign_id,
         "user_id": current_user["user_id"]
     }, {"_id": 0, "followup_settings": 1, "id": 1, "name": 1})
-    
+
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # Return default settings if none configured
     default_settings = {
         "enabled": True,
@@ -9315,7 +9822,7 @@ async def get_campaign_followup_settings(
         "voicemail_followup_delay_hours": 48,
         "sequence_id": None
     }
-    
+
     return {
         "campaign_id": campaign["id"],
         "campaign_name": campaign.get("name"),
@@ -9328,15 +9835,15 @@ async def auto_schedule_followup(call_id: str, outcome: str, user_id: str):
     call = await db.calls.find_one({"id": call_id})
     if not call:
         return
-    
+
     campaign = await db.campaigns.find_one({"id": call.get("campaign_id")})
     if not campaign:
         return
-    
+
     settings = campaign.get("followup_settings", {})
     if not settings.get("enabled", True):
         return
-    
+
     # Check if lead already has pending follow-up
     existing = await db.followups.find_one({
         "lead_id": call["lead_id"],
@@ -9345,17 +9852,17 @@ async def auto_schedule_followup(call_id: str, outcome: str, user_id: str):
     })
     if existing:
         return  # Don't create duplicate
-    
+
     delay_hours = None
     reason = None
-    
+
     if outcome == "no_answer" and settings.get("no_answer_retry_enabled", True):
         delay_hours = settings.get("no_answer_retry_delay_hours", 24)
         reason = "no_answer"
     elif outcome == "voicemail" and settings.get("voicemail_followup_enabled", True):
         delay_hours = settings.get("voicemail_followup_delay_hours", 48)
         reason = "voicemail"
-    
+
     if delay_hours and reason:
         followup = {
             "id": str(uuid.uuid4()),
@@ -9414,7 +9921,7 @@ async def remove_from_dnc_list(
     """Remove a number from the DNC list"""
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     success = await compliance_service.remove_from_dnc(phone_number)
     if success:
         return {"message": f"Removed {phone_number} from DNC list"}
@@ -9469,12 +9976,12 @@ async def get_compliance_status(
     """
     user_id = current_user["user_id"]
     features = get_tier_features(current_user)
-    
+
     # Get DNC usage for current month
     dnc_usage = await compliance_service.get_dnc_usage(user_id)
     dnc_allowance = features.get("dnc_checks_per_month", 0)
     dnc_remaining = dnc_allowance - dnc_usage["checks_used"] if dnc_allowance > 0 else "unlimited"
-    
+
     return {
         "tcpa_compliance": {
             "calling_hours_enforcement": True,
@@ -9573,7 +10080,7 @@ async def acknowledge_compliance(
     Required before making any outbound calls.
     """
     user_id = current_user["user_id"]
-    
+
     # Validate all checkboxes are checked
     if not all([
         acknowledgment.acknowledge_dnc_responsibility,
@@ -9585,11 +10092,11 @@ async def acknowledge_compliance(
             status_code=400,
             detail="All compliance acknowledgments must be accepted"
         )
-    
+
     # If B2C mode, FTC SAN is recommended (not required, but logged)
     if acknowledgment.calling_mode == "b2c" and not acknowledgment.ftc_san:
         logger.warning(f"User {user_id} selected B2C mode without FTC SAN")
-    
+
     # Update user record
     update_data = {
         "compliance_acknowledged": True,
@@ -9599,12 +10106,12 @@ async def acknowledge_compliance(
         "ftc_san": acknowledgment.ftc_san,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.users.update_one(
         {"user_id": user_id},
         {"$set": update_data}
     )
-    
+
     # Log the acknowledgment for audit
     await db.compliance_acknowledgments.insert_one({
         "id": str(uuid.uuid4()),
@@ -9622,9 +10129,9 @@ async def acknowledge_compliance(
             "litigator_risk": acknowledgment.acknowledge_litigator_risk
         }
     })
-    
+
     logger.info(f"User {user_id} acknowledged compliance v{COMPLIANCE_VERSION}, mode: {acknowledgment.calling_mode}")
-    
+
     return {
         "success": True,
         "message": "Compliance acknowledgment recorded",
@@ -9641,18 +10148,18 @@ async def get_compliance_setup_guide(
     """
     user_acknowledged = current_user.get("compliance_acknowledged", False)
     calling_mode = current_user.get("calling_mode", "b2b")
-    
+
     # Get DNC stats
     dnc_count = await db.national_dnc_list.count_documents({})
     litigator_count = await db.tcpa_litigators.count_documents({})
-    
+
     # Get last DNC refresh
     refresh_info = await db.dnc_refresh_log.find_one(
         {"type": "national_dnc"},
         {"_id": 0},
         sort=[("refreshed_at", -1)]
     )
-    
+
     dnc_current = False
     if refresh_info:
         try:
@@ -9660,7 +10167,7 @@ async def get_compliance_setup_guide(
             dnc_current = (datetime.now(timezone.utc) - last_refresh).days <= 31
         except Exception:
             pass
-    
+
     b2b_checklist = [
         {
             "id": "acknowledge",
@@ -9703,7 +10210,7 @@ async def get_compliance_setup_guide(
             "action": "upload_litigators"
         }
     ]
-    
+
     b2c_checklist = b2b_checklist + [
         {
             "id": "ftc_registration",
@@ -9730,9 +10237,9 @@ async def get_compliance_setup_guide(
             "action": "refresh_dnc"
         }
     ]
-    
+
     checklist = b2c_checklist if calling_mode == "b2c" else b2b_checklist
-    
+
     return {
         "calling_mode": calling_mode,
         "acknowledged": user_acknowledged,
@@ -9795,26 +10302,26 @@ async def upload_national_dnc_list(
     """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     content = await file.read()
     text = content.decode('utf-8')
-    
+
     # Parse phone numbers from file
     phone_numbers = []
     lines = text.strip().split('\n')
-    
+
     for line in lines:
         # Skip header row if CSV
         if 'phone' in line.lower() and len(phone_numbers) == 0:
             continue
-        
+
         # Extract phone number (clean it)
         clean_number = ''.join(filter(str.isdigit, line.split(',')[0] if ',' in line else line))
         if len(clean_number) >= 10:
             if not clean_number.startswith('1') and len(clean_number) == 10:
                 clean_number = '1' + clean_number
             phone_numbers.append(f"+{clean_number}")
-    
+
     # Bulk insert into national_dnc_list
     if phone_numbers:
         operations = [
@@ -9826,7 +10333,7 @@ async def upload_national_dnc_list(
             }
             for num in phone_numbers
         ]
-        
+
         # Use bulk upsert to avoid duplicates
         for op in operations:
             await db.national_dnc_list.update_one(
@@ -9834,7 +10341,7 @@ async def upload_national_dnc_list(
                 {"$set": op},
                 upsert=True
             )
-    
+
     return {
         "message": f"Uploaded {len(phone_numbers)} phone numbers to National DNC list",
         "count": len(phone_numbers)
@@ -9853,20 +10360,20 @@ async def get_dnc_stats(
     national_dnc_count = await db.national_dnc_list.count_documents({})
     litigator_count = await db.tcpa_litigators.count_documents({})
     internal_dnc_count = await db.dnc_list.count_documents({})
-    
+
     # Get last refresh info
     refresh_info = await db.dnc_refresh_log.find_one(
         {"type": "national_dnc"},
         {"_id": 0},
         sort=[("refreshed_at", -1)]
     )
-    
+
     litigator_refresh = await db.dnc_refresh_log.find_one(
         {"type": "litigator_list"},
         {"_id": 0},
         sort=[("refreshed_at", -1)]
     )
-    
+
     # Calculate days since last refresh
     days_since_refresh = None
     refresh_status = "never"
@@ -9884,7 +10391,7 @@ async def get_dnc_stats(
                 refresh_status = "critical"
         except Exception:
             pass
-    
+
     return {
         "national_dnc": {
             "count": national_dnc_count,
@@ -9913,13 +10420,13 @@ async def upload_ftc_dnc_data(
 ):
     """
     Upload FTC National DNC Registry data file.
-    
+
     Download data from: https://telemarketing.donotcall.gov
     Supports FTC's standard format (area code files or full data files).
     """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         content = await file.read()
         # Try UTF-8 first, fall back to latin-1
@@ -9927,38 +10434,38 @@ async def upload_ftc_dnc_data(
             text = content.decode('utf-8')
         except UnicodeDecodeError:
             text = content.decode('latin-1')
-        
+
         phone_numbers = []
         lines = text.strip().split('\n')
         skipped = 0
-        
+
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-            
+
             # Skip header rows
             if any(h in line.lower() for h in ['phone', 'number', 'area', 'header']):
                 continue
-            
+
             # FTC format is typically just phone numbers, one per line
             # Could be 10 digits or formatted
             clean_number = ''.join(filter(str.isdigit, line.split(',')[0] if ',' in line else line))
-            
+
             if len(clean_number) == 10:
                 phone_numbers.append(f"+1{clean_number}")
             elif len(clean_number) == 11 and clean_number.startswith('1'):
                 phone_numbers.append(f"+{clean_number}")
             else:
                 skipped += 1
-        
+
         if not phone_numbers:
             raise HTTPException(status_code=400, detail="No valid phone numbers found in file")
-        
+
         # Batch insert for performance (1000 at a time)
         batch_size = 1000
         inserted = 0
-        
+
         for i in range(0, len(phone_numbers), batch_size):
             batch = phone_numbers[i:i + batch_size]
             operations = []
@@ -9969,7 +10476,7 @@ async def upload_ftc_dnc_data(
                     "uploaded_by": current_user["user_id"],
                     "uploaded_at": datetime.now(timezone.utc).isoformat()
                 })
-            
+
             # Bulk upsert
             for op in operations:
                 await db.national_dnc_list.update_one(
@@ -9978,7 +10485,7 @@ async def upload_ftc_dnc_data(
                     upsert=True
                 )
             inserted += len(batch)
-        
+
         # Log the refresh
         await db.dnc_refresh_log.insert_one({
             "type": "national_dnc",
@@ -9989,7 +10496,7 @@ async def upload_ftc_dnc_data(
             "refreshed_at": datetime.now(timezone.utc).isoformat(),
             "refreshed_by": current_user["user_id"]
         })
-        
+
         return {
             "success": True,
             "message": f"Successfully imported {len(phone_numbers):,} phone numbers from FTC DNC data",
@@ -10001,7 +10508,7 @@ async def upload_ftc_dnc_data(
             },
             "next_steps": "FTC requires refresh every 31 days for safe harbor protection"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10017,35 +10524,35 @@ async def upload_litigator_list(
     Upload TCPA litigator phone numbers list.
     These are numbers associated with known TCPA plaintiffs/serial litigators.
     Calls to these numbers will be blocked with high-risk warning.
-    
+
     Format: CSV or TXT with phone numbers (one per line)
     Optional columns: phone_number, name, firm, notes, risk_level
     """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         content = await file.read()
         try:
             text = content.decode('utf-8')
         except UnicodeDecodeError:
             text = content.decode('latin-1')
-        
+
         lines = text.strip().split('\n')
         litigators = []
-        
+
         # Check if CSV with headers
         has_headers = any(h in lines[0].lower() for h in ['phone', 'name', 'firm']) if lines else False
         start_idx = 1 if has_headers else 0
-        
+
         for line in lines[start_idx:]:
             line = line.strip()
             if not line:
                 continue
-            
+
             parts = line.split(',') if ',' in line else [line]
             phone = ''.join(filter(str.isdigit, parts[0]))
-            
+
             if len(phone) >= 10:
                 if len(phone) == 10:
                     phone = f"+1{phone}"
@@ -10053,7 +10560,7 @@ async def upload_litigator_list(
                     phone = f"+{phone}"
                 else:
                     continue
-                
+
                 litigator = {
                     "phone_number": phone,
                     "name": parts[1].strip() if len(parts) > 1 else None,
@@ -10065,10 +10572,10 @@ async def upload_litigator_list(
                     "added_at": datetime.now(timezone.utc).isoformat()
                 }
                 litigators.append(litigator)
-        
+
         if not litigators:
             raise HTTPException(status_code=400, detail="No valid phone numbers found in file")
-        
+
         # Upsert litigators
         for lit in litigators:
             await db.tcpa_litigators.update_one(
@@ -10076,7 +10583,7 @@ async def upload_litigator_list(
                 {"$set": lit},
                 upsert=True
             )
-        
+
         # Log the refresh
         await db.dnc_refresh_log.insert_one({
             "type": "litigator_list",
@@ -10086,13 +10593,13 @@ async def upload_litigator_list(
             "refreshed_at": datetime.now(timezone.utc).isoformat(),
             "refreshed_by": current_user["user_id"]
         })
-        
+
         return {
             "success": True,
             "message": f"Successfully imported {len(litigators)} TCPA litigator numbers",
             "count": len(litigators)
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10110,7 +10617,7 @@ async def add_litigator(
     """Add a single phone number to the TCPA litigator list."""
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     clean_number = ''.join(filter(str.isdigit, phone_number))
     if len(clean_number) == 10:
         clean_number = f"+1{clean_number}"
@@ -10118,7 +10625,7 @@ async def add_litigator(
         clean_number = f"+{clean_number}"
     else:
         raise HTTPException(status_code=400, detail="Invalid phone number format")
-    
+
     litigator = {
         "phone_number": clean_number,
         "name": name,
@@ -10129,13 +10636,13 @@ async def add_litigator(
         "added_by": current_user["user_id"],
         "added_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.tcpa_litigators.update_one(
         {"phone_number": clean_number},
         {"$set": litigator},
         upsert=True
     )
-    
+
     return {"success": True, "message": f"Added {clean_number} to litigator list"}
 
 @api_router.get("/compliance/litigators")
@@ -10146,10 +10653,10 @@ async def get_litigators(
     """Get list of known TCPA litigators."""
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     cursor = db.tcpa_litigators.find({}, {"_id": 0}).limit(limit)
     litigators = await cursor.to_list(length=limit)
-    
+
     return {
         "litigators": litigators,
         "count": len(litigators),
@@ -10164,7 +10671,7 @@ async def remove_litigator(
     """Remove a phone number from the TCPA litigator list."""
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Try different formats
     formats_to_try = [phone_number]
     clean = ''.join(filter(str.isdigit, phone_number))
@@ -10172,12 +10679,12 @@ async def remove_litigator(
         formats_to_try.append(f"+1{clean}")
     elif len(clean) == 11:
         formats_to_try.append(f"+{clean}")
-    
+
     result = await db.tcpa_litigators.delete_one({"phone_number": {"$in": formats_to_try}})
-    
+
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Litigator not found")
-    
+
     return {"success": True, "message": "Litigator removed"}
 
 @api_router.get("/compliance/litigators/info")
@@ -10277,7 +10784,7 @@ async def get_dnc_refresh_reminder(
         {"_id": 0},
         sort=[("refreshed_at", -1)]
     )
-    
+
     if not refresh_info:
         return {
             "needs_refresh": True,
@@ -10286,11 +10793,11 @@ async def get_dnc_refresh_reminder(
             "action_url": "https://telemarketing.donotcall.gov",
             "days_overdue": None
         }
-    
+
     try:
         last_refresh = datetime.fromisoformat(refresh_info["refreshed_at"].replace("Z", "+00:00"))
         days_since = (datetime.now(timezone.utc) - last_refresh).days
-        
+
         if days_since <= 25:
             return {
                 "needs_refresh": False,
@@ -10348,12 +10855,12 @@ async def get_user_optouts(
     try:
         # Get opt-outs from internal DNC list with user_request reason
         total = await db.dnc_list.count_documents({"reason": "user_request"})
-        
+
         optouts = await db.dnc_list.find(
             {"reason": "user_request"},
             {"_id": 0}
         ).sort("added_at", -1).skip(skip).limit(limit).to_list(length=limit)
-        
+
         # Enrich with call data if available
         enriched_optouts = []
         for optout in optouts:
@@ -10363,7 +10870,7 @@ async def get_user_optouts(
                 {"lead.phone": phone, "outcome": "opted_out"},
                 {"_id": 0, "lead.business_name": 1, "lead.contact_name": 1, "opt_out_phrase": 1, "ended_at": 1}
             )
-            
+
             enriched_optouts.append({
                 "phone_number": phone,
                 "added_at": optout.get("added_at"),
@@ -10372,7 +10879,7 @@ async def get_user_optouts(
                 "opt_out_phrase": call.get("opt_out_phrase") if call else None,
                 "call_ended_at": call.get("ended_at") if call else None
             })
-        
+
         return {
             "total": total,
             "optouts": enriched_optouts,
@@ -10396,7 +10903,7 @@ async def remove_from_optouts(
         result = await db.dnc_list.delete_one({"phone_number": phone_number, "reason": "user_request"})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Phone number not found in opt-out list")
-        
+
         logger.info(f"Removed {phone_number} from opt-out list by {current_user.get('email')}")
         return {"message": f"Removed {phone_number} from opt-out list", "deleted": True}
     except HTTPException:
@@ -10430,9 +10937,9 @@ async def submit_demo_request(request: DemoRequestForm):
             "source": "homepage_form",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        
+
         await db.demo_requests.insert_one(demo_request)
-        
+
         # Try to send email notification (non-blocking)
         try:
             if notification_service:
@@ -10450,9 +10957,9 @@ async def submit_demo_request(request: DemoRequestForm):
                 )
         except Exception as e:
             logger.warning(f"Failed to send demo request notification: {e}")
-        
+
         return {"success": True, "message": "Demo request submitted successfully"}
-    
+
     except Exception as e:
         logger.error(f"Failed to store demo request: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit demo request")
@@ -10475,8 +10982,12 @@ async def call_yourself_demo(
     Cost: ~$0.50 per demo call
     """
     # Rate limit by IP for anonymous users
-    client_ip = http_request.client.host if http_request.client else "unknown"
-    
+    forwarded = http_request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = http_request.headers.get("x-real-ip") or (http_request.client.host if http_request.client else "unknown")
+
     if current_user:
         user_id = current_user["user_id"]
         # Check if user already used their demo call (limit 3 per user)
@@ -10486,30 +10997,30 @@ async def call_yourself_demo(
             MAX_DEMO_CALLS = 10
             if demo_calls_used >= MAX_DEMO_CALLS:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail=f"You've already used your {MAX_DEMO_CALLS} free demo calls. Subscribe to make more calls!"
                 )
     else:
         # Anonymous user - rate limit by IP (max 2 calls per IP)
         user_id = f"anon_{client_ip}"
         anon_demo = await db.demo_calls.count_documents({"ip_address": client_ip})
-        if anon_demo >= 2:
+        if anon_demo >= 5:
             raise HTTPException(
                 status_code=400,
                 detail="You've used your free demo calls. Create an account for more!"
             )
-    
+
     # Validate phone number format
     phone = request.phone_number.strip()
     if not phone.startswith("+"):
         phone = "+1" + phone.replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
-    
+
     if not twilio_client:
         raise HTTPException(status_code=503, detail="Calling service not configured. Please add TWILIO credentials.")
-    
+
     if not twilio_phone_number:
         raise HTTPException(status_code=503, detail="Twilio phone number not configured on the server. Add TWILIO_PHONE_NUMBER to your environment.")
-    
+
     try:
         # Get the base URL for webhooks
         host = http_request.headers.get("host", "")
@@ -10519,10 +11030,10 @@ async def call_yourself_demo(
             base_url = f"https://{host}"
         else:
             base_url = "https://intentbrain.ai"
-        
+
         # Create a demo call record
         demo_call_id = str(uuid.uuid4())
-        
+
         # Make the call with demo TwiML
         call = twilio_client.calls.create(
             to=phone,
@@ -10532,14 +11043,14 @@ async def call_yourself_demo(
             status_callback_event=["completed"],
             timeout=30
         )
-        
+
         # Update user's demo call count (only for logged in users)
         if current_user:
             await db.users.update_one(
                 {"user_id": user_id},
                 {"$inc": {"demo_calls_used": 1}}
             )
-        
+
         # Log the demo call
         await db.demo_calls.insert_one({
             "id": demo_call_id,
@@ -10550,15 +11061,15 @@ async def call_yourself_demo(
             "status": "initiated",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
-        
+
         logger.info(f"Demo call initiated for {user_id} to {phone}")
-        
+
         return {
             "success": True,
             "message": "Demo call initiated! Your phone will ring in a few seconds.",
             "call_id": demo_call_id
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10581,15 +11092,15 @@ async def call_yourself_demo(
 async def demo_call_twiml(demo_call_id: str, http_request: Request):
     """Generate TwiML for the demo call - uses ElevenLabs voice"""
     response = VoiceResponse()
-    
+
     # Get the host for audio URL
     host = http_request.headers.get("host", "intentbrain.ai")
     protocol = "https" if "intentbrain" in host or "preview" in host else "http"
     base_url = f"{protocol}://{host}"
-    
+
     # Play pre-generated ElevenLabs audio for the demo
     response.play(f"{base_url}/api/demo/audio/{demo_call_id}")
-    
+
     return Response(content=str(response), media_type="application/xml")
 
 
@@ -10600,14 +11111,14 @@ _demo_audio_cache = None
 async def demo_audio(demo_call_id: str):
     """Generate ElevenLabs audio for the demo call - cached for speed"""
     global _demo_audio_cache
-    
+
     # Return cached audio if available
     if _demo_audio_cache:
         return Response(content=_demo_audio_cache, media_type="audio/mpeg")
-    
+
     demo_script = """Hey! This is Sarah from IntentBrain... Glad you picked up!
 
-I know what you're thinking— great, another sales call, right? 
+I know what you're thinking— great, another sales call, right?
 
 But here's the twist... I'm actually an AI. Yeah— a real-time AI, having a natural conversation with you, right now.
 
@@ -10630,7 +11141,7 @@ Anyway— I'll let you get back to it. Talk soon!"""
     try:
         # Use Rachel voice - American English female (same as homepage)
         voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
@@ -10648,7 +11159,7 @@ Anyway— I'll let you get back to it. Talk soon!"""
                 },
                 timeout=60.0
             )
-            
+
             if response.status_code == 200:
                 # Cache the audio for future calls
                 _demo_audio_cache = response.content
@@ -10661,6 +11172,26 @@ Anyway— I'll let you get back to it. Talk soon!"""
         return Response(content=b"", media_type="audio/mpeg")
 
 
+@api_router.get("/vm-audio/{token}")
+async def vm_audio_stream(token: str):
+    """Serve a persisted cloned-voice voicemail MP3 by opaque token.
+
+    Reachable by Twilio (no auth) at the URL stored in campaign.voicemail_audio_url.
+    Token is a uuid4.hex minted at synth time — campaign_id is never exposed.
+    Returns 404 if the file is absent → generate_voicemail_twiml falls back
+    to Polly automatically.
+    """
+    from services.vm_cloned_audio import read_vm_audio_bytes
+    data = read_vm_audio_bytes(token)
+    if not data:
+        raise HTTPException(status_code=404, detail="vm audio not found")
+    return Response(
+        content=data,
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 @api_router.get("/demo/calls-remaining")
 async def get_demo_calls_remaining(current_user: Dict = Depends(get_current_user)):
     """Check how many demo calls the user has remaining"""
@@ -10670,7 +11201,7 @@ async def get_demo_calls_remaining(current_user: Dict = Depends(get_current_user
     else:
         demo_calls_used = user.get("demo_calls_used", 0)
     MAX_DEMO_CALLS = 5
-    
+
     return {
         "demo_calls_used": demo_calls_used,
         "demo_calls_remaining": max(0, MAX_DEMO_CALLS - demo_calls_used),
@@ -10697,22 +11228,22 @@ async def initiate_real_call(
     """
     if not twilio_service.is_configured:
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail="Twilio not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to .env"
         )
-    
+
     user_id = current_user["user_id"]
-    
+
     # Check trial status first
     trial_status = get_trial_status(current_user)
-    
+
     # Check phone verification (required for all trial users)
     if trial_status["is_trial"] and not current_user.get("phone_verified", False):
         raise HTTPException(
             status_code=403,
             detail="Phone verification required. Please verify your phone number to use your free trial."
         )
-    
+
     if trial_status["is_trial"]:
         # Trial user - check if they have time remaining
         if trial_status["trial_expired"] or not trial_status["can_make_calls"]:
@@ -10726,13 +11257,13 @@ async def initiate_real_call(
         calls_remaining = current_user.get("call_credits_remaining", 0)
         if calls_remaining < 1:
             raise HTTPException(status_code=402, detail="Insufficient call credits")
-        
+
         # Deduct call credit for paid users
         await db.users.update_one(
             {"user_id": user_id},
             {"$inc": {"call_credits_remaining": -1}}
         )
-        
+
         # Log usage event
         await log_usage_event(
             user_id=user_id,
@@ -10740,27 +11271,27 @@ async def initiate_real_call(
             amount=1,
             credits_after=calls_remaining - 1
         )
-    
+
     # Get lead (with user ownership verification)
     lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     phone_number = lead.get("phone")
     if not phone_number:
         raise HTTPException(status_code=400, detail="Lead has no phone number")
-    
+
     # Get campaign (with user ownership verification)
     campaign = await db.campaigns.find_one({"id": request.campaign_id, "user_id": user_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # Run compliance checks
     compliance_result = await compliance_service.pre_call_compliance_check(
         phone_number=phone_number,
         user_id=user_id
     )
-    
+
     if not compliance_result["is_allowed"]:
         # Refund credit if paid user and call blocked
         if not trial_status["is_trial"]:
@@ -10773,7 +11304,30 @@ async def initiate_real_call(
             "message": "Call blocked by compliance checks",
             "reasons": compliance_result["reasons"]
         }
-    
+
+    # Prepare personalized cloned voicemail for this exact lead.
+    try:
+        from services.vm_cloned_audio import ensure_lead_vm_audio
+        _backend_url = (
+            os.environ.get("BACKEND_PUBLIC_URL")
+            or os.environ.get("REACT_APP_BACKEND_URL")
+            or ""
+        )
+        if _backend_url and campaign.get("voicemail_enabled", True):
+            await ensure_lead_vm_audio(
+                db=db,
+                eleven_client=eleven_client,
+                backend_public_url=_backend_url,
+                campaign=campaign,
+                lead=lead,
+                user_id=user_id,
+            )
+    except Exception as _lead_vm_err:
+        logger.error(
+            f"[vm_lead] preparation failed campaign={request.campaign_id} "
+            f"lead={request.lead_id}: {_lead_vm_err}"
+        )
+
     # Create call record with user_id
     call = Call(
         user_id=user_id,
@@ -10783,13 +11337,13 @@ async def initiate_real_call(
         started_at=datetime.now(timezone.utc).isoformat()
     )
     await db.calls.insert_one(call.model_dump())
-    
+
     # Get callback URL
     callback_url = str(http_request.base_url).rstrip("/")
-    
+
     # Check if campaign has voicemail enabled (use AMD)
     use_amd = campaign.get("voicemail_enabled", True)
-    
+
     try:
         if use_amd:
             # Use AMD-enabled call (detects human vs voicemail)
@@ -10808,7 +11362,7 @@ async def initiate_real_call(
                 campaign=campaign,
                 callback_url=callback_url
             )
-        
+
         # Update call record with Twilio SID
         await db.calls.update_one(
             {"id": call.id},
@@ -10817,7 +11371,7 @@ async def initiate_real_call(
                 "status": CallStatus.IN_PROGRESS.value
             }}
         )
-        
+
         response_data = {
             "status": "initiated",
             "call_id": call.id,
@@ -10825,15 +11379,15 @@ async def initiate_real_call(
             "message": "Call initiated successfully",
             "amd_enabled": use_amd
         }
-        
+
         if trial_status["is_trial"]:
             response_data["trial_minutes_remaining"] = trial_status["minutes_remaining"]
             response_data["is_trial"] = True
         else:
             response_data["credits_remaining"] = current_user.get("call_credits_remaining", 0) - 1
-        
+
         return response_data
-        
+
     except Exception as e:
         # Refund the credit if call failed to initiate (paid users only)
         if not trial_status["is_trial"]:
@@ -10856,13 +11410,13 @@ async def twilio_voice_webhook(lead_id: str, campaign_id: str, request: Request)
     """
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
-    
+
     if not lead or not campaign:
         response = VoiceResponse()
         response.say("Sorry, there was an error. Goodbye.", voice='Polly.Joanna')
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
-    
+
     twiml = twilio_service.generate_ai_greeting_twiml(lead, campaign)
     return Response(content=twiml, media_type="application/xml")
 
@@ -10872,9 +11426,9 @@ async def twilio_gather_webhook(request: Request):
     form_data = await request.form()
     speech_result = form_data.get("SpeechResult", "")
     digits = form_data.get("Digits", "")  # noqa: F841 - may be used for DTMF
-    
+
     response = VoiceResponse()
-    
+
     # Check for DNC request keywords
     dnc_keywords = ["stop", "remove", "don't call", "do not call", "unsubscribe", "no thanks"]
     if any(keyword in speech_result.lower() for keyword in dnc_keywords):
@@ -10882,14 +11436,14 @@ async def twilio_gather_webhook(request: Request):
         to_number = form_data.get("To", "")
         if to_number:
             await compliance_service.add_to_dnc(to_number, reason="user_request")
-        
+
         response.say(
             "No problem at all. I've removed your number from our list. Have a great day!",
             voice='Polly.Joanna'
         )
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
-    
+
     # Check for interest
     interest_keywords = ["yes", "sure", "okay", "tell me more", "interested"]
     if any(keyword in speech_result.lower() for keyword in interest_keywords):
@@ -10899,33 +11453,33 @@ async def twilio_gather_webhook(request: Request):
             "Would you be the right person to discuss this with, or should I speak with someone else?",
             voice='Polly.Joanna'
         )
-        
+
         gather = Gather(
             input='speech',
             timeout=5,
-            speech_timeout='auto',
+            speech_timeout="auto",
             action='/api/twilio/qualify',
             method='POST'
         )
         response.append(gather)
         return Response(content=str(response), media_type="application/xml")
-    
+
     # Default: ask for clarification
     response.say(
         "I'm sorry, I didn't quite catch that. Are you interested in learning more about how we can help your business?",
         voice='Polly.Joanna'
     )
-    
+
     gather = Gather(
         input='speech dtmf',
         timeout=5,
-        speech_timeout='auto',
+        speech_timeout="auto",
         action='/api/twilio/gather',
         method='POST'
     )
     gather.say("Press 1 for yes, or say not interested to opt out.", voice='Polly.Joanna')
     response.append(gather)
-    
+
     return Response(content=str(response), media_type="application/xml")
 
 @api_router.post("/twilio/qualify")
@@ -10933,9 +11487,9 @@ async def twilio_qualify_webhook(request: Request):
     """Handle qualification responses"""
     form_data = await request.form()
     speech_result = form_data.get("SpeechResult", "")
-    
+
     response = VoiceResponse()
-    
+
     # Check if they're the decision maker
     decision_maker_keywords = ["yes", "i am", "that's me", "correct"]
     if any(keyword in speech_result.lower() for keyword in decision_maker_keywords):
@@ -10944,11 +11498,11 @@ async def twilio_qualify_webhook(request: Request):
             "who can show you exactly how this works. Would this week or next week work better for you?",
             voice='Polly.Joanna'
         )
-        
+
         gather = Gather(
             input='speech',
             timeout=5,
-            speech_timeout='auto',
+            speech_timeout="auto",
             action='/api/twilio/book',
             method='POST'
         )
@@ -10959,16 +11513,16 @@ async def twilio_qualify_webhook(request: Request):
             "Or I can send some information to their email if you'd prefer.",
             voice='Polly.Joanna'
         )
-        
+
         gather = Gather(
             input='speech',
             timeout=5,
-            speech_timeout='auto',
+            speech_timeout="auto",
             action='/api/twilio/gather',
             method='POST'
         )
         response.append(gather)
-    
+
     return Response(content=str(response), media_type="application/xml")
 
 @api_router.post("/twilio/book")
@@ -10976,9 +11530,9 @@ async def twilio_book_webhook(request: Request):
     """Handle booking responses"""
     form_data = await request.form()
     call_sid = form_data.get("CallSid", "")
-    
+
     response = VoiceResponse()
-    
+
     # In production, this would integrate with calendar booking
     # For now, capture interest and end call positively
     response.say(
@@ -10986,7 +11540,7 @@ async def twilio_book_webhook(request: Request):
         "They'll send you a calendar invite shortly. Thank you for your time today, and have a great day!",
         voice='Polly.Joanna'
     )
-    
+
     # Update call record as qualified
     if call_sid:
         await db.calls.update_one(
@@ -11000,7 +11554,7 @@ async def twilio_book_webhook(request: Request):
                 }
             }}
         )
-    
+
     response.hangup()
     return Response(content=str(response), media_type="application/xml")
 
@@ -11016,11 +11570,11 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
     Returns a data URI that can be played by Twilio.
     Uses disk cache to avoid burning ElevenLabs credits on every restart."""
     global _inbound_audio_cache
-    
+
     # Check memory cache first
     if cache_key and cache_key in _inbound_audio_cache:
         return _inbound_audio_cache[cache_key]
-    
+
     # Check disk cache
     if cache_key:
         disk_path = os.path.join(_INBOUND_AUDIO_DIR, f"{cache_key}.b64")
@@ -11029,13 +11583,13 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
                 audio_uri = f.read()
             _inbound_audio_cache[cache_key] = audio_uri
             return audio_uri
-    
+
     if not elevenlabs_api_key:
         return None
-    
+
     try:
         voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
@@ -11054,11 +11608,11 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
                 },
                 timeout=30.0
             )
-            
+
             if response.status_code == 200:
                 audio_base64 = base64.b64encode(response.content).decode('utf-8')
                 audio_uri = f"data:audio/mpeg;base64,{audio_base64}"
-                
+
                 # Save to memory cache
                 if cache_key:
                     _inbound_audio_cache[cache_key] = audio_uri
@@ -11066,11 +11620,11 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
                     os.makedirs(_INBOUND_AUDIO_DIR, exist_ok=True)
                     with open(os.path.join(_INBOUND_AUDIO_DIR, f"{cache_key}.b64"), "w") as f:
                         f.write(audio_uri)
-                
+
                 return audio_uri
     except Exception as e:
         logger.error(f"ElevenLabs inbound audio error: {e}")
-    
+
     return None
 
 # Pre-generate common inbound responses on startup
@@ -11078,25 +11632,25 @@ async def generate_inbound_audio(text: str, cache_key: str = None) -> str:
 async def cache_inbound_audio():
     """Load inbound call audio from disk cache. Only calls ElevenLabs if no cache exists."""
     global _inbound_audio_cache
-    
+
     if not elevenlabs_api_key:
         logger.info("No ElevenLabs key, skipping inbound audio cache")
         return
-    
+
     common_responses = {
-        "greeting": "Hi, thanks for calling IntentBrain! This is Sarah, your AI sales assistant. I can answer questions about our platform, help you understand if we're a good fit, and even book a demo with our team. How can I help you today?",
+        "greeting": "Hi, thanks for calling IntentBrain! I'm your AI assistant. I can answer questions about the platform, help you figure out if we're a good fit, and even book a demo. How can I help?",
         "qualify_volume": "Great question! Before I quote pricing, can I ask roughly how many leads or calls you'd handle per month? That way I can recommend the right plan for you.",
         "qualify_byol_or_discovery": "Got it. Quick question — do you already have your own list of leads you want us to call, or do you need us to find them for you?",
         "pricing_starter": "Got it. Based on that, our Discovery Starter plan at three hundred ninety-nine dollars a month is a great fit. You get five hundred high-intent prospects we surface for you each month, two hundred fifty AI calls, AI qualification, auto-booking, and seven-day call recordings. One user seat. We also have a starter package at forty-nine dollars a month if that would suit you better — want me to walk you through that, or schedule you with a specialist for the Discovery plan?",
         "pricing_pro": "Perfect. Our Discovery Pro plan at eight hundred ninety-nine dollars a month is our best value for that volume. You get fifteen hundred high-intent prospects, seven hundred fifty AI calls, full call transcripts, thirty-day recordings, custom scripts, and three user seats. We also have a starter package at forty-nine dollars a month if that would suit you better — want me to walk you through that, or book a demo for the Pro plan?",
         "pricing_elite": "Excellent. For that volume, our Discovery Elite plan at fifteen hundred ninety-nine dollars a month is the right fit. You get three thousand high-intent prospects, two thousand AI calls, ninety-day recordings, priority support, and five user seats. We also have a starter package at forty-nine dollars a month if you'd rather start smaller — want me to walk you through that, or book a demo for Elite?",
-        "pricing_overview": "Sure! We have three Discovery plans that include lead discovery and AI calling. Discovery Starter at three hundred ninety-nine a month for five hundred prospects and two hundred fifty calls. Discovery Pro at eight hundred ninety-nine for fifteen hundred prospects and seven hundred fifty calls — that's our best value. And Discovery Elite at fifteen hundred ninety-nine for three thousand prospects and two thousand calls. We also have a starter package at forty-nine dollars a month if that would suit you better. Want me to book a demo to find your fit?",
+        "pricing_overview": "We have starter plans at $49 and discovery at $399. Would it make sense to schedule a quick demo?",
         "pricing_test_drive": "Perfect. Our Test Drive plan is forty-nine dollars a month and includes fifty AI calls, call recordings, a basic dashboard, and CSV upload — great for getting started. You can upgrade anytime. Want me to book a quick demo so we can show you around?",
         "pricing_byol_starter": "Great — since you have your own list, our BYOL Starter plan at one hundred ninety-nine dollars a month is built for that. You get two hundred fifty AI calls on the leads you upload, AI qualification, auto-booking, and seven-day recordings. One user seat. Want me to set up a quick demo?",
         "pricing_byol_pro": "Perfect. Our BYOL Pro plan at four hundred forty-nine dollars a month gives you seven hundred fifty AI calls on your own list, full transcripts, thirty-day recordings, custom scripts, and three user seats. Want to book a demo to see it in action?",
         "pricing_byol_scale": "Excellent. Our BYOL Scale plan at seven hundred ninety-nine dollars a month gives you fifteen hundred AI calls on your own list, sixty-day recordings, custom scripts, priority support, and five user seats. Want me to book a demo?",
         "how_it_works": "Here's how IntentBrain works... First, our AI discovers leads by finding businesses actively searching for services like yours. Second, our voice agents call these leads with natural, human-like conversations. Third, the AI qualifies leads based on your criteria. Fourth, qualified leads get booked directly into your calendar. You basically wake up to booked meetings! Would you like to see a demo?",
-        "book_demo": "Perfect! I'd love to get you scheduled with one of our product specialists. They can give you a personalized walkthrough. Can you tell me your email address so I can send you a calendar invite?",
+        "book_demo": "Based on what you've told me, I think a personalized demo would make sense. What's the best mobile number for a booking text?",
         "features": "IntentBrain has some powerful features. We offer AI lead discovery, natural voice conversations, voicemail drops, automatic call transcription, CRM integrations with HubSpot and Salesforce, and Calendly integration for auto-booking meetings. Our AI agents can even handle objections and qualify leads. What's most important to you?",
         "not_interested": "No problem at all! Thanks for calling IntentBrain. If you ever want to explore AI-powered sales automation, we're here. Have a great day!",
         "default": "I'd be happy to help with that. IntentBrain is an AI-powered cold calling platform that automates your sales outreach. Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. Would you like to know about pricing, see how it works, or schedule a demo?",
@@ -11105,15 +11659,15 @@ async def cache_inbound_audio():
         "closing": "Thanks for calling IntentBrain. We're excited to show you how we can automate your sales outreach. Have a fantastic day!",
         "about_us": "IntentBrain is an AI-powered sales platform that launched recently. We help businesses automate their outbound outreach with AI that sounds completely natural. Our system finds high-intent leads, calls them, qualifies them based on your criteria, detects their personality type, and either books a meeting or transfers them live to your team. We're a small team with big technology behind us."
     }
-    
+
     os.makedirs(_INBOUND_AUDIO_DIR, exist_ok=True)
     loaded_from_disk = 0
     generated_fresh = 0
-    
+
     for key, text in common_responses.items():
         cache_key = f"inbound_{key}"
         disk_path = os.path.join(_INBOUND_AUDIO_DIR, f"{cache_key}.b64")
-        
+
         # Load from disk if available (FREE — no ElevenLabs call)
         if os.path.exists(disk_path):
             with open(disk_path, "r") as f:
@@ -11131,27 +11685,206 @@ async def cache_inbound_audio():
                     logger.warning(f"Failed to generate inbound audio: {key} (ElevenLabs returned empty)")
             except Exception as e:
                 logger.error(f"Failed to cache inbound audio {key}: {e}")
-    
+
     logger.info(f"Inbound audio caching complete: {loaded_from_disk} from disk, {generated_fresh} freshly generated")
 
+
+# ---------------------------------------------------------------------------
+# BUG #004 fix - Pre-warm fast-path audio in background so first call is fast
+# ---------------------------------------------------------------------------
+@app.on_event("startup")
+async def prewarm_fast_path_audio():
+    """Kick off background generation of TTS audio for fast-path responses.
+    Runs after startup so it doesn't block app readiness."""
+    if not elevenlabs_api_key:
+        logger.info("No ElevenLabs key - skipping fast-path prewarm")
+        return
+    asyncio.create_task(_do_prewarm_fast_path_audio())
+
+
+async def _do_prewarm_fast_path_audio():
+    try:
+        sem = asyncio.Semaphore(4)
+        unique_texts = sorted(set(_BRAIN_FAST_PATH_CACHE.values()))
+
+        async def _gen_one(text: str):
+            async with sem:
+                h = hashlib.md5(text.encode("utf-8")).hexdigest()[:16]
+                ck = f"inbound_dyn_{h}"
+                if ck in _inbound_audio_cache:
+                    return "memory"
+                disk_path = os.path.join(_INBOUND_AUDIO_DIR, f"{ck}.b64")
+                if os.path.exists(disk_path):
+                    with open(disk_path, "r") as f:
+                        _inbound_audio_cache[ck] = f.read()
+                    return "disk"
+                await generate_inbound_audio(text, cache_key=ck)
+                return "fresh" if ck in _inbound_audio_cache else "failed"
+
+        results = await asyncio.gather(*[_gen_one(t) for t in unique_texts],
+                                       return_exceptions=True)
+        counts = {"memory": 0, "disk": 0, "fresh": 0, "failed": 0, "error": 0}
+        for r in results:
+            if isinstance(r, Exception):
+                counts["error"] += 1
+            elif r in counts:
+                counts[r] += 1
+        logger.info(
+            f"Fast-path audio prewarm complete: total={len(unique_texts)} "
+            f"memory={counts['memory']} disk={counts['disk']} "
+            f"fresh={counts['fresh']} failed={counts['failed']} error={counts['error']}"
+        )
+    except Exception as e:
+        logger.error(f"Fast-path prewarm error: {e}")
+
+
 # Endpoint to serve cached inbound audio
+# === Central TTS helper (BUG #001 fix) ===
+_TTS_LOG = logging.getLogger("tts")
+
+async def tts_speak(target, text, *, audio_key=None, intent="UNKNOWN",
+                    stage="UNKNOWN", call_sid="", route=""):
+    backend_url = os.environ.get("BACKEND_URL", "")
+    provider = "polly"
+    voice_id = "Polly.Joanna-Neural"
+    cache_hit = False
+    fallback_reason = None
+    safe_text = (text or "").strip()
+    if not safe_text:
+        return
+    if audio_key:
+        cache_key = f"inbound_{audio_key}"
+        url_path = audio_key
+    else:
+        h = hashlib.md5(safe_text.encode("utf-8")).hexdigest()[:16]
+        cache_key = f"inbound_dyn_{h}"
+        url_path = f"dyn_{h}"
+    try:
+        if cache_key in _inbound_audio_cache:
+            target.play(f"{backend_url}/api/inbound-audio/{url_path}")
+            provider = "elevenlabs"
+            voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "default")
+            cache_hit = True
+        else:
+            try:
+                await generate_inbound_audio(safe_text, cache_key=cache_key)
+                if cache_key in _inbound_audio_cache:
+                    target.play(f"{backend_url}/api/inbound-audio/{url_path}")
+                    provider = "elevenlabs"
+                    voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "default")
+                    cache_hit = False
+                else:
+                    raise RuntimeError("ElevenLabs returned no audio")
+            except Exception as e:
+                fallback_reason = f"elevenlabs_failed:{type(e).__name__}:{str(e)[:80]}"
+                target.say(safe_text, voice='Polly.Joanna-Neural')  # noqa: tts_fallback
+    except Exception as e:
+        fallback_reason = f"tts_helper_error:{type(e).__name__}:{str(e)[:80]}"
+        try:
+            target.say(safe_text, voice='Polly.Joanna-Neural')  # noqa: tts_fallback
+        except Exception:
+            pass
+    log_text = safe_text[:120].replace("\n", " ").replace('"', "'")
+    _TTS_LOG.info(
+        f'TTS_USED call_sid={call_sid or "n/a"} intent={intent} stage={stage} '
+        f'provider={provider} voice_id={voice_id} cache_hit={cache_hit} '
+        f'fallback_reason={fallback_reason or "null"} route={route or "n/a"} '
+        f'response="{log_text}"'
+    )
+
+
 @api_router.get("/inbound-audio/{audio_key}")
 async def serve_inbound_audio(audio_key: str):
     """Serve pre-cached ElevenLabs audio for inbound calls."""
     cache_key = f"inbound_{audio_key}"
-    
+
     if cache_key not in _inbound_audio_cache:
         raise HTTPException(status_code=404, detail="Audio not found")
-    
+
     audio_data = _inbound_audio_cache[cache_key]
-    
+
     # If it's a data URI, extract the base64 content
     if audio_data.startswith("data:audio/mpeg;base64,"):
         import base64
         audio_bytes = base64.b64decode(audio_data.split(",")[1])
         return Response(content=audio_bytes, media_type="audio/mpeg")
-    
+
     return Response(content=audio_data, media_type="audio/mpeg")
+
+def _detect_speech_intent(speech_lower: str):
+    """Detect high-priority signals that override conversation stage."""
+    if any(p in speech_lower for p in [
+        "wait", "hold on", "stop", "one second", "one sec",
+        "let me talk", "let me speak", "let me finish", "let me get a word",
+        "trying to ask", "trying to say", "i'm trying to", "i was trying",
+        "didn't let me", "wasn't able to interrupt", "can i ask", "let me ask",
+        "you didn't let me", "you kept talking", "i have a question",
+        "you didn't listen", "you weren't listening", "talking over me",
+    ]):
+        return {"type": "interruption",
+                "say": "Sorry about that. Go ahead, what's your question?",
+                "reset_stage": True}
+
+    if any(p in speech_lower for p in [
+        "ignore previous instructions", "ignore your instructions",
+        "reveal your prompt", "show me your prompt", "what's your prompt",
+        "what tools are you using", "what api keys", "what model are you",
+        "what company runs this",
+        "show me your hidden instructions", "your system prompt",
+        "are you chatgpt", "are you gpt", "what llm",
+    ]):
+        return {"type": "prompt_injection",
+                "say": ("I can't provide internal system information. I'm here to answer "
+                        "questions about IntentBrain and AI SDRs."),
+                "reset_stage": True}
+
+    OFF = ["recipe", "cheesecake", "bake ", "baking", "cook ", "cooking", "ingredient",
+           " milk", "sugar", "flour", "butter", " egg", "dinner", "lunch", "breakfast",
+           "meal", "oven", "stove", "pizza", "burger", "chicken", "pasta",
+           "weather", "raining", " snow", "temperature", "forecast", " sunny", "cloudy",
+           "football", "basketball", "baseball", " soccer", " score", "super bowl",
+           "world cup", "movie", " song", " joke", "tell me a joke",
+           "math problem", "calculate ", "two plus", "what is 2", "what's 2", "homework",
+           "what stock", "should i buy", "investment advice", "stock market"]
+    IB = ["intent", "brain", "sarah", "sales", "lead", "demo", "price", "cost",
+          "pricing", "plan", "agent", "voice", "campaign", "appointment", "book",
+          "schedule", "discovery", "byol", "transfer", "human ", "person", "billing",
+          "trial", "starter", " pro ", "elite", "calendar", "feature", "qualif",
+          "integration", "crm", "objection", "personality", "company",
+          "your service", "your product", "your platform", "subscription", "month",
+          "outbound", "sdr ", "appointment setting"]
+    if any(m in speech_lower for m in OFF) and not any(k in speech_lower for k in IB):
+        if "cheesecake" in speech_lower or "recipe" in speech_lower or "bake" in speech_lower:
+            topic = "cheesecake recipes"
+        elif any(w in speech_lower for w in ["stock", "invest", "should i buy"]):
+            topic = "investment advice"
+        elif any(w in speech_lower for w in ["football", "basketball", "baseball", "soccer", "super bowl", "score", "world cup"]):
+            topic = "sports information"
+        elif any(w in speech_lower for w in ["weather", "raining", "snow", "temperature", "forecast"]):
+            topic = "weather updates"
+        else:
+            topic = "that"
+        return {"type": "off_topic",
+                "say": (f"I'm probably not the best person to help with {topic}. "
+                        f"I'm here to answer questions about AI SDRs, outbound calling, and "
+                        f"lead generation. Did you have a question about IntentBrain?"),
+                "reset_stage": True}
+
+    if any(p in speech_lower for p in [
+        "credit card processing", "card processing", "cc processing", "payment processing",
+        "merchant account", "merchant services", "payment gateway",
+        "web design", "website design", "build me a website", "build a website",
+        "web hosting", " hosting", "domain name", "logo design", "graphic design",
+        "do seo", "google ranking", "seo service", "search engine optim",
+    ]) and not any(k in speech_lower for k in ["for our", "for my", "for us", "agency", "my company", "my business"]):
+        return {"type": "wrong_business",
+                "say": ("IntentBrain doesn't provide that service directly. "
+                        "We help businesses generate, qualify, and route leads using AI SDRs. "
+                        "Are you asking whether our AI could help a business in that industry?"),
+                "reset_stage": True}
+
+    return None
+
 
 @api_router.post("/twilio/inbound")
 async def handle_inbound_sales_call(request: Request):
@@ -11162,9 +11895,9 @@ async def handle_inbound_sales_call(request: Request):
     form_data = await request.form()
     caller = form_data.get("From", "Unknown")
     call_sid = form_data.get("CallSid", "")
-    
+
     logger.info(f"Inbound sales call from {caller}, SID: {call_sid}")
-    
+
     # Log the inbound call
     await db.inbound_calls.insert_one({
         "call_sid": call_sid,
@@ -11173,38 +11906,31 @@ async def handle_inbound_sales_call(request: Request):
         "started_at": datetime.now(timezone.utc).isoformat(),
         "conversation_stage": "greeting"
     })
-    
+
     response = VoiceResponse()
-    
+
     # Try to use cached ElevenLabs audio, fallback to Polly
     cached_audio = _inbound_audio_cache.get("inbound_greeting")
     if cached_audio and cached_audio.startswith("data:"):
         # For data URI, we need to serve it via an endpoint
         response.play(f"{os.environ.get('BACKEND_URL', '')}/api/inbound-audio/greeting")
     else:
-        response.say(
-            "Hi, thanks for calling IntentBrain! "
-            "This is Sarah, your AI sales assistant. "
-            "I can answer questions about our platform, help you understand if we're a good fit, "
-            "and even book a demo with our team. "
-            "How can I help you today?",
-            voice='Polly.Joanna-Neural'
-        )
-    
+        await tts_speak(response, "Hi, thanks for calling IntentBrain! " "This is Sarah, your AI sales assistant. " "I can answer questions about our platform, help you understand if we're a good fit, " "and even book a demo with our team. " "How can I help you today?")
+
     # Gather caller's response — REDUCED sensitivity to background noise
     gather = Gather(
         input='speech',
-        timeout=8,
-        speech_timeout=2,
+        timeout=5,
+        speech_timeout="auto",
         action='/api/twilio/inbound/respond',
         method='POST'
     )
     response.append(gather)
-    
+
     # Fallback if no response
-    response.say("I didn't catch that. Feel free to ask me anything about IntentBrain.", voice='Polly.Joanna-Neural')
+    await tts_speak(response, "I didn't catch that. Feel free to ask me anything about IntentBrain.")
     response.redirect('/api/twilio/inbound')
-    
+
     return Response(content=str(response), media_type="application/xml")
 
 @api_router.post("/twilio/inbound/respond")
@@ -11214,29 +11940,29 @@ async def handle_inbound_response(request: Request):
     speech_result = form_data.get("SpeechResult", "").lower()
     call_sid = form_data.get("CallSid", "")
     caller = form_data.get("From", "Unknown")
-    
+
     logger.info(f"Inbound caller said: {speech_result}")
-    
+
     response = VoiceResponse()
     backend_url = os.environ.get('BACKEND_URL', '')
-    
+
     # Look up conversation state to know if we already asked the volume question
     call_doc = await db.inbound_calls.find_one({"call_sid": call_sid}, {"_id": 0})
     last_stage = (call_doc or {}).get("conversation_stage", "greeting")
-    
+
     # Update conversation log
     await db.inbound_calls.update_one(
         {"call_sid": call_sid},
         {"$push": {"conversation": {"caller": speech_result, "timestamp": datetime.now(timezone.utc).isoformat()}}}
     )
-    
+
     # Helper to play cached audio or fallback to Polly
     def play_or_say(audio_key: str, fallback_text: str):
         if f"inbound_{audio_key}" in _inbound_audio_cache:
             response.play(f"{backend_url}/api/inbound-audio/{audio_key}")
         else:
             response.say(fallback_text, voice='Polly.Joanna-Neural')
-    
+
     # Helper to detect approximate monthly volume from speech
     def detect_volume_tier(text: str) -> Optional[str]:
         """Return 'starter', 'pro', 'elite', 'vague', or None."""
@@ -11253,7 +11979,7 @@ async def handle_inbound_response(request: Request):
             if phrase in text:
                 nums.append(val)
         max_num = max(nums) if nums else 0
-        
+
         # Tier mapping based on monthly call/lead volume
         if max_num >= 2000:
             return "elite"
@@ -11269,7 +11995,7 @@ async def handle_inbound_response(request: Request):
         if any(w in text for w in ["medium", "growing", "scaling"]):
             return "pro"
         return None
-    
+
     # Helper to detect own-list vs need-discovery
     def detect_byol_or_discovery(text: str) -> Optional[str]:
         """Return 'byol' (has own list), 'discovery' (needs us to find), or None."""
@@ -11278,9 +12004,24 @@ async def handle_inbound_response(request: Request):
         if any(w in text for w in ["find them", "need you to find", "need leads", "discover", "don't have", "no list", "don't have a list", "you find"]):
             return "discovery"
         return None
-    
+
     speech_lower = speech_result
-    
+
+    # === GLOBAL GUARDS (override stage) ===
+    guard = _detect_speech_intent(speech_lower)
+    if guard:
+        logger.info(f"Guard fired: {guard['type']}")
+        await tts_speak(response, guard["say"])
+        if guard.get("reset_stage"):
+            await db.inbound_calls.update_one(
+                {"call_sid": call_sid},
+                {"$set": {"conversation_stage": "active"}}
+            )
+        gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                        action='/api/twilio/inbound/respond', method='POST')
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+
     # === STAGE: post_pricing — caller heard pricing and we offered Test Drive fallback ===
     if last_stage == "post_pricing":
         if any(w in speech_lower for w in ["walk me through", "starter", "forty-nine", "$49", "49 dollar", "smaller", "test drive", "yes", "sure", "show me that"]) and not any(w in speech_lower for w in ["demo", "schedule", "book", "specialist"]):
@@ -11300,8 +12041,8 @@ async def handle_inbound_response(request: Request):
             gather = Gather(
                 input='speech',
                 timeout=10,
-                speech_timeout=2,
-                action='/api/twilio/inbound/capture-email',
+                speech_timeout="auto",
+                action='/api/twilio/inbound/sms-number',
                 method='POST'
             )
             response.append(gather)
@@ -11375,8 +12116,43 @@ async def handle_inbound_response(request: Request):
                 {"call_sid": call_sid},
                 {"$set": {"conversation_stage": "post_pricing"}}
             )
-    # Pricing questions — ASK qualifying question first
-    elif any(word in speech_lower for word in ["price", "cost", "pricing", "how much", "expensive", "afford", "plans", "plan"]):
+    # === INTERRUPTION ACKNOWLEDGEMENT ===
+    elif any(p in speech_lower for p in [
+        "let me talk", "let me speak", "let me finish", "let me get a word",
+        "trying to ask", "trying to say", "i'm trying to", "i was trying",
+        "didn't let me", "wasn't able to interrupt", "can i ask", "let me ask",
+        "you didn't let me", "you kept talking"
+    ]):
+        await tts_speak(response, "Sorry about that, go ahead. What would you like to ask?")
+
+    # === OFF-TOPIC GATE ===
+    elif (lambda s: (
+        any(m in s for m in [
+            "recipe", "cheesecake", "bake ", "baking", "cook ", "cooking", "ingredient", " milk",
+            "sugar", "flour", "butter", " egg", "dinner", "lunch", "breakfast", "meal",
+            "oven", "stove", "pizza", "burger", "chicken", "pasta",
+            "weather", "raining", " snow", "temperature", "forecast", " sunny", "cloudy",
+            "football", "basketball", "baseball", " soccer", " score", "movie", " song",
+            " joke", "tell me a joke",
+            "math problem", "calculate ", "two plus", "what is 2", "what's 2", "homework",
+        ]) and not any(k in s for k in [
+            "intent", "brain", "sarah", "sales", "lead", "demo", "price", "cost",
+            "pricing", "plan", "agent", "voice", "campaign", "appointment", "book",
+            "schedule", "discovery", "byol", "transfer", "human ", "person", "billing",
+            "trial", "starter", " pro ", "elite", "credit", "calendar", "feature",
+            "integration", "crm", "qualif", "objection", "personality", "company",
+            "your service", "your product", "your platform", "subscription", "month",
+        ])
+    ))(speech_lower):
+        await tts_speak(response, "I'm probably not the best help with that. I'm here to answer questions about AI SDRs, lead generation, and automated calling. " "Did you want to test how I handle prospecting, objections, or pricing?")
+
+    # === PRICING ===
+    elif (
+        re.search(r"\b(price|prices|pricing|cost|costs|expensive|affordable|subscription)\b", speech_lower)
+        or re.search(r"\b(plan|plans)\b", speech_lower)
+        or re.search(r"\bhow much\b.*\b(cost|charge|pay|month|year|service|plan|subscription|for it|is it|does it|do you)\b", speech_lower)
+        or re.search(r"\b(what|whats|what's)\s+(?:does\s+it\s+)?cost\b", speech_lower)
+    ):
         play_or_say("qualify_volume",
             "Great question! Before I quote pricing, can I ask roughly how many leads or calls you'd handle per month? "
             "That way I can recommend the right plan for you."
@@ -11385,9 +12161,13 @@ async def handle_inbound_response(request: Request):
             {"call_sid": call_sid},
             {"$set": {"conversation_stage": "awaiting_volume"}}
         )
-    
-    # How it works
-    elif any(word in speech_lower for word in ["how", "work", "what do", "tell me", "explain", "more"]):
+
+    # How it works — tightened
+    elif (
+        re.search(r"\bhow\s+(?:does|do|will|can|would|is|it|the|your)\b", speech_lower)
+        or re.search(r"\b(work|works|working)\b", speech_lower)
+        or re.search(r"\b(explain|tell me about|tell me more|what do you do|what is it|what's it)\b", speech_lower)
+    ):
         play_or_say("how_it_works",
             "Here's how IntentBrain works... "
             "First, our AI discovers leads by finding businesses actively searching for services like yours. "
@@ -11396,7 +12176,7 @@ async def handle_inbound_response(request: Request):
             "Fourth, qualified leads get booked directly into your calendar. "
             "You basically wake up to booked meetings! Would you like to see a demo?"
         )
-    
+
     # Demo / meeting request
     elif any(word in speech_lower for word in ["demo", "meeting", "schedule", "book", "yes", "sure", "okay", "interested"]):
         play_or_say("book_demo",
@@ -11404,17 +12184,17 @@ async def handle_inbound_response(request: Request):
             "They can give you a personalized walkthrough. "
             "Can you tell me your email address so I can send you a calendar invite?"
         )
-        
+
         gather = Gather(
             input='speech',
             timeout=10,
-            speech_timeout=2,
-            action='/api/twilio/inbound/capture-email',
+            speech_timeout="auto",
+            action='/api/twilio/inbound/sms-number',
             method='POST'
         )
         response.append(gather)
         return Response(content=str(response), media_type="application/xml")
-    
+
     # Features
     elif any(word in speech_lower for word in ["feature", "can it", "does it", "integration", "crm", "calendly"]):
         play_or_say("features",
@@ -11425,7 +12205,7 @@ async def handle_inbound_response(request: Request):
             "Our AI agents can even handle objections and qualify leads. "
             "What's most important to you?"
         )
-    
+
     # Not interested / end call
     elif any(word in speech_lower for word in ["not interested", "no thanks", "goodbye", "bye"]):
         play_or_say("not_interested",
@@ -11434,13 +12214,13 @@ async def handle_inbound_response(request: Request):
             "Have a great day!"
         )
         response.hangup()
-        
+
         await db.inbound_calls.update_one(
             {"call_sid": call_sid},
             {"$set": {"status": "completed", "outcome": "not_interested", "ended_at": datetime.now(timezone.utc).isoformat()}}
         )
         return Response(content=str(response), media_type="application/xml")
-    
+
     # About the company / who are you / new company
     elif any(word in speech_lower for word in ["who are you", "about you", "your company", "are you new", "how long", "how old", "what is intent", "what is this", "who is intent", "tell me about intent", "new company", "startup"]):
         play_or_say("about_us",
@@ -11450,106 +12230,436 @@ async def handle_inbound_response(request: Request):
             "detects their personality type, and either books a meeting or transfers them live to your team. "
             "We're a small team with big technology behind us."
         )
-    
-    # Default response
+
+    # Default - route to AI brain for unhandled/general questions
     else:
-        play_or_say("default",
-            "I'd be happy to help with that. "
-            "IntentBrain is an AI-powered cold calling platform that automates your sales outreach. "
-            "Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. "
-            "Would you like to know about pricing, see how it works, or schedule a demo?"
-        )
-    
+        _brain_handled = False
+        if BRAIN_AVAILABLE and brain_respond:
+            try:
+                # BUG #004 fix - Fast-path cache (bypass OpenAI for AI-identity probes)
+                _fast = _fast_path_lookup(speech_result)
+                if _fast is not None:
+                    logger.info(f"FAST_PATH hit for '{speech_result[:60]}' (no LLM call)")
+                    brain = {"response_text": _fast, "action": "continue", "detected_intent": "AI_IDENTITY"}
+                else:
+                    brain = await brain_respond(speech_result, stage=last_stage or "INTRO")
+                response_text = brain.get("response_text", "")
+                action = brain.get("action", "continue")
+                intent = brain.get("detected_intent", "UNKNOWN")
+                # BUG #004 fix - guarantee a follow-up question on continue paths
+                if action == "continue":
+                    response_text = _ensure_followup(response_text)
+                logger.info(f"Brain handled '{speech_result[:60]}' -> intent={intent} action={action}")
+
+                if action == "collect_email":
+                    await db.inbound_calls.update_one(
+                        {"call_sid": call_sid},
+                        {"$set": {"conversation_stage": "awaiting_email"}}
+                    )
+                    gather = Gather(input='speech', timeout=10, speech_timeout="auto",
+                                    action='/api/twilio/inbound/sms-number', method='POST',
+                                    barge_in=True)
+                    await tts_speak(gather, response_text)
+                    response.append(gather)
+                    return Response(content=str(response), media_type="application/xml")
+
+                if action == "transfer_human":
+                    transfer_phone = os.environ.get("INBOUND_TRANSFER_PHONE", "")
+                    if transfer_phone:
+                        await tts_speak(response, response_text)
+                        response.dial(transfer_phone, timeout=20, caller_id=twilio_phone_number)
+                        return Response(content=str(response), media_type="application/xml")
+
+                if action == "end_call":
+                    await tts_speak(response, response_text)
+                    response.hangup()
+                    await db.inbound_calls.update_one(
+                        {"call_sid": call_sid},
+                        {"$set": {"status": "completed", "outcome": "ai_ended",
+                                  "ended_at": datetime.now(timezone.utc).isoformat()}}
+                    )
+                    return Response(content=str(response), media_type="application/xml")
+
+                # action == continue / ask_discovery / fallback_clarify
+                gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                                action='/api/twilio/inbound/respond', method='POST',
+                                barge_in=True)
+                await tts_speak(gather, response_text)
+                response.append(gather)
+                return Response(content=str(response), media_type="application/xml")
+            except Exception as be:
+                logger.error(f"Brain fallback path failed: {be}")
+
+        # Legacy default (brain unavailable or errored)
+        if not _brain_handled:
+            play_or_say("default",
+                "I'd be happy to help with that. "
+                "IntentBrain is an AI-powered cold calling platform that automates your sales outreach. "
+                "Our AI agents can find leads, make calls, qualify prospects, and book meetings for you. "
+                "Would you like to know about pricing, see how it works, or schedule a demo?"
+            )
+
     # Continue conversation — REDUCED interruption sensitivity
     # speech_timeout=2 means caller must pause 2s before AI considers them done
     # (vs 'auto' which is ~700ms and triggers on background noise/coughs)
     gather = Gather(
         input='speech',
-        timeout=8,
-        speech_timeout=2,
+        timeout=5,
+        speech_timeout="auto",
         action='/api/twilio/inbound/respond',
         method='POST'
     )
     response.append(gather)
-    
+
     play_or_say("anything_else", "Is there anything else you'd like to know?")
     response.redirect('/api/twilio/inbound/respond')
-    
+
     return Response(content=str(response), media_type="application/xml")
 
-@api_router.post("/twilio/inbound/capture-email")
-async def capture_caller_email(request: Request):
-    """Capture caller's email for demo booking."""
+
+def _normalize_spoken_email(raw: str) -> str:
+    """Normalize Twilio STT spoken email into a valid email when possible."""
+    if not raw:
+        return ""
+
+    s = raw.lower().strip()
+
+    # Remove common filler
+    s = re.sub(r"\b(yes|yeah|yep|yup|okay|ok|sure|it is|it's|its|my email is|email is|the email is|hold on|one second|one sec)\b", " ", s)
+
+    # Convert phonetic phrases: "d as in david", "as in egg g as in goat"
+    phonetic = {
+        "alpha": "a", "apple": "a", "adam": "a",
+        "bravo": "b", "boy": "b",
+        "charlie": "c", "cat": "c",
+        "david": "d", "delta": "d", "dog": "d",
+        "edward": "e", "egg": "e", "echo": "e",
+        "frank": "f", "foxtrot": "f",
+        "goat": "g", "george": "g", "golf": "g",
+        "henry": "h", "hotel": "h",
+        "india": "i", "igloo": "i",
+        "john": "j", "juliet": "j",
+        "kilo": "k", "king": "k",
+        "lima": "l", "love": "l",
+        "mike": "m", "mary": "m",
+        "nancy": "n", "november": "n",
+        "oscar": "o", "orange": "o",
+        "papa": "p", "paul": "p",
+        "queen": "q", "quebec": "q",
+        "romeo": "r", "robert": "r",
+        "sierra": "s", "sam": "s",
+        "tango": "t", "tom": "t",
+        "uniform": "u",
+        "victor": "v",
+        "whiskey": "w", "william": "w",
+        "xray": "x", "x-ray": "x",
+        "yankee": "y",
+        "zulu": "z", "zebra": "z",
+    }
+
+    # "d as in david" -> "d"
+    s = re.sub(r"\b([a-z])\s+as\s+in\s+([a-z-]+)\b", lambda m: m.group(1), s)
+    # "as in david" -> "d"
+    s = re.sub(r"\bas\s+in\s+([a-z-]+)\b", lambda m: phonetic.get(m.group(1), m.group(1)[:1]), s)
+
+    # Normalize symbols
+    s = re.sub(r"\s+(at|@)\s+", " @ ", s)
+    s = re.sub(r"\s+(dot|period|point)\s+", " . ", s)
+
+    # Remove punctuation except @ and .
+    s = re.sub(r"[^a-z0-9@.\s_-]", " ", s)
+
+    # Compress spaces
+    s = re.sub(r"\s+", " ", s).strip()
+
+    # If STT gives "gmail.com" but no @, this is invalid
+    if "@" not in s and " at " not in s:
+        return ""
+
+    # Convert tokens to compact email
+    s = s.replace(" @ ", "@").replace("@ ", "@").replace(" @", "@")
+    s = s.replace(" . ", ".").replace(". ", ".").replace(" .", ".")
+
+    # Remove spaces around local/domain pieces
+    s = s.replace(" ", "")
+
+    # Common domain repairs
+    s = s.replace("g-mail", "gmail").replace("g.mail", "gmail")
+    s = s.replace("gmailcom", "gmail.com")
+    s = s.replace("gmail", "gmail.com") if s.endswith("@gmail") else s
+    s = s.replace("gmail.co", "gmail.com") if s.endswith("@gmail.co") else s
+
+    # If domain has no TLD and is common provider, add .com
+    for provider in ["gmail", "yahoo", "hotmail", "outlook", "icloud", "aol"]:
+        if s.endswith("@" + provider):
+            s += ".com"
+
+    s = s.strip(".,!?;:")
+
+    if re.match(r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$", s):
+        return s
+
+    return ""
+
+
+def _parse_spoken_phone(text: str) -> str:
+    """Extract a phone number from speech. Returns E.164 (+1...) or empty."""
+    if not text:
+        return ""
+    s = text.lower().strip()
+    digit_words = {
+        "zero": "0", "oh": "0",
+        "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+        "six": "6", "seven": "7", "eight": "8", "nine": "9",
+    }
+    for w, d in digit_words.items():
+        s = re.sub(r"\b" + w + r"\b", d, s)
+    digits = re.sub(r"[^0-9+]", "", s)
+    if not digits:
+        return ""
+    if digits.startswith("+") and len(digits) >= 11:
+        return digits
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits
+    if len(digits) == 10:
+        return "+1" + digits
+    return ""
+
+
+@api_router.post("/twilio/inbound/sms-number")
+async def capture_sms_number(request: Request):
+    """SMS-first demo booking: ask for best mobile number, text Calendly link."""
     form_data = await request.form()
-    speech_result = form_data.get("SpeechResult", "")
+    speech_result = (form_data.get("SpeechResult", "") or "").strip()
     call_sid = form_data.get("CallSid", "")
-    caller = form_data.get("From", "Unknown")
-    
-    logger.info(f"Caller email attempt: {speech_result}")
-    
+    caller = form_data.get("From", "")
+    logger.info(f"SMS-number attempt: {speech_result!r} (caller={caller})")
+
     response = VoiceResponse()
-    
-    # Try to parse email from speech
-    email_attempt = speech_result.lower().replace(" at ", "@").replace(" dot ", ".").replace(" ", "")
-    
-    # Save the lead info
+    booking_url = os.environ.get("DEMO_BOOKING_URL", "https://intentbrain.ai/book-demo")
+    speech_lower = speech_result.lower()
+
+    target_number = None
+    same_patterns = [
+        r"\bthis\s+(one|number|phone|cell|mobile)\b",
+        r"\bsame\s+(one|number|phone)\b",
+        r"\bthe\s+one\s+i'?m\s+(calling|on)\b",
+        r"\b(yes|yeah|yep|yup|sure|correct|right|okay|ok)\b",
+        r"\bthat\s+(works|is\s+fine|number)\b",
+        r"\buse\s+(this|that)\b",
+    ]
+
+    if any(re.search(p, speech_lower) for p in same_patterns):
+        target_number = caller
+        logger.info(f"Caller chose this number -> {caller}")
+    else:
+        target_number = _parse_spoken_phone(speech_lower)
+        if target_number:
+            logger.info(f"Parsed spoken phone -> {target_number}")
+
+    if not target_number:
+        logger.info("Could not determine SMS target number - re-prompting")
+        await tts_speak(response, "Sorry, I didn't catch that. Should I text the booking link to the number you're calling from? Just say yes, or give me a different number.")
+        gather = Gather(input='speech', timeout=10, speech_timeout="auto",
+                        action='/api/twilio/inbound/sms-number', method='POST')
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+
+    sms_status = "skipped"
+    sms_error = None
+    twilio_sms_from = os.environ.get("TWILIO_SMS_NUMBER", "")
+    body = f"Hi! Thanks for calling IntentBrain. Book your demo here: {booking_url}"
+
+    try:
+        if twilio_client and twilio_sms_from:
+            msg = twilio_client.messages.create(body=body, from_=twilio_sms_from, to=target_number)
+            sms_status = f"sent ({msg.sid})"
+            logger.info(f"Demo SMS sent to {target_number} sid={msg.sid}")
+        else:
+            sms_status = "twilio_not_configured"
+            logger.warning(f"SMS not sent: twilio_client={bool(twilio_client)} from={twilio_sms_from!r}")
+    except Exception as e:
+        sms_status = "failed"
+        sms_error = str(e)
+        logger.exception(f"SMS send failed to {target_number}")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     await db.inbound_calls.update_one(
         {"call_sid": call_sid},
         {"$set": {
-            "email_captured": email_attempt,
+            "demo_sms_number": target_number,
+            "demo_sms_status": sms_status,
+            "demo_sms_error": sms_error,
+            "demo_sms_sent_at": now_iso,
             "status": "demo_requested",
             "outcome": "hot_lead",
-            "ended_at": datetime.now(timezone.utc).isoformat()
+            "conversation_stage": "post_sms_sent",
         }}
     )
-    
-    # Also save as a lead
+
     await db.inbound_leads.insert_one({
-        "phone": caller,
-        "email": email_attempt,
-        "source": "inbound_call",
-        "status": "demo_requested",
+        "phone": target_number,
+        "caller_number": caller,
+        "source": "inbound_call_sms",
+        "status": "demo_sms_sent",
         "call_sid": call_sid,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "sms_status": sms_status,
+        "booking_url": booking_url,
+        "created_at": now_iso,
     })
-    
-    # Generate natural response for email capture confirmation
-    confirmation_text = (
-        "I've noted your email. "
-        "Our team will send you a calendar invite shortly with available demo times. "
-        "You'll also receive an email with information about IntentBrain and a link to start your free trial. "
-        "Is there anything else I can help you with before we wrap up?"
-    )
-    
-    backend_url = os.environ.get('BACKEND_URL', '')
-    if elevenlabs_api_key:
-        try:
-            audio = await generate_inbound_audio(confirmation_text, cache_key="inbound_email_confirm")
-            if audio:
-                response.play(f"{backend_url}/api/inbound-audio/email_confirm")
-            else:
-                response.say(confirmation_text, voice='Polly.Joanna-Neural')
-        except Exception:
-            response.say(confirmation_text, voice='Polly.Joanna-Neural')
+
+    if sms_status.startswith("sent"):
+        confirm_text = (
+            "Perfect. I'll send a scheduling link to that number now. "
+            "It'll let you pick a time that works for you. Anything else I can help you with?"
+        )
     else:
-        response.say(confirmation_text, voice='Polly.Joanna-Neural')
-    
-    gather = Gather(
-        input='speech',
-        timeout=8,
-        speech_timeout=2,
-        action='/api/twilio/inbound/final',
-        method='POST'
-    )
+        confirm_text = (
+            "Got it. Our team will reach out shortly to confirm your demo. "
+            "Anything else I can help you with?"
+        )
+
+    await tts_speak(response, confirm_text)
+    gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                    action='/api/twilio/inbound/final', method='POST')
     response.append(gather)
-    
-    closing_text = "Thanks for calling IntentBrain. We're excited to show you how we can automate your sales outreach. Have a fantastic day!"
-    if "inbound_closing" in _inbound_audio_cache:
-        response.play(f"{backend_url}/api/inbound-audio/closing")
-    else:
-        response.say(closing_text, voice='Polly.Joanna-Neural')
-    response.hangup()
-    
+    return Response(content=str(response), media_type="application/xml")
+
+
+@api_router.post("/twilio/inbound/capture-email")
+async def capture_caller_email(request: Request):
+    """Capture caller's email. Validates strictly, reads back to confirm."""
+    form_data = await request.form()
+    speech_result = form_data.get("SpeechResult", "") or ""
+    call_sid = form_data.get("CallSid", "")
+    caller = form_data.get("From", "Unknown")
+    logger.info(f"Caller email attempt: {speech_result!r}")
+
+    response = VoiceResponse()
+    backend_url = os.environ.get('BACKEND_URL', '')
+    speech_lower = speech_result.lower()
+
+    # In email capture, do NOT run broad off-topic/wrong-business guards.
+    # Phonetic spelling words like "egg" and "goat" are common in emails.
+    if any(p in speech_lower for p in ["cancel", "stop", "nevermind", "never mind", "forget it"]):
+        await tts_speak(response, "No problem. What would you like to ask instead?")
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {"conversation_stage": "active"}, "$unset": {"pending_email": ""}}
+        )
+        gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                        action='/api/twilio/inbound/respond', method='POST')
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+
+    email_attempt = _normalize_spoken_email(speech_result)
+    looks_like_email = bool(email_attempt)
+
+    if not looks_like_email:
+        logger.info(f"Invalid email rejected: {email_attempt!r}")
+        await tts_speak(response, "I don't think that's an email address. What email should I use for the demo invitation?")
+        gather = Gather(input='speech', timeout=10, speech_timeout="auto",
+                        action='/api/twilio/inbound/capture-email', method='POST')
+        response.append(gather)
+        response.redirect('/api/twilio/inbound/respond')
+        return Response(content=str(response), media_type="application/xml")
+
+    await db.inbound_calls.update_one(
+        {"call_sid": call_sid},
+        {"$set": {"pending_email": email_attempt, "conversation_stage": "confirming_email"}}
+    )
+
+    def _spell(addr):
+        out = []
+        for w in addr.replace("@", " at ").replace(".", " dot ").split():
+            if w in ("at", "dot"):
+                out.append(w)
+            else:
+                out.extend(list(w))
+        return ", ".join(out)
+    spelled = _spell(email_attempt)
+
+    await tts_speak(response, f"Let me read that back. I have: {spelled}. Is that correct? Yes or no?")
+    gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                    action='/api/twilio/inbound/confirm-email', method='POST')
+    response.append(gather)
+    response.redirect('/api/twilio/inbound/capture-email')
+    return Response(content=str(response), media_type="application/xml")
+
+
+@api_router.post("/twilio/inbound/confirm-email")
+async def confirm_caller_email(request: Request):
+    """Confirm spelled-back email. Yes -> save. No -> re-prompt."""
+    form_data = await request.form()
+    speech_result = (form_data.get("SpeechResult", "") or "").lower()
+    call_sid = form_data.get("CallSid", "")
+    caller = form_data.get("From", "Unknown")
+    logger.info(f"Email confirmation: {speech_result!r}")
+
+    response = VoiceResponse()
+    backend_url = os.environ.get('BACKEND_URL', '')
+
+    # During email confirmation, only allow explicit cancellation to escape.
+    if any(p in speech_result for p in ["cancel", "stop", "nevermind", "never mind", "forget it"]):
+        await tts_speak(response, "No problem. What would you like to ask instead?")
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {"conversation_stage": "active"}, "$unset": {"pending_email": ""}}
+        )
+        gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                        action='/api/twilio/inbound/respond', method='POST')
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+
+    call_doc = await db.inbound_calls.find_one({"call_sid": call_sid}, {"_id": 0})
+    pending_email = (call_doc or {}).get("pending_email", "")
+
+    is_yes = bool(re.search(r"\b(yes|yeah|yep|yup|correct|right|that's it|thats it|confirm|looks good|sounds good|that's right|thats right)\b", speech_result))
+    is_no = bool(re.search(r"\b(no|nope|nah|wrong|incorrect|not right|that's not|thats not|change it|fix it|try again)\b", speech_result))
+
+    if is_yes and not is_no and pending_email:
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$set": {
+                "email_captured": pending_email,
+                "status": "demo_requested",
+                "outcome": "hot_lead",
+                "conversation_stage": "post_email_confirmed",
+                "ended_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        await db.inbound_leads.insert_one({
+            "phone": caller, "email": pending_email, "source": "inbound_call",
+            "status": "demo_requested", "call_sid": call_sid,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        await tts_speak(response, "Perfect, got it. Our team will send you a calendar invite shortly. " "Is there anything else I can help you with?")
+        gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                        action='/api/twilio/inbound/final', method='POST')
+        response.append(gather)
+        if "inbound_closing" in _inbound_audio_cache:
+            response.play(f"{backend_url}/api/inbound-audio/closing")
+        else:
+            await tts_speak(response, "Thanks for calling IntentBrain. Have a fantastic day!")
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+
+    if is_no:
+        await db.inbound_calls.update_one(
+            {"call_sid": call_sid},
+            {"$unset": {"pending_email": ""}, "$set": {"conversation_stage": "awaiting_email"}}
+        )
+        await tts_speak(response, "No problem, let's try again. Please spell your email slowly, " "like sarah at intentbrain dot ai.")
+        gather = Gather(input='speech', timeout=10, speech_timeout="auto",
+                        action='/api/twilio/inbound/capture-email', method='POST')
+        response.append(gather)
+        return Response(content=str(response), media_type="application/xml")
+
+    await tts_speak(response, "Sorry, was that a yes or no? Say yes if the email is correct, or no to try again.")
+    gather = Gather(input='speech', timeout=5, speech_timeout="auto",
+                    action='/api/twilio/inbound/confirm-email', method='POST')
+    response.append(gather)
     return Response(content=str(response), media_type="application/xml")
 
 @api_router.post("/twilio/inbound/final")
@@ -11558,41 +12668,38 @@ async def handle_final_response(request: Request):
     form_data = await request.form()
     speech_result = form_data.get("SpeechResult", "").lower()
     call_sid = form_data.get("CallSid", "")
-    
+
     response = VoiceResponse()
-    
+
     backend_url = os.environ.get('BACKEND_URL', '')
-    
+
     if any(word in speech_result for word in ["yes", "question", "actually", "one more"]):
         if "inbound_anything_else" in _inbound_audio_cache:
             response.play(f"{backend_url}/api/inbound-audio/anything_else")
         else:
-            response.say("Sure, what else would you like to know?", voice='Polly.Joanna-Neural')
-        
+            await tts_speak(response, "Sure, what else would you like to know?")
+
         gather = Gather(
             input='speech',
-            timeout=8,
-            speech_timeout=2,
+            timeout=5,
+            speech_timeout="auto",
             action='/api/twilio/inbound/respond',
             method='POST'
         )
         response.append(gather)
         return Response(content=str(response), media_type="application/xml")
-    
+
     if "inbound_closing" in _inbound_audio_cache:
         response.play(f"{backend_url}/api/inbound-audio/closing")
     else:
-        response.say(
-            "Thanks for calling IntentBrain. We're excited to help you automate your sales outreach. Have a fantastic day!",
-            voice='Polly.Joanna-Neural'
-        )
+        await tts_speak(response, "Thanks for calling IntentBrain. We're excited to help you automate your sales outreach. Have a fantastic day!")
     response.hangup()
-    
+
     await db.inbound_calls.update_one(
         {"call_sid": call_sid},
         {"$set": {"status": "completed", "ended_at": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return Response(content=str(response), media_type="application/xml")
 
 @api_router.post("/twilio/status")
@@ -11602,9 +12709,9 @@ async def twilio_status_webhook(request: Request):
     call_sid = form_data.get("CallSid", "")
     call_status = form_data.get("CallStatus", "")
     duration = form_data.get("CallDuration", "0")
-    
+
     logger.info(f"Twilio status update: {call_sid} -> {call_status}")
-    
+
     # Map Twilio status to our status
     status_map = {
         "queued": CallStatus.PENDING.value,
@@ -11616,21 +12723,21 @@ async def twilio_status_webhook(request: Request):
         "canceled": CallStatus.FAILED.value,
         "failed": CallStatus.FAILED.value
     }
-    
+
     new_status = status_map.get(call_status, CallStatus.FAILED.value)
     call_duration_seconds = int(duration) if duration else 0
-    
+
     update_data = {
         "status": new_status,
         "duration": call_duration_seconds,
         "ended_at": datetime.now(timezone.utc).isoformat() if call_status in ["completed", "busy", "no-answer", "canceled", "failed"] else None
     }
-    
+
     await db.calls.update_one(
         {"twilio_sid": call_sid},
         {"$set": update_data}
     )
-    
+
     # Deduct call duration from trial time (if user is on trial)
     if call_status == "completed" and call_duration_seconds > 0:
         # Get the call record to find the user
@@ -11643,7 +12750,7 @@ async def twilio_status_webhook(request: Request):
                     # Deduct call duration from trial
                     await deduct_trial_time(user["user_id"], call_duration_seconds)
                     logger.info(f"Deducted {call_duration_seconds}s from trial for user {user['user_id']}")
-    
+
     return {"status": "ok"}
 
 # ============== AMD (Answering Machine Detection) WEBHOOKS ==============
@@ -11656,11 +12763,11 @@ async def twilio_amd_initial_handler(call_id: str, request: Request):
     We play a brief pause while AMD determines human vs machine.
     """
     response = VoiceResponse()
-    
+
     # Brief pause while AMD analyzes (async AMD will callback separately)
     # This prevents awkward silence - we play hold music or a brief message
     response.pause(length=2)
-    
+
     # If AMD hasn't determined yet, say something generic
     # (The real handling happens in the AMD callback)
     response.say(
@@ -11668,7 +12775,7 @@ async def twilio_amd_initial_handler(call_id: str, request: Request):
         voice='Polly.Matthew-Neural'
     )
     response.pause(length=10)  # Wait for AMD callback to potentially redirect
-    
+
     return Response(content=str(response), media_type="application/xml")
 
 @api_router.post("/twilio/amd/{call_id}")
@@ -11678,7 +12785,7 @@ async def twilio_amd_callback(call_id: str, request: Request):
     This is where we decide to either:
     - Drop voicemail (if machine detected)
     - Connect to AI conversation (if human detected)
-    
+
     AMD AnsweredBy values:
     - "human": Human answered
     - "machine_start": Machine detected, voicemail playing
@@ -11689,22 +12796,22 @@ async def twilio_amd_callback(call_id: str, request: Request):
     - "unknown": Could not determine
     """
     form_data = await request.form()
-    
+
     call_sid = form_data.get("CallSid", "")
     answered_by = form_data.get("AnsweredBy", "unknown")
     machine_detection_duration = form_data.get("MachineDetectionDuration", "0")
-    
+
     logger.info(f"AMD callback for call {call_id}: AnsweredBy={answered_by}, Duration={machine_detection_duration}ms")
-    
+
     # Get call and campaign info
     call_record = await db.calls.find_one({"id": call_id}, {"_id": 0})
     if not call_record:
         logger.error(f"Call record not found for AMD callback: {call_id}")
         return {"status": "error", "message": "Call not found"}
-    
+
     lead = await db.leads.find_one({"id": call_record["lead_id"]}, {"_id": 0})
     campaign = await db.campaigns.find_one({"id": call_record["campaign_id"]}, {"_id": 0})
-    
+
     # Update call record with AMD result
     await db.calls.update_one(
         {"id": call_id},
@@ -11714,48 +12821,75 @@ async def twilio_amd_callback(call_id: str, request: Request):
             "amd_duration_ms": int(machine_detection_duration) if machine_detection_duration else 0
         }}
     )
-    
+
     # Determine action based on AMD result
     is_machine = answered_by in ["machine_start", "machine_end_beep", "machine_end_silence", "machine_end_other"]
     is_human = answered_by == "human"
-    
+
     if is_machine and campaign and campaign.get("voicemail_enabled", True):
         # MACHINE DETECTED - Drop voicemail
         logger.info(f"Machine detected for call {call_id}, dropping voicemail")
-        
+
+        # Hydrate campaign with resolved {agent_name} + {callback_number}
+        try:
+            _campaign_hydrated = await hydrate_campaign_for_vm(db, campaign)
+        except Exception as _hy_err:
+            logger.error(f"[vm] hydration failed for call {call_id}: {_hy_err}")
+            _campaign_hydrated = campaign
+
+        # Load personalized voicemail for this exact campaign + lead.
+        try:
+            _lead_vm = await db.lead_vm_audio.find_one(
+                {
+                    "campaign_id": str((campaign or {}).get("id") or ""),
+                    "lead_id": str((lead or {}).get("id") or ""),
+                    "user_id": str((campaign or {}).get("user_id") or ""),
+                },
+                {"_id": 0, "voicemail_audio_url": 1},
+            )
+            if _lead_vm and _lead_vm.get("voicemail_audio_url"):
+                _campaign_hydrated["_lead_voicemail_audio_url"] = (
+                    _lead_vm["voicemail_audio_url"]
+                )
+        except Exception as _lead_vm_lookup_err:
+            logger.error(
+                f"[vm_lead] AMD lookup failed call={call_id}: "
+                f"{_lead_vm_lookup_err}"
+            )
+
         # Update call to redirect to voicemail TwiML
         try:
             twilio_client.calls(call_sid).update(
-                twiml=twilio_service.generate_voicemail_twiml(lead or {}, campaign)
+                twiml=twilio_service.generate_voicemail_twiml(lead or {}, _campaign_hydrated)
             )
-            
+
             # Mark as voicemail dropped
             await db.calls.update_one(
                 {"id": call_id},
                 {"$set": {"voicemail_dropped": True}}
             )
-            
+
             logger.info(f"Voicemail dropped for call {call_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to drop voicemail for call {call_id}: {e}")
-    
+
     elif is_human:
         # HUMAN DETECTED - Connect to AI conversation
         logger.info(f"Human detected for call {call_id}, connecting to AI")
-        
+
         try:
             twilio_client.calls(call_sid).update(
                 twiml=twilio_service.generate_human_twiml(lead or {}, campaign or {}, call_id)
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to connect human to AI for call {call_id}: {e}")
-    
+
     else:
         # UNKNOWN or FAX - Just log and let call continue
         logger.warning(f"Unknown AMD result for call {call_id}: {answered_by}")
-    
+
     return {"status": "ok", "answered_by": answered_by, "action": "voicemail" if is_machine else "ai_conversation"}
 
 @api_router.get("/calls/{call_id}/amd-status")
@@ -11768,7 +12902,7 @@ async def get_call_amd_status(
     call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     return {
         "call_id": call_id,
         "answered_by": call.get("answered_by"),
@@ -11795,15 +12929,15 @@ async def get_call_recording(
             status_code=403,
             detail="Call recording requires Starter plan or higher."
         )
-    
+
     # Get call (with user ownership verification)
     call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     if not call.get("recording_url"):
         raise HTTPException(status_code=404, detail="No recording available for this call")
-    
+
     return {
         "call_id": call_id,
         "recording_url": call.get("recording_url"),
@@ -11829,12 +12963,12 @@ async def get_call_transcript(
             status_code=403,
             detail="Call transcription requires Professional plan or higher."
         )
-    
+
     # Get call (with user ownership verification)
     call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     if not call.get("full_transcript"):
         if call.get("transcription_status") == "processing":
             return {
@@ -11846,7 +12980,7 @@ async def get_call_transcript(
             raise HTTPException(status_code=500, detail="Transcription failed. Please try again.")
         else:
             raise HTTPException(status_code=404, detail="No transcript available for this call")
-    
+
     return {
         "call_id": call_id,
         "full_transcript": call.get("full_transcript"),
@@ -11868,26 +13002,26 @@ async def live_transfer_call(
     call = await db.calls.find_one({"id": call_id})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     # Get the agent to find transfer number
     agent = await db.agents.find_one({"id": call.get("agent_id")})
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     transfer_number = agent.get("transfer_phone_number")
     if not transfer_number:
         raise HTTPException(status_code=400, detail="No transfer number configured for this agent")
-    
+
     try:
         # Get Twilio credentials
         twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
         twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
-        
+
         if not twilio_sid or not twilio_token:
             raise HTTPException(status_code=500, detail="Twilio not configured")
-        
+
         client = Client(twilio_sid, twilio_token)
-        
+
         # Generate TwiML for warm transfer
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -11896,10 +13030,10 @@ async def live_transfer_call(
         <Number>{transfer_number}</Number>
     </Dial>
 </Response>'''
-        
+
         # Update the call with the transfer TwiML
         client.calls(call.get("twilio_sid")).update(twiml=twiml)
-        
+
         # Log the transfer
         await db.calls.update_one(
             {"id": call_id},
@@ -11909,15 +13043,15 @@ async def live_transfer_call(
                 "transferred_at": datetime.now(timezone.utc).isoformat()
             }}
         )
-        
+
         logger.info(f"Call {call_id} transferred to {transfer_number}")
-        
+
         return {
             "success": True,
             "message": "Call transferred successfully",
             "transferred_to": transfer_number
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to transfer call {call_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Transfer failed: {str(e)}")
@@ -11938,17 +13072,17 @@ async def request_transcription(
             status_code=403,
             detail="Call transcription requires Professional plan or higher."
         )
-    
+
     call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     if not call.get("recording_sid"):
         raise HTTPException(status_code=400, detail="No recording available for this call")
-    
+
     if call.get("transcription_status") == "processing":
         return {"message": "Transcription already in progress", "status": "processing"}
-    
+
     # Process in background
     background_tasks.add_task(
         recording_service.process_call_recording,
@@ -11957,7 +13091,7 @@ async def request_transcription(
         call["recording_sid"],
         features
     )
-    
+
     return {
         "message": "Transcription requested",
         "call_id": call_id,
@@ -11979,22 +13113,22 @@ async def stream_call_recording(
             status_code=403,
             detail="Call recording requires Starter plan or higher."
         )
-    
+
     call = await db.calls.find_one({"id": call_id, "user_id": current_user["user_id"]}, {"_id": 0})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     recording_path = call.get("recording_url")
     if not recording_path:
         raise HTTPException(status_code=404, detail="No recording available")
-    
+
     # Get from object storage
     result = await asyncio.to_thread(get_object, recording_path)
     if not result:
         raise HTTPException(status_code=404, detail="Recording file not found")
-    
+
     audio_data, content_type = result
-    
+
     return StreamingResponse(
         io.BytesIO(audio_data),
         media_type=content_type,
@@ -12015,13 +13149,13 @@ async def twilio_recording_webhook(request: Request, background_tasks: Backgroun
     recording_sid = form_data.get("RecordingSid", "")
     recording_duration = form_data.get("RecordingDuration", "0")
     recording_status = form_data.get("RecordingStatus", "")
-    
+
     logger.info(f"Twilio recording webhook: call={call_sid}, status={recording_status}, sid={recording_sid}")
-    
+
     if recording_status == "completed" and recording_sid:
         # Find the call by Twilio SID
         call = await db.calls.find_one({"twilio_sid": call_sid}, {"_id": 0})
-        
+
         if call:
             # Update call with recording info
             await db.calls.update_one(
@@ -12032,12 +13166,12 @@ async def twilio_recording_webhook(request: Request, background_tasks: Backgroun
                     "transcription_status": "pending"
                 }}
             )
-            
+
             # Get user to check tier features
             user = await db.users.find_one({"user_id": call.get("user_id")}, {"_id": 0})
             if user:
                 features = get_tier_features(user)
-                
+
                 # Process recording in background (store + transcribe based on tier)
                 background_tasks.add_task(
                     recording_service.process_call_recording,
@@ -12046,13 +13180,13 @@ async def twilio_recording_webhook(request: Request, background_tasks: Backgroun
                     recording_sid,
                     features
                 )
-            
+
             logger.info(f"Recording queued for processing: call={call['id']}, sid={recording_sid}")
         else:
             logger.warning(f"Call not found for Twilio SID: {call_sid}")
-    
+
     return {"status": "received"}
-    
+
     return {"status": "ok"}
 
 # ----- Real-Time AI Calling (Synthflow-style) -----
@@ -12077,37 +13211,37 @@ async def initiate_realtime_call(
     """
     if not twilio_service.is_configured:
         raise HTTPException(status_code=503, detail="Twilio not configured")
-    
+
     # Check credits
     if current_user.get("call_credits_remaining", 0) < 1:
         raise HTTPException(status_code=402, detail="Insufficient call credits")
-    
+
     user_id = current_user["user_id"]
-    
+
     # Get lead and campaign (with user ownership verification)
     lead = await db.leads.find_one({"id": request.lead_id, "user_id": user_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     campaign = await db.campaigns.find_one({"id": request.campaign_id, "user_id": user_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     phone_number = lead.get("phone")
     if not phone_number:
         raise HTTPException(status_code=400, detail="Lead has no phone number")
-    
+
     # Compliance check
     compliance = await compliance_service.pre_call_compliance_check(phone_number, user_id)
     if not compliance["is_allowed"]:
         return {"status": "blocked", "reasons": compliance["reasons"]}
-    
+
     # Deduct credit
     await db.users.update_one(
         {"user_id": user_id},
         {"$inc": {"call_credits_remaining": -1}}
     )
-    
+
     # Create call record with user_id
     call = Call(
         user_id=user_id,
@@ -12116,14 +13250,14 @@ async def initiate_realtime_call(
         status=CallStatus.PENDING
     )
     await db.calls.insert_one(call.model_dump())
-    
+
     # Store context for WebSocket handler
     active_media_streams[call.id] = {
         "lead": lead,
         "campaign": campaign,
         "user_id": user_id
     }
-    
+
     # Get callback URL (must be wss:// for Media Streams)
     # IMPORTANT: Use the external URL that Twilio can reach, not the internal request URL
     # The external URL comes from frontend .env or an explicit backend env var
@@ -12132,14 +13266,14 @@ async def initiate_realtime_call(
         # Fallback to request base_url but this may not work if behind a proxy
         external_url = str(http_request.base_url).rstrip("/")
         logger.warning(f"No EXTERNAL_URL configured, using request base: {external_url}")
-    
+
     callback_url = external_url.rstrip("/")
     ws_url = callback_url.replace("https://", "wss://").replace("http://", "ws://")
-    
+
     try:
         # Create TwiML that connects to Media Streams
         response = VoiceResponse()
-        
+
         # Compliance disclosure first (required)
         company = campaign.get('company_name', 'our company')
         response.say(
@@ -12147,7 +13281,7 @@ async def initiate_realtime_call(
             voice='Polly.Matthew-Neural'
         )
         response.pause(length=1)
-        
+
         # Connect to Media Stream for real-time conversation
         connect = Connect()
         stream = Stream(url=f"{ws_url}/api/media-stream/{call.id}")
@@ -12155,7 +13289,7 @@ async def initiate_realtime_call(
         stream.parameter(name="campaign_id", value=request.campaign_id)
         connect.append(stream)
         response.append(connect)
-        
+
         # Make the call with TwiML
         twilio_call = twilio_client.calls.create(
             to=phone_number,
@@ -12165,12 +13299,12 @@ async def initiate_realtime_call(
             status_callback_event=["initiated", "ringing", "answered", "completed"],
             record=True
         )
-        
+
         await db.calls.update_one(
             {"id": call.id},
             {"$set": {"twilio_sid": twilio_call.sid, "status": CallStatus.IN_PROGRESS.value}}
         )
-        
+
         return {
             "status": "initiated",
             "call_id": call.id,
@@ -12178,7 +13312,7 @@ async def initiate_realtime_call(
             "mode": "realtime",
             "message": "Real-time AI call initiated"
         }
-        
+
     except Exception as e:
         # Refund credit
         await db.users.update_one(
@@ -12195,18 +13329,18 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
     Handles real-time AI conversation.
     """
     await websocket.accept()
-    
+
     context = active_media_streams.get(call_id)
     if not context:
         logger.error(f"No context found for call {call_id}")
         await websocket.close()
         return
-    
+
     lead = context["lead"]
     campaign = context["campaign"]
     user_id = context.get("user_id")
     stream_sid = None
-    
+
     # Load agent for voice settings
     agent = None
     agent_voice_id = None
@@ -12222,21 +13356,21 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
             # Get voice settings
             agent_voice_settings = agent.get("voice_settings")
             logger.info(f"Using agent voice: {agent_voice_id}, settings: {agent_voice_settings}")
-    
+
     # Conversation state
     messages = []
     is_first_response = True
     audio_buffer = b""
-    
+
     # Silence detection state
     consecutive_silence_count = 0
     MAX_CONSECUTIVE_SILENCE = 3  # Hang up after 3 no-responses
     last_response_time = asyncio.get_event_loop().time()
     MAX_CALL_DURATION = 600  # 10 minute hard cap
     call_start_time = asyncio.get_event_loop().time()
-    
+
     logger.info(f"Media stream connected for call {call_id}")
-    
+
     try:
         while True:
             # Check max call duration
@@ -12252,30 +13386,30 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         voice_settings=agent_voice_settings
                     )
                     await asyncio.sleep(5)
-                    
+
                     # Schedule follow-up
                     if user_id:
                         await auto_schedule_followup(call_id, "max_duration_callback", user_id)
                 break
-            
+
             data = await websocket.receive_text()
             message = json.loads(data)
             event = message.get("event")
-            
+
             if event == "connected":
                 logger.info(f"Media stream connected: {message}")
-                
+
             elif event == "start":
                 # Twilio start event - get the streamSid
                 stream_sid = message.get("streamSid")
                 start_data = message.get("start", {})
-                
+
                 # Handle both formats: top-level and nested in start object
                 if not stream_sid:
                     stream_sid = start_data.get("streamSid")
-                
+
                 logger.info(f"Media stream started: {stream_sid}")
-                
+
                 # Send initial AI greeting
                 if is_first_response and stream_sid:
                     is_first_response = False
@@ -12283,12 +13417,12 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                     business = lead.get('business_name', 'your company')
                     line_type = lead.get('line_type', 'unknown').lower()
                     is_mobile = line_type in ['mobile', 'cellphone', 'wireless']
-                    
+
                     # Determine greeting based on agent settings and line type
                     if agent:
                         agent_name = agent.get('name', 'Sarah')
                         auto_disclosure = agent.get('auto_disclosure_mobile_only', True)
-                        
+
                         # Use custom scripts if provided
                         if is_mobile and agent.get('opening_script_mobile'):
                             # Mobile call with AI disclosure script
@@ -12308,34 +13442,34 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                         else:
                             # Default landline greeting without AI disclosure
                             greeting = f"Hi {contact_name or 'there'}, this is {agent_name} with IntentBrain. We help sales companies bring in more clients with booked meetings, live transfers, and intent leads. Would you be open to a quick 15 minute demo to see how it works?"
-                        
+
                         logger.info(f"Call to {business} - Line type: {line_type}, Mobile: {is_mobile}, Auto-disclosure: {auto_disclosure}")
                     else:
                         # Fallback generic greeting
                         greeting = f"Am I speaking with someone at {business}? I'm reaching out because we help businesses increase their profits with solutions most companies overlook. Do you have a moment?"
-                    
+
                     # Generate and send TTS
                     await send_tts_to_stream(websocket, stream_sid, greeting, voice_id=agent_voice_id, voice_settings=agent_voice_settings)
                     last_response_time = asyncio.get_event_loop().time()
-                
+
             elif event == "media":
                 # Receive audio from caller
                 payload = message["media"]["payload"]
                 audio_chunk = base64.b64decode(payload)
                 audio_buffer += audio_chunk
-                
+
                 # Process when we have ~2 seconds of audio (for better transcription)
                 if len(audio_buffer) >= 16000:
                     # In production, use Deepgram or AssemblyAI for real-time transcription
                     # For now, we'll use a simplified approach
                     transcript = await transcribe_audio_chunk(audio_buffer)
-                    
+
                     if transcript and len(transcript.strip()) > 2:
                         # Reset silence counter - we got a response!
                         consecutive_silence_count = 0
                         last_response_time = asyncio.get_event_loop().time()
                         logger.info(f"Caller: {transcript}")
-                        
+
                         # Check for opt-out / DNC request (Option B: detect disinterest)
                         transcript_lower = transcript.lower()
                         opt_out_phrases = [
@@ -12350,7 +13484,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             "please stop", "leave me alone", "go away", "hang up",
                             "don't contact", "do not contact", "never call"
                         ]
-                        
+
                         if any(phrase in transcript_lower for phrase in opt_out_phrases):
                             logger.info(f"Opt-out detected: '{transcript}' - Adding to DNC list")
                             await send_tts_to_stream(
@@ -12363,7 +13497,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             if phone:
                                 await compliance_service.add_to_dnc(phone, "user_request", added_by=user_id)
                                 logger.info(f"Added {phone} to DNC list - reason: user_request during call")
-                            
+
                             # Update call record with opt-out reason
                             await db.calls.update_one(
                                 {"id": call_id},
@@ -12375,11 +13509,11 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             )
                             await asyncio.sleep(3)
                             break
-                        
+
                         # Generate AI response
                         ai_response = await generate_sales_response(transcript, messages, lead, campaign)
                         logger.info(f"AI: {ai_response}")
-                        
+
                         # Extract DISC personality if detected by AI
                         detected_personality = None
                         if "[PERSONALITY:" in ai_response:
@@ -12401,7 +13535,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                     }}
                                 )
                                 logger.info(f"Call {call_id} - Detected personality: {detected_personality} ({personality_info.get('name', '')})")
-                        
+
                         # Also run our own detection based on transcript
                         if not detected_personality and len(messages) >= 4:
                             # Combine all user messages for analysis
@@ -12420,14 +13554,14 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                     }}
                                 )
                                 logger.info(f"Call {call_id} - Auto-detected personality: {detected_personality} (confidence: {disc_result['confidence']})")
-                        
+
                         # Check if AI requested a live transfer
                         if "[TRANSFER_NOW]" in ai_response:
                             logger.info(f"Transfer requested for call {call_id}")
                             # Get agent's transfer number
                             agent = await db.agents.find_one({"id": campaign.get("agent_id")})
                             transfer_number = agent.get("transfer_phone_number") if agent else None
-                            
+
                             if transfer_number:
                                 await send_tts_to_stream(
                                     websocket, stream_sid,
@@ -12436,20 +13570,20 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                     voice_settings=agent_voice_settings
                                 )
                                 await asyncio.sleep(2)
-                                
+
                                 # Trigger the transfer via Twilio
                                 try:
                                     twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
                                     twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
                                     twilio_client = Client(twilio_sid, twilio_token)
-                                    
+
                                     call_record = await db.calls.find_one({"id": call_id})
                                     if call_record and call_record.get("twilio_sid"):
                                         # Build whisper message with personality info
                                         lead_name = lead.get("contact_name", lead.get("name", "Unknown"))
                                         lead_company = lead.get("company", lead.get("business_name", ""))
                                         personality_type = call_record.get("detected_personality") or detected_personality
-                                        
+
                                         whisper_parts = [f"Incoming transfer: {lead_name}"]
                                         if lead_company:
                                             whisper_parts.append(f"from {lead_company}")
@@ -12457,9 +13591,9 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                             pinfo = DISC_PERSONALITIES.get(personality_type, {})
                                             whisper_parts.append(f". Personality type: {pinfo.get('name', personality_type)}.")
                                             whisper_parts.append(f"Tip: {pinfo.get('sales_tips', '')[:100]}")
-                                        
+
                                         whisper_message = " ".join(whisper_parts)
-                                        
+
                                         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="Polly.Joanna">{whisper_message}</Say>
@@ -12468,7 +13602,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
     </Dial>
 </Response>'''
                                         twilio_client.calls(call_record.get("twilio_sid")).update(twiml=twiml)
-                                        
+
                                         await db.calls.update_one(
                                             {"id": call_id},
                                             {"$set": {
@@ -12491,10 +13625,10 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             else:
                                 # No transfer number configured - fall back to booking
                                 ai_response = "I'd love to connect you with someone. Let me get you scheduled for a call - what day works best for you?"
-                        
+
                         messages.append({"role": "user", "content": transcript})
                         messages.append({"role": "assistant", "content": ai_response})
-                        
+
                         await send_tts_to_stream(websocket, stream_sid, ai_response, voice_id=agent_voice_id, voice_settings=agent_voice_settings)
                     else:
                         # No speech detected - check for silence timeout
@@ -12503,7 +13637,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             consecutive_silence_count += 1
                             last_response_time = asyncio.get_event_loop().time()
                             logger.info(f"Silence detected for call {call_id}, count: {consecutive_silence_count}")
-                            
+
                             if consecutive_silence_count >= MAX_CONSECUTIVE_SILENCE:
                                 # Too many silences - schedule callback and end call
                                 logger.info(f"Call {call_id} - max silence reached, scheduling callback")
@@ -12514,7 +13648,7 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                                     voice_settings=agent_voice_settings
                                 )
                                 await asyncio.sleep(3)
-                                
+
                                 # Schedule follow-up call
                                 if user_id:
                                     await auto_schedule_followup(call_id, "no_response_callback", user_id)
@@ -12525,20 +13659,20 @@ async def media_stream_websocket(websocket: WebSocket, call_id: str):
                             elif consecutive_silence_count == 2:
                                 # Second silence - another prompt
                                 await send_tts_to_stream(websocket, stream_sid, "Hello? Can you hear me?", voice_id=agent_voice_id, voice_settings=agent_voice_settings)
-                    
+
                     audio_buffer = b""
-                
+
             elif event == "stop":
                 logger.info(f"Media stream stopped: {call_id}")
                 break
-                
+
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for call {call_id}")
     except Exception as e:
         logger.error(f"Media stream error: {e}")
     finally:
         active_media_streams.pop(call_id, None)
-        
+
         # Update call record with transcript
         await db.calls.update_one(
             {"id": call_id},
@@ -12555,20 +13689,20 @@ async def send_tts_to_stream(websocket: WebSocket, stream_sid: str, text: str, v
         if not eleven_client:
             logger.error("ElevenLabs not configured")
             return
-        
+
         # Use provided voice_id or default
         final_voice_id = voice_id or "EXAVITQu4vr4xnSDxMaL"  # Sarah - professional
-        
+
         # Build voice settings with defaults
         stability = 0.5
         similarity_boost = 0.75
         style = 0.0
-        
+
         if voice_settings:
             stability = voice_settings.get("stability", 0.5)
             similarity_boost = voice_settings.get("similarity_boost", 0.75)
             style = voice_settings.get("style", 0.0)
-        
+
         # Generate audio with voice settings
         audio_gen = eleven_client.text_to_speech.convert(
             text=text,
@@ -12582,26 +13716,26 @@ async def send_tts_to_stream(websocket: WebSocket, stream_sid: str, text: str, v
                 "use_speaker_boost": True
             }
         )
-        
+
         audio_data = b""
         for chunk in audio_gen:
             audio_data += chunk
-        
+
         logger.info(f"TTS generated {len(audio_data)} bytes for: '{text[:40]}...'")
-        
+
         # Send in 20ms chunks (160 bytes at 8kHz)
         chunk_size = 160
         for i in range(0, len(audio_data), chunk_size):
             chunk = audio_data[i:i + chunk_size]
             payload = base64.b64encode(chunk).decode()
-            
+
             await websocket.send_text(json.dumps({
                 "event": "media",
                 "streamSid": stream_sid,
                 "media": {"payload": payload}
             }))
             await asyncio.sleep(0.02)
-            
+
     except Exception as e:
         logger.error(f"TTS streaming error: {e}", exc_info=True)
 
@@ -12613,7 +13747,7 @@ async def transcribe_audio_chunk(audio_data: bytes) -> str:
         # Convert μ-law to PCM for transcription APIs
         import audioop
         pcm_data = audioop.ulaw2lin(audio_data, 2)
-        
+
         # Create WAV file
         import struct
         sample_rate = 8000
@@ -12623,7 +13757,7 @@ async def transcribe_audio_chunk(audio_data: bytes) -> str:
             1, 1, sample_rate, sample_rate * 2, 2, 16, b'data', len(pcm_data)
         )
         wav_data = wav_header + pcm_data
-        
+
         # Use OpenAI Whisper
         llm_key = os.environ.get('EMERGENT_LLM_KEY')
         async with httpx.AsyncClient() as client:
@@ -12645,7 +13779,7 @@ async def generate_sales_response(user_input: str, history: list, lead: Dict, ca
     try:
         company = campaign.get('company_name', 'our company')
         business = lead.get('business_name', 'your company')
-        
+
         # Check if agent has transfer enabled
         agent = await db.agents.find_one({"id": campaign.get("agent_id")})
         transfer_enabled = agent.get("transfer_enabled", False) if agent else False
@@ -12655,7 +13789,7 @@ async def generate_sales_response(user_input: str, history: list, lead: Dict, ca
 - If they show ANY interest, curiosity, or want to learn more, ask: "Would you like me to connect you with a team member now to go over this in more detail?"
 - If they say YES to transfer, respond EXACTLY with: "[TRANSFER_NOW]"
 """
-        
+
         # DISC personality adaptation instruction
         disc_instruction = """
 IMPORTANT - Personality Detection & Adaptation:
@@ -12663,20 +13797,20 @@ As you converse, detect the prospect's DISC personality type and adapt your styl
 
 D (Dominant) - If they're direct, results-focused, ask about ROI, want to move fast:
   → Be concise, focus on results, don't small talk, speak with confidence
-  
+
 I (Influencer) - If they're enthusiastic, use words like "exciting", "love it", talk about people:
   → Be energetic, build rapport, make it fun, share stories
-  
+
 S (Steady) - If they're calm, mention team/trust, say "no rush", want to think about it:
   → Be patient, reassuring, don't pressure, emphasize support
-  
+
 C (Conscientious) - If they ask for specifics, data, "how exactly does it work":
   → Be precise, provide details, cite facts, be thorough
 
 After 2-3 exchanges, if you detect a clear personality type, include it as: [PERSONALITY:X] where X is D, I, S, or C
 Example: "That's a great question! [PERSONALITY:C]"
 """
-        
+
         system_prompt = f"""You are an AI sales agent for {company}. Keep responses SHORT (1-2 sentences max) - this is a phone call.
 
 Your goal: Qualify the lead and book a meeting.
@@ -12691,7 +13825,7 @@ Guidelines:
 
 Common responses:
 - "Yes/interested" → Ask about their timeline or decision-making process
-- "Tell me more" → Briefly explain the value proposition  
+- "Tell me more" → Briefly explain the value proposition
 - "Not now" → Offer to send info by email
 - "Who is this?" → Re-introduce yourself briefly"""
 
@@ -12700,21 +13834,21 @@ Common responses:
             model="gpt-5.2",
             system_message=system_prompt
         )
-        
+
         # Add history
         full_prompt = ""
         for msg in history[-6:]:  # Last 3 exchanges
             full_prompt += f"{msg['role']}: {msg['content']}\n"
         full_prompt += f"user: {user_input}"
-        
+
         response = await chat.chat(full_prompt)
-        
+
         # Keep it short
         if len(response) > 150:
             response = response[:150].rsplit(' ', 1)[0]
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"GPT response error: {e}")
         return "I apologize, could you repeat that?"
@@ -12731,34 +13865,34 @@ async def generate_tts(request: TTSRequest):
     """Generate text-to-speech audio using ElevenLabs"""
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs not configured. Add ELEVENLABS_API_KEY to .env")
-    
+
     try:
         voice_settings = VoiceSettings(
             stability=request.stability,
             similarity_boost=request.similarity_boost
         )
-        
+
         audio_generator = eleven_client.text_to_speech.convert(
             text=request.text,
             voice_id=request.voice_id,
             model_id="eleven_flash_v2",
             voice_settings=voice_settings
         )
-        
+
         # Collect audio data
         audio_data = b""
         for chunk in audio_generator:
             audio_data += chunk
-        
+
         # Convert to base64 for transfer
         audio_b64 = base64.b64encode(audio_data).decode()
-        
+
         return {
             "audio_url": f"data:audio/mpeg;base64,{audio_b64}",
             "text": request.text,
             "voice_id": request.voice_id
         }
-        
+
     except Exception as e:
         logger.error(f"Error generating TTS: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating TTS: {str(e)}")
@@ -12768,7 +13902,7 @@ async def get_available_voices():
     """Get list of available ElevenLabs voices"""
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs not configured")
-    
+
     try:
         voices_response = eleven_client.voices.get_all()
         voices = [{"voice_id": v.voice_id, "name": v.name} for v in voices_response.voices]
@@ -12808,14 +13942,14 @@ async def get_demo_narration(step_id: str):
     """Get demo narration audio for a specific step - serves pre-generated static files"""
     if step_id not in DEMO_NARRATIONS:
         raise HTTPException(status_code=404, detail="Demo step not found")
-    
+
     narration = DEMO_NARRATIONS[step_id]
     voice_info = DEMO_VOICE_MAP.get(step_id, {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel"})
-    
+
     # Serve static pre-generated audio files (no API calls needed)
     # Files are located at /public/audio/demo_step1.mp3, demo_step2.mp3, demo_step3.mp3
     static_audio_url = f"/audio/demo_{step_id}.mp3"
-    
+
     return {
         "step_id": step_id,
         "title": narration["title"],
@@ -12829,7 +13963,7 @@ async def get_all_demo_narrations():
     """Get all demo narration metadata (without audio)"""
     return {
         "narrations": [
-            {"step_id": k, "title": v["title"], "text": v["text"]} 
+            {"step_id": k, "title": v["title"], "text": v["text"]}
             for k, v in DEMO_NARRATIONS.items()
         ]
     }
@@ -12850,24 +13984,24 @@ class ReviewRequestBulk(BaseModel):
 @api_router.post("/reviews/send-request")
 async def send_review_request(request: ReviewRequestCreate, user_id: str = Depends(get_current_user)):
     """Send SMS review request to a single patient"""
-    
+
     if not twilio_service.is_configured:
         raise HTTPException(status_code=400, detail="Twilio not configured for SMS")
-    
+
     # Default message template
     message = request.custom_message or f"Hi {request.patient_name}! Thank you for visiting us today. We'd love to hear about your experience. Please leave us a quick review: {request.google_review_url}"
-    
+
     # Ensure message isn't too long for SMS
     if len(message) > 1500:
         message = message[:1500]
-    
+
     try:
         twilio_client.messages.create(
             body=message,
             from_=os.environ.get("TWILIO_PHONE_NUMBER"),
             to=request.patient_phone
         )
-        
+
         # Log the review request
         await db.review_requests.insert_one({
             "user_id": user_id,
@@ -12878,9 +14012,9 @@ async def send_review_request(request: ReviewRequestCreate, user_id: str = Depen
             "status": "sent",
             "sent_at": datetime.now(timezone.utc).isoformat()
         })
-        
+
         logger.info(f"Sent review request SMS to {request.patient_phone}")
-        
+
         return {
             "success": True,
             "message": "Review request sent",
@@ -12893,28 +14027,28 @@ async def send_review_request(request: ReviewRequestCreate, user_id: str = Depen
 @api_router.post("/reviews/send-bulk")
 async def send_bulk_review_requests(request: ReviewRequestBulk, user_id: str = Depends(get_current_user)):
     """Send review requests to multiple patients"""
-    
+
     if not twilio_service.is_configured:
         raise HTTPException(status_code=400, detail="Twilio not configured for SMS")
-    
+
     results = []
     for patient in request.patients:
         name = patient.get("name", "")
         phone = patient.get("phone", "")
-        
+
         if not phone:
             results.append({"name": name, "status": "skipped", "reason": "No phone"})
             continue
-        
+
         message = request.custom_message or f"Hi {name}! Thank you for visiting us today. We'd love to hear about your experience. Please leave us a quick review: {request.google_review_url}"
-        
+
         try:
             twilio_client.messages.create(
                 body=message,
                 from_=os.environ.get("TWILIO_PHONE_NUMBER"),
                 to=phone
             )
-            
+
             await db.review_requests.insert_one({
                 "user_id": user_id,
                 "patient_name": name,
@@ -12924,13 +14058,13 @@ async def send_bulk_review_requests(request: ReviewRequestBulk, user_id: str = D
                 "status": "sent",
                 "sent_at": datetime.now(timezone.utc).isoformat()
             })
-            
+
             results.append({"name": name, "status": "sent"})
         except Exception as e:
             results.append({"name": name, "status": "failed", "reason": str(e)})
-    
+
     sent_count = len([r for r in results if r["status"] == "sent"])
-    
+
     return {
         "success": True,
         "total": len(request.patients),
@@ -12941,15 +14075,15 @@ async def send_bulk_review_requests(request: ReviewRequestBulk, user_id: str = D
 @api_router.get("/reviews/history")
 async def get_review_request_history(user_id: str = Depends(get_current_user), limit: int = 50):
     """Get history of sent review requests"""
-    
+
     requests = await db.review_requests.find(
         {"user_id": user_id}
     ).sort("sent_at", -1).limit(limit).to_list(length=limit)
-    
+
     # Remove MongoDB _id
     for req in requests:
         req.pop("_id", None)
-    
+
     return {"requests": requests}
 
 # Include router
@@ -13077,6 +14211,51 @@ else:
 # Include main api_router (legacy routes)
 app.include_router(api_router)
 
+# ============================================================
+# Outbound Human-Greeting Gate (additive — does NOT touch inbound)
+# ============================================================
+try:
+    from routes import twilio_outbound as _twilio_outbound
+
+    _outbound_voice_id = os.environ.get("ELEVENLABS_VOICE_ID") or "21m00Tcm4TlvDq8ikWAM"  # Rachel default
+    _outbound_backend_url = (os.environ.get("BACKEND_URL") or os.environ.get("REACT_APP_BACKEND_URL") or "").rstrip("/")
+    _outbound_from = os.environ.get("TWILIO_OUTBOUND_FROM") or twilio_phone_number or ""
+
+    _twilio_outbound.setup_dependencies(
+        db=db,
+        twilio_client=twilio_client,
+        eleven_client=eleven_client,
+        synthesize_fn=None,
+        voice_id=_outbound_voice_id,
+        backend_url=_outbound_backend_url,
+        from_number=_outbound_from,
+    )
+    app.include_router(_twilio_outbound.router, prefix="/api")
+    app.include_router(_twilio_outbound.tts_router, prefix="/api")
+    app.include_router(_twilio_outbound.admin_router, prefix="/api")
+    logger.info(
+        "Mounted Outbound Human-Greeting Gate at /api/twilio/outbound/* "
+        f"(backend_url={'set' if _outbound_backend_url else 'MISSING'}, "
+        f"voice_id={_outbound_voice_id}, from={'set' if _outbound_from else 'MISSING'})"
+    )
+except Exception as _outbound_err:
+    logger.error(f"Failed to mount outbound router: {_outbound_err}")
+
+
+# ============================================================
+# Cloned-voice VM audio retention sweep (isolated, non-fatal)
+# ============================================================
+@app.on_event("startup")
+async def _vm_cloned_audio_startup_sweep():
+    try:
+        from services.vm_cloned_audio import sweep_orphaned_vm_audio
+        stats = await sweep_orphaned_vm_audio(db)
+        logger.info(f"[vm_cloned] startup sweep: {stats}")
+    except Exception as _vm_sweep_err:
+        logger.error(f"[vm_cloned] startup sweep failed: {_vm_sweep_err}")
+
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -13094,7 +14273,7 @@ async def startup_pre_cache():
         try:
             demo_script = """Hey! This is Sarah from IntentBrain... Glad you picked up!
 
-I know what you're thinking— great, another sales call, right? 
+I know what you're thinking— great, another sales call, right?
 
 But here's the twist... I'm actually an AI. Yeah— a real-time AI, having a natural conversation with you, right now.
 
@@ -13113,7 +14292,7 @@ Ready to try it yourself? Just head back to your dashboard and launch your first
 Pretty cool, right?
 
 Anyway— I'll let you get back to it. Talk soon!"""
-            
+
             voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel - American female voice
             async with httpx.AsyncClient() as http_client:
                 response = await http_client.post(

@@ -2,8 +2,8 @@ import { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Phone, Zap, Calendar, CheckCircle, ArrowRight, Play, 
+import {
+  Phone, Zap, Calendar, CheckCircle, ArrowRight, Play,
   Users, Clock, Shield, Headphones, BarChart3,
   ChevronDown, Bot, Target, Menu, X, Upload, Volume2, Pause, Loader2,
   Search, MessageSquare, PhoneCall, Mail, Settings, PhoneForwarded, Mic, Brain, TrendingUp, Star
@@ -33,7 +33,7 @@ const CallYourselfHero = () => {
         `${API}/demo/call-yourself`,
         { phone_number: phoneNumber }
       );
-      
+
       toast.success("Your phone will ring in a few seconds!");
       setCalled(true);
     } catch (error) {
@@ -114,7 +114,7 @@ const DemoAudioPlayer = ({ stepId }) => {
     try {
       // Use static pre-generated audio files
       const audioUrl = `/audio/demo_${stepId}.mp3`;
-      
+
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
         await audioRef.current.play();
@@ -161,7 +161,7 @@ const LandingPage = () => {
   const [openFaq, setOpenFaq] = useState(null);
   const [pricingTab, setPricingTab] = useState("full"); // "byol" or "full"
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   // Demo request form state
   const [demoForm, setDemoForm] = useState({
     name: "",
@@ -175,7 +175,7 @@ const LandingPage = () => {
   const handleDemoRequest = async (e) => {
     e.preventDefault();
     setDemoSubmitting(true);
-    
+
     try {
       await axios.post(`${API}/demo-requests`, demoForm);
       setDemoSuccess(true);
@@ -220,7 +220,7 @@ const LandingPage = () => {
       icon: Target,
     },
     {
-      number: "02", 
+      number: "02",
       title: "AI Calls & Qualifies",
       description: "Our AI makes natural-sounding calls, identifies decision makers, and scores interest level.",
       icon: Phone,
@@ -543,7 +543,7 @@ const LandingPage = () => {
       <nav className="bg-[#0B1628] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-center">
-            
+
             <div className="hidden md:flex items-center gap-8">
               <a href="#personality" className="text-sm text-gray-300 hover:text-white transition-colors">Personality AI</a>
               <a href="#proof" className="text-sm text-gray-300 hover:text-white transition-colors">Results</a>
@@ -551,13 +551,13 @@ const LandingPage = () => {
               <a href="#pricing" className="text-sm text-gray-300 hover:text-white transition-colors">Pricing</a>
               <a href="#faq" className="text-sm text-gray-300 hover:text-white transition-colors">FAQ</a>
               <span className="w-px h-5 bg-gray-700"></span>
-              <button 
+              <button
                 onClick={goToLogin}
                 className="rounded-full border border-gray-600 text-white hover:bg-white/10 bg-transparent px-4 py-2 text-sm cursor-pointer"
               >
                 Log in
               </button>
-              <button 
+              <button
                 onClick={scrollToPricing}
                 className="rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white px-4 py-2 text-sm cursor-pointer"
               >
@@ -565,7 +565,7 @@ const LandingPage = () => {
               </button>
             </div>
 
-            <button 
+            <button
               className="md:hidden p-2 text-white"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
@@ -582,13 +582,13 @@ const LandingPage = () => {
                 <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">Pricing</a>
                 <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="text-gray-300 hover:text-white py-2">FAQ</a>
                 <div className="pt-4 border-t border-gray-800 flex flex-col gap-3">
-                  <button 
+                  <button
                     onClick={() => { setMobileMenuOpen(false); goToLogin(); }}
                     className="w-full rounded-full border border-gray-600 text-white hover:bg-white/10 bg-transparent px-4 py-3 text-sm text-center cursor-pointer"
                   >
                     Log in
                   </button>
-                  <button 
+                  <button
                     onClick={() => { setMobileMenuOpen(false); scrollToPricing(); }}
                     className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-4 py-3 text-sm text-center cursor-pointer"
                   >
@@ -605,7 +605,7 @@ const LandingPage = () => {
       <section className="bg-[#0B1628] pt-4 pb-16 px-6 relative overflow-hidden">
         {/* Gradient orb effect */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-purple-500/20 via-cyan-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
-        
+
         <div className="max-w-5xl mx-auto text-center relative">
           {/* Big Centered Logo */}
           <div className="mb-6">
@@ -618,14 +618,14 @@ const LandingPage = () => {
             <span className="bg-gradient-to-r from-purple-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">AI That Adapts</span>
             <span className="text-white"> to Every Buyer</span>
           </h1>
-          
+
           <p className="text-lg md:text-xl text-gray-400 mt-8 max-w-3xl mx-auto leading-relaxed">
             Instantly detect buyer intent and personality, then tailor every sales call to convert more high&#8209;intent leads.
           </p>
 
           {/* Primary CTA */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
-            <Button 
+            <Button
               onClick={scrollToPricing}
               className="rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white px-10 py-7 text-lg font-semibold border-0 shadow-lg shadow-purple-500/25"
             >
@@ -728,7 +728,7 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Stats & Trust Badges */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
               <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700/50 rounded-xl p-5 text-center">
@@ -748,7 +748,7 @@ const LandingPage = () => {
                 <div className="text-sm text-gray-400">Automated Calling</div>
               </div>
             </div>
-            
+
             {/* Compliance Badges */}
             <div className="flex items-center justify-center gap-6 flex-wrap">
               <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-full text-sm font-medium">
@@ -791,7 +791,7 @@ const LandingPage = () => {
               Your reps follow one script—but every buyer is different.
             </p>
           </div>
-          
+
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             {/* Left - DISC Types */}
             <div>
@@ -801,7 +801,7 @@ const LandingPage = () => {
                 </p>
               </div>
               <h3 className="text-white text-xl font-semibold mb-6">The 4 Buyer Personalities (DISC)</h3>
-              
+
               <div className="space-y-4">
                 {/* Dominant */}
                 <div className="p-5 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -821,7 +821,7 @@ const LandingPage = () => {
                     <span className="text-white">→ Your team's tip:</span> Be direct, focus on results, don't small talk
                   </p>
                 </div>
-                
+
                 {/* Influencer */}
                 <div className="p-5 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
                   <div className="flex items-center gap-3 mb-2">
@@ -840,7 +840,7 @@ const LandingPage = () => {
                     <span className="text-white">→ Your team's tip:</span> Be energetic, build rapport, share success stories
                   </p>
                 </div>
-                
+
                 {/* Steady */}
                 <div className="p-5 bg-green-500/10 border border-green-500/30 rounded-xl">
                   <div className="flex items-center gap-3 mb-2">
@@ -859,7 +859,7 @@ const LandingPage = () => {
                     <span className="text-white">→ Your team's tip:</span> Be patient, don't pressure, emphasize support
                   </p>
                 </div>
-                
+
                 {/* Conscientious */}
                 <div className="p-5 bg-blue-500/10 border border-blue-500/30 rounded-xl">
                   <div className="flex items-center gap-3 mb-2">
@@ -880,12 +880,12 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Right - How It Works */}
             <div>
               <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
                 <h3 className="text-white text-xl font-semibold mb-6 text-center">How It Works</h3>
-                
+
                 <div className="space-y-6">
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -896,7 +896,7 @@ const LandingPage = () => {
                       <p className="text-gray-400 text-sm">During the first 2-3 exchanges, AI analyzes word choice, pace, and conversation style</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white font-bold">2</span>
@@ -906,7 +906,7 @@ const LandingPage = () => {
                       <p className="text-gray-400 text-sm">AI identifies signals and classifies the buyer as D, I, S, or C</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white font-bold">3</span>
@@ -916,7 +916,7 @@ const LandingPage = () => {
                       <p className="text-gray-400 text-sm">AI adjusts its communication style to match—building better rapport</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white font-bold">4</span>
@@ -927,7 +927,7 @@ const LandingPage = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Transfer Whisper Example */}
                 <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
                   <p className="text-purple-300 text-sm font-medium mb-2">📞 What your team hears on transfer:</p>
@@ -935,7 +935,7 @@ const LandingPage = () => {
                     "Incoming transfer: John Smith from Acme Corp. <span className="text-purple-300">Personality type: Dominant.</span> Tip: Be direct, focus on ROI, don't small talk."
                   </p>
                 </div>
-                
+
                 {/* Call History Preview */}
                 <div className="mt-6 p-4 bg-white/5 rounded-lg border border-white/10">
                   <p className="text-gray-400 text-sm font-medium mb-3">📊 See it in Call History:</p>
@@ -947,7 +947,7 @@ const LandingPage = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Benefits */}
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
@@ -996,7 +996,7 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-3xl font-bold text-white mb-4">Visual Sales Funnel</h3>
                 <p className="text-gray-400 text-lg mb-6">
-                  Track every lead through your pipeline — from discovery to booked meeting. 
+                  Track every lead through your pipeline — from discovery to booked meeting.
                   See real-time stats on qualification rates, calls made, and bookings.
                 </p>
                 <ul className="space-y-3">
@@ -1174,7 +1174,7 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-3xl font-bold text-white mb-4">AI Lead Discovery</h3>
                 <p className="text-gray-400 text-lg mb-6">
-                  Enter your target keywords and let AI find businesses actively searching for solutions like yours. 
+                  Enter your target keywords and let AI find businesses actively searching for solutions like yours.
                   Or upload your own CSV with existing leads.
                 </p>
                 <ul className="space-y-3">
@@ -1205,7 +1205,7 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-3xl font-bold text-white mb-4">Call Recordings & Results</h3>
                 <p className="text-gray-400 text-lg mb-6">
-                  Review every AI conversation. See call transcripts, qualification scores, 
+                  Review every AI conversation. See call transcripts, qualification scores,
                   and listen to recordings to train your AI further.
                 </p>
                 <ul className="space-y-3">
@@ -1297,7 +1297,7 @@ const LandingPage = () => {
 
           {/* CTA after demo */}
           <div className="text-center mt-20">
-            <button 
+            <button
               onClick={scrollToPricing}
               className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-10 py-6 text-lg font-medium border-0 inline-flex items-center cursor-pointer transition-all"
             >
@@ -1330,7 +1330,7 @@ const LandingPage = () => {
                 </p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => {
                 document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
                 setTimeout(() => setPricingTab('byol'), 300);
@@ -1354,38 +1354,38 @@ const LandingPage = () => {
                 <Zap className="w-4 h-4 text-cyan-400" />
                 <span className="text-cyan-400 text-sm font-medium">AI-Powered Outbound</span>
               </div>
-              
+
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
                 Scale your outreach with AI that <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">calls, qualifies, books meetings, and seamlessly hands off to your team</span>
               </h2>
-              
+
               <p className="text-gray-400 text-lg mb-8 leading-relaxed">
-                Our AI voice agents conduct natural, human-like conversations at scale. They handle lead qualification, 
-                appointment scheduling, and follow-ups—without writing a single line of code. When a prospect shows 
+                Our AI voice agents conduct natural, human-like conversations at scale. They handle lead qualification,
+                appointment scheduling, and follow-ups—without writing a single line of code. When a prospect shows
                 interest, the AI seamlessly hands off warm leads to your human sales team.
               </p>
 
               <div className="space-y-4">
                 {[
-                  { 
-                    icon: "🎯", 
-                    title: "Multi-Turn Conversations", 
-                    desc: "AI navigates complex dialogues, handles objections, and adapts to any response" 
+                  {
+                    icon: "🎯",
+                    title: "Multi-Turn Conversations",
+                    desc: "AI navigates complex dialogues, handles objections, and adapts to any response"
                   },
-                  { 
-                    icon: "🔗", 
-                    title: "CRM Integration Ready", 
-                    desc: "Connect to HubSpot, Salesforce, Go High Level (GHL), or your existing tools via API" 
+                  {
+                    icon: "🔗",
+                    title: "CRM Integration Ready",
+                    desc: "Connect to HubSpot, Salesforce, Go High Level (GHL), or your existing tools via API"
                   },
-                  { 
-                    icon: "📞", 
-                    title: "Intelligent Call Routing", 
-                    desc: "Hot leads instantly transferred to available reps with full context" 
+                  {
+                    icon: "📞",
+                    title: "Intelligent Call Routing",
+                    desc: "Hot leads instantly transferred to available reps with full context"
                   },
-                  { 
-                    icon: "⚡", 
-                    title: "No-Code Setup", 
-                    desc: "Launch campaigns in minutes with our intuitive campaign builder" 
+                  {
+                    icon: "⚡",
+                    title: "No-Code Setup",
+                    desc: "Launch campaigns in minutes with our intuitive campaign builder"
                   },
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-start gap-4 p-4 bg-white/5 rounded-xl border border-white/10 hover:border-cyan-500/30 transition-colors">
@@ -1417,7 +1417,7 @@ const LandingPage = () => {
                       <span className="text-green-400 text-sm">Live Call</span>
                     </div>
                   </div>
-                  
+
                   {/* Conversation Preview */}
                   <div className="space-y-3 text-sm">
                     <div className="flex gap-3">
@@ -1475,8 +1475,8 @@ const LandingPage = () => {
               { value: "8+", label: "attempts needed to reach a prospect", source: "RAIN Group" },
               { value: "$15K", label: "average cost to hire one SDR/month", source: "Bridge Group" },
             ].map((stat, idx) => (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className="bg-gray-50 rounded-2xl p-8 text-center"
               >
                 <p className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-cyan-500 to-teal-500 bg-clip-text text-transparent">
@@ -1525,7 +1525,7 @@ const LandingPage = () => {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why It's Better</h2>
           </div>
-          
+
           <div className="grid md:grid-cols-2 gap-8">
             <div className="flex items-start gap-4 p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
               <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -1536,7 +1536,7 @@ const LandingPage = () => {
                 <p className="text-gray-600">AI qualifies leads and books directly to your calendar—you just show up and close.</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-4 p-6 bg-cyan-50 rounded-2xl border border-cyan-100">
               <div className="w-12 h-12 bg-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Zap className="w-6 h-6 text-white" />
@@ -1546,7 +1546,7 @@ const LandingPage = () => {
                 <p className="text-gray-600">No more 5-minute delays. AI responds in seconds—when interest is at its peak.</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-4 p-6 bg-purple-50 rounded-2xl border border-purple-100">
               <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Users className="w-6 h-6 text-white" />
@@ -1556,7 +1556,7 @@ const LandingPage = () => {
                 <p className="text-gray-600">Let AI handle the grunt work. Your reps focus on high-value conversations only.</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-4 p-6 bg-orange-50 rounded-2xl border border-orange-100">
               <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Target className="w-6 h-6 text-white" />
@@ -1582,12 +1582,12 @@ const LandingPage = () => {
               Hear the difference. Our AI agents have natural energy, warmth, and conversation flow.
             </p>
           </div>
-          
+
           {/* Call Yourself Demo - Prominent */}
           <div className="mb-12">
             <CallYourselfHero />
           </div>
-          
+
           {/* Voice Tuning Highlight */}
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -1621,7 +1621,7 @@ const LandingPage = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Quick Presets */}
               <div className="mt-8">
                 <p className="text-gray-400 text-sm mb-3">One-Click Presets:</p>
@@ -1633,7 +1633,7 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Mock Voice Tuning UI */}
             <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
               <h4 className="text-white text-lg font-semibold mb-6 text-center">Voice Tuning Controls</h4>
@@ -1692,7 +1692,7 @@ const LandingPage = () => {
             {features.map((feature, idx) => {
               const Icon = feature.icon;
               return (
-                <div 
+                <div
                   key={idx}
                   className="bg-gray-50 rounded-2xl p-6 hover:bg-gray-100 transition-colors"
                 >
@@ -1718,10 +1718,10 @@ const LandingPage = () => {
                 Turn Every Missed Call Into a Booking—Automatically
               </h2>
               <p className="text-gray-400 text-lg mb-8">
-                Never lose a lead to voicemail again. Our AI answers every call 24/7, qualifies prospects, 
+                Never lose a lead to voicemail again. Our AI answers every call 24/7, qualifies prospects,
                 and books appointments directly on your calendar—even at 2am.
               </p>
-              
+
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1732,7 +1732,7 @@ const LandingPage = () => {
                     <p className="text-gray-400 text-sm">AI picks up instantly—no hold music, no missed opportunities</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                     <MessageSquare className="w-5 h-5 text-cyan-400" />
@@ -1742,7 +1742,7 @@ const LandingPage = () => {
                     <p className="text-gray-400 text-sm">Answers questions, handles objections, sounds completely human</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Calendar className="w-5 h-5 text-cyan-400" />
@@ -1753,8 +1753,8 @@ const LandingPage = () => {
                   </div>
                 </div>
               </div>
-              
-              <button 
+
+              <button
                 onClick={goToCalendly}
                 className="mt-8 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white px-8 py-4 text-lg font-medium inline-flex items-center gap-2 cursor-pointer transition-all"
               >
@@ -1762,13 +1762,13 @@ const LandingPage = () => {
                 <ArrowRight className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
               <div className="text-center mb-6">
                 <h3 className="text-white text-xl font-semibold mb-2">Perfect For</h3>
                 <p className="text-gray-400">Service businesses that can't afford to miss calls</p>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 {[
                   { icon: "🏠", name: "Roofers" },
@@ -1786,7 +1786,7 @@ const LandingPage = () => {
                   </div>
                 ))}
               </div>
-              
+
               <div className="mt-6 p-4 bg-gradient-to-r from-cyan-500/20 to-teal-500/20 rounded-lg border border-cyan-500/30">
                 <p className="text-cyan-300 text-sm text-center">
                   <span className="font-semibold">💡 Did you know?</span> 80% of callers won't leave a voicemail—they'll just call your competitor.
@@ -1809,12 +1809,12 @@ const LandingPage = () => {
               <p className="text-gray-400 text-lg mb-8">
                 Turn high-intent conversations into real opportunities—instantly.
               </p>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-white font-semibold text-lg mb-3">How It Works</h4>
                   <p className="text-gray-400 mb-4">When a prospect shows interest or curiosity, IntentBrain takes action in real time:</p>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -1822,7 +1822,7 @@ const LandingPage = () => {
                       </div>
                       <p className="text-gray-300">Detects interest and curiosity automatically</p>
                     </div>
-                    
+
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-orange-400 text-xs font-bold">2</span>
@@ -1832,14 +1832,14 @@ const LandingPage = () => {
                         <p className="text-orange-300 italic mt-1">"Would you like me to connect you with a team member now to go over this in more detail?"</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-orange-400 text-xs font-bold">3</span>
                       </div>
                       <p className="text-gray-300">If they say yes → <span className="text-white font-medium">instantly transfers the call to your team</span></p>
                     </div>
-                    
+
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-orange-400 text-xs font-bold">4</span>
@@ -1853,38 +1853,38 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
               <h3 className="text-white text-xl font-semibold mb-6 text-center">Why It Matters</h3>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
                   <Zap className="w-8 h-8 text-orange-400 flex-shrink-0" />
                   <p className="text-white">Connect with prospects at <span className="text-orange-400 font-semibold">peak interest</span></p>
                 </div>
-                
+
                 <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
                   <Phone className="w-8 h-8 text-orange-400 flex-shrink-0" />
                   <p className="text-white">Eliminate delays that <span className="text-orange-400 font-semibold">cost you deals</span></p>
                 </div>
-                
+
                 <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
                   <Target className="w-8 h-8 text-orange-400 flex-shrink-0" />
                   <p className="text-white">Increase conversions with <span className="text-orange-400 font-semibold">instant human connection — no follow-up needed</span></p>
                 </div>
-                
+
                 <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
                   <CheckCircle className="w-8 h-8 text-orange-400 flex-shrink-0" />
                   <p className="text-white">No more <span className="text-orange-400 font-semibold">missed high-value opportunities</span></p>
                 </div>
               </div>
-              
+
               <div className="mt-6 p-4 bg-gradient-to-r from-orange-500/20 to-amber-500/20 rounded-lg border border-orange-500/30">
                 <p className="text-orange-300 text-sm text-center font-medium">
                   🔥 The Result: Your hottest leads go from conversation → live conversation with your team in seconds.
                 </p>
               </div>
-              
+
               {/* Setup Instructions */}
               <div className="mt-6 p-5 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
@@ -1929,7 +1929,7 @@ const LandingPage = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="order-2 lg:order-1 bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8">
               <h3 className="text-white text-xl font-semibold mb-6 text-center">Why VM Drop Matters</h3>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
                   <div className="w-12 h-12 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1937,30 +1937,30 @@ const LandingPage = () => {
                   </div>
                   <p className="text-white">of sales calls go to <span className="text-violet-400 font-semibold">voicemail</span></p>
                 </div>
-                
+
                 <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
                   <Clock className="w-8 h-8 text-violet-400 flex-shrink-0" />
                   <p className="text-white">Save <span className="text-violet-400 font-semibold">hours daily</span> vs manual messages</p>
                 </div>
-                
+
                 <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
                   <Mic className="w-8 h-8 text-violet-400 flex-shrink-0" />
                   <p className="text-white">Perfect, <span className="text-violet-400 font-semibold">consistent delivery</span> every time</p>
                 </div>
-                
+
                 <div className="flex items-center gap-4 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
                   <TrendingUp className="w-8 h-8 text-violet-400 flex-shrink-0" />
                   <p className="text-white">Increase <span className="text-violet-400 font-semibold">callback rates by 22%</span></p>
                 </div>
               </div>
-              
+
               <div className="mt-6 p-4 bg-gradient-to-r from-violet-500/20 to-purple-500/20 rounded-lg border border-violet-500/30">
                 <p className="text-violet-300 text-sm text-center font-medium">
                   📬 The Result: Every voicemail gets a professional, compelling message—automatically.
                 </p>
               </div>
             </div>
-            
+
             <div className="order-1 lg:order-2">
               <span className="text-violet-400 text-sm font-medium uppercase tracking-wide">Voicemail Drop</span>
               <h2 className="text-3xl md:text-4xl font-bold text-white mt-2 mb-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -1969,11 +1969,11 @@ const LandingPage = () => {
               <p className="text-gray-400 text-lg mb-8">
                 80% of calls go to voicemail. Make every single one count with AI-powered voicemail drops.
               </p>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-white font-semibold text-lg mb-3">How It Works</h4>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -1981,21 +1981,21 @@ const LandingPage = () => {
                       </div>
                       <p className="text-gray-300">AI detects voicemail pickup (beep detection)</p>
                     </div>
-                    
+
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-violet-400 text-xs font-bold">2</span>
                       </div>
                       <p className="text-gray-300">Instantly drops your pre-recorded or AI-generated message</p>
                     </div>
-                    
+
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-violet-400 text-xs font-bold">3</span>
                       </div>
                       <p className="text-gray-300">Moves to next call immediately—<span className="text-white font-medium">zero wait time</span></p>
                     </div>
-                    
+
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-violet-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-violet-400 text-xs font-bold">4</span>
@@ -2004,7 +2004,7 @@ const LandingPage = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="p-5 bg-white/5 rounded-lg border border-white/10">
                   <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
                     <Zap className="w-4 h-4 text-violet-400" />
@@ -2046,10 +2046,10 @@ const LandingPage = () => {
                 <span className="text-amber-400"> 5-Star Reviews</span>
               </h2>
               <p className="text-gray-400 text-lg mb-8">
-                After every successful interaction, automatically send personalized SMS or email review requests. 
+                After every successful interaction, automatically send personalized SMS or email review requests.
                 Build your online reputation while you focus on growing your business.
               </p>
-              
+
               <div className="space-y-4 mb-8">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -2060,7 +2060,7 @@ const LandingPage = () => {
                     <p className="text-gray-400 text-sm">Send review requests via SMS or email after calls, meetings, or purchases</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Star className="w-4 h-4 text-emerald-400" />
@@ -2070,7 +2070,7 @@ const LandingPage = () => {
                     <p className="text-gray-400 text-sm">One-tap Google, Yelp, or custom review links make it effortless for customers</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Users className="w-4 h-4 text-cyan-400" />
@@ -2081,16 +2081,16 @@ const LandingPage = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
                 <p className="text-amber-200 text-sm">
-                  <span className="font-semibold">💡 Pro Tip:</span> Businesses with 50+ Google reviews see 
-                  <span className="text-amber-400 font-semibold"> 35% more clicks</span> than competitors. 
+                  <span className="font-semibold">💡 Pro Tip:</span> Businesses with 50+ Google reviews see
+                  <span className="text-amber-400 font-semibold"> 35% more clicks</span> than competitors.
                   Start building your reviews today.
                 </p>
               </div>
             </div>
-            
+
             {/* Right: Mock SMS Preview */}
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-emerald-500/20 blur-3xl opacity-30"></div>
@@ -2108,24 +2108,24 @@ const LandingPage = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-3">
                     <div className="bg-blue-600 text-white text-sm p-3 rounded-2xl rounded-tl-sm max-w-[85%]">
                       <p>Hi John! 👋</p>
                       <p className="mt-1">Thanks for choosing Acme Business! We hope everything went great today.</p>
                     </div>
-                    
+
                     <div className="bg-blue-600 text-white text-sm p-3 rounded-2xl rounded-tl-sm max-w-[85%]">
                       <p>Would you take 30 seconds to share your experience? Your feedback helps others find us!</p>
                       <p className="mt-2 text-blue-200 underline">→ Leave a Review</p>
                     </div>
-                    
+
                     <div className="bg-gray-700 text-white text-sm p-3 rounded-2xl rounded-tr-sm max-w-[85%] ml-auto">
                       <p>Absolutely! Great service as always. Done! ⭐⭐⭐⭐⭐</p>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Stats Badge */}
                 <div className="absolute -bottom-4 -right-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg">
                   +47 reviews this month
@@ -2145,7 +2145,7 @@ const LandingPage = () => {
               Real Results, Real Numbers
             </h2>
           </div>
-          
+
           {/* Metrics */}
           <div className="grid md:grid-cols-3 gap-8 mb-16">
             <div className="text-center p-8 bg-gradient-to-b from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl">
@@ -2164,7 +2164,7 @@ const LandingPage = () => {
               <p className="text-gray-400 text-sm">24/7 AI answering</p>
             </div>
           </div>
-          
+
           {/* Voice Demo */}
           <div className="mb-16">
             <div className="text-center mb-8">
@@ -2173,7 +2173,7 @@ const LandingPage = () => {
             </div>
             <CallYourselfHero />
           </div>
-          
+
           {/* Testimonials */}
           <div className="grid md:grid-cols-2 gap-8">
             <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
@@ -2278,7 +2278,7 @@ const LandingPage = () => {
                 </li>
               </ul>
             </div>
-            
+
             {/* Agencies */}
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
               <div className="w-14 h-14 bg-cyan-100 rounded-2xl flex items-center justify-center mb-6">
@@ -2300,7 +2300,7 @@ const LandingPage = () => {
                 </li>
               </ul>
             </div>
-            
+
             {/* Local Businesses */}
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
               <div className="w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center mb-6">
@@ -2380,7 +2380,7 @@ const LandingPage = () => {
           <div className="text-center mb-10">
             <p className="text-gray-500 text-sm uppercase tracking-wide">Trusted & Integrated</p>
           </div>
-          
+
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div>
               <p className="text-gray-400 text-sm mb-3">Integrations</p>
@@ -2457,12 +2457,31 @@ const LandingPage = () => {
         <div className="max-w-3xl mx-auto">
           <div className="text-center bg-gradient-to-r from-blue-600/10 via-cyan-600/15 to-blue-600/10 border border-cyan-500/30 rounded-2xl px-8 py-8 backdrop-blur-sm shadow-lg">
             <p className="text-gray-800 text-lg md:text-xl leading-relaxed font-medium">
-              Create your own call scripts, handle objections with confidence, and seamlessly book meetings—all in one place. 
+              Create your own call scripts, handle objections with confidence, and seamlessly book meetings—all in one place.
               <span className="text-cyan-600 font-semibold"> Take control of your outreach</span> and turn more conversations into sales.
             </p>
           </div>
         </div>
       </section>
+{/* Video Demo Section */}
+<section className="py-20 bg-[#0B1628]">
+  <div className="max-w-4xl mx-auto px-6">
+    <h2 className="text-4xl font-bold text-center text-white mb-8">
+      Watch How IntentBrain Works
+    </h2>
+
+    <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-xl border border-white/10">
+      <iframe
+        className="w-full h-full"
+        src="https://www.youtube.com/embed/YOUR_VIDEO_ID_HERE"
+        title="IntentBrain Demo"
+        frameBorder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      ></iframe>
+    </div>
+  </div>
+</section>
 
       {/* Pricing - White */}
       <section id="pricing" className="bg-white py-24 px-6">
@@ -2475,31 +2494,32 @@ const LandingPage = () => {
           {/* Pricing Toggle */}
           <div className="flex justify-center mb-12">
             <div className="inline-flex bg-gray-100 rounded-full p-1 flex-wrap justify-center gap-1">
-              <button 
+              <button
                 onClick={() => setPricingTab('byol')}
                 className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
-                  pricingTab === 'byol' 
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 shadow text-white' 
+                  pricingTab === 'byol'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 shadow text-white'
                     : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
                 }`}
               >
                 Outbound (BYOL)
-              </button>
-              <button 
+
+     </button>
+              <button
                 onClick={() => setPricingTab('full')}
                 className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
-                  pricingTab === 'full' 
-                    ? 'bg-gradient-to-r from-cyan-500 to-teal-500 shadow text-white' 
+                  pricingTab === 'full'
+                    ? 'bg-gradient-to-r from-cyan-500 to-teal-500 shadow text-white'
                     : 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200'
                 }`}
               >
                 Outbound (Full Service)
               </button>
-              <button 
+              <button
                 onClick={() => setPricingTab('inbound')}
                 className={`px-5 py-3 rounded-full text-sm font-medium transition-all ${
-                  pricingTab === 'inbound' 
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow text-white' 
+                  pricingTab === 'inbound'
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow text-white'
                     : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
                 }`}
               >
@@ -2526,13 +2546,13 @@ const LandingPage = () => {
           {(pricingTab === 'byol' || pricingTab === 'full') && (
           <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
             {pricingPlans.map((plan, idx) => (
-              <div 
+              <div
                 key={idx}
                 className="relative bg-white border rounded-2xl p-6 border-gray-200"
               >
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
                 <p className="text-gray-500 text-xs mb-4">{plan.description}</p>
-                
+
                 <div className="mb-4">
                   <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
                   <span className="text-gray-500 text-sm">{plan.period}</span>
@@ -2547,7 +2567,7 @@ const LandingPage = () => {
                   ))}
                 </ul>
 
-                <button 
+                <button
                   onClick={() => goToPlan(plan.id)}
                   className="w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all bg-gray-100 hover:bg-gray-200 text-gray-900 border-0"
                 >
@@ -2562,11 +2582,11 @@ const LandingPage = () => {
           {pricingTab === 'byol' && (
             <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {byolPlans.map((plan, idx) => (
-                <div 
+                <div
                   key={idx}
                   className={`relative bg-white border rounded-2xl p-6 ${
-                    plan.popular 
-                      ? 'border-blue-500 shadow-lg shadow-blue-500/10' 
+                    plan.popular
+                      ? 'border-blue-500 shadow-lg shadow-blue-500/10'
                       : 'border-gray-200'
                   }`}
                 >
@@ -2575,10 +2595,10 @@ const LandingPage = () => {
                       Most Popular
                     </div>
                   )}
-                  
+
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
                   <p className="text-gray-500 text-xs mb-4">{plan.description}</p>
-                  
+
                   <div className="mb-4">
                     <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
                     <span className="text-gray-500 text-sm">{plan.period}</span>
@@ -2593,11 +2613,11 @@ const LandingPage = () => {
                     ))}
                   </ul>
 
-                  <button 
+                  <button
                     onClick={() => goToPlan(plan.id)}
                     className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
-                      plan.popular 
-                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white border-0' 
+                      plan.popular
+                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white border-0'
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
                     }`}
                   >
@@ -2612,11 +2632,11 @@ const LandingPage = () => {
           {pricingTab === 'full' && (
             <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {fullServicePlans.map((plan, idx) => (
-                <div 
+                <div
                   key={idx}
                   className={`relative bg-white border rounded-2xl p-6 ${
-                    plan.popular 
-                      ? 'border-teal-500 shadow-lg shadow-teal-500/10' 
+                    plan.popular
+                      ? 'border-teal-500 shadow-lg shadow-teal-500/10'
                       : 'border-gray-200'
                   }`}
                 >
@@ -2625,10 +2645,10 @@ const LandingPage = () => {
                       Best Value
                     </div>
                   )}
-                  
+
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
                   <p className="text-gray-500 text-xs mb-4">{plan.description}</p>
-                  
+
                   <div className="mb-4">
                     <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
                     <span className="text-gray-500 text-sm">{plan.period}</span>
@@ -2643,11 +2663,11 @@ const LandingPage = () => {
                     ))}
                   </ul>
 
-                  <button 
+                  <button
                     onClick={() => goToPlan(plan.id)}
                     className={`w-full rounded-full py-3 text-sm font-medium cursor-pointer transition-all ${
-                      plan.popular 
-                        ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0' 
+                      plan.popular
+                        ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white border-0'
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border-0'
                     }`}
                   >
@@ -2667,11 +2687,11 @@ const LandingPage = () => {
               </div>
               <div className="grid md:grid-cols-3 gap-6">
                 {inboundPlans.map((plan, idx) => (
-                  <div 
+                  <div
                     key={idx}
                     className={`bg-white rounded-2xl p-8 border-2 transition-all ${
-                      plan.popular 
-                        ? 'border-purple-500 shadow-xl shadow-purple-100 scale-105' 
+                      plan.popular
+                        ? 'border-purple-500 shadow-xl shadow-purple-100 scale-105'
                         : 'border-gray-100 hover:border-purple-200'
                     }`}
                   >
@@ -2694,7 +2714,7 @@ const LandingPage = () => {
                         </li>
                       ))}
                     </ul>
-                    <button 
+                    <button
                       onClick={() => goToPlan(plan.id)}
                       className={`w-full py-3 rounded-lg font-medium transition-all ${
                         plan.popular
@@ -2740,7 +2760,7 @@ const LandingPage = () => {
           <p className="text-gray-600 text-lg mb-12 max-w-2xl mx-auto">
             No technical setup required. We guide you every step of the way.
           </p>
-          
+
           <div className="grid md:grid-cols-3 gap-8">
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
               <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -2749,7 +2769,7 @@ const LandingPage = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No Technical Setup</h3>
               <p className="text-gray-600 text-sm">Connect in a few clicks. No coding, no developers needed.</p>
             </div>
-            
+
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
               <div className="w-14 h-14 bg-cyan-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Users className="w-7 h-7 text-cyan-600" />
@@ -2757,7 +2777,7 @@ const LandingPage = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Fully Guided Onboarding</h3>
               <p className="text-gray-600 text-sm">Our team walks you through setup and optimization.</p>
             </div>
-            
+
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
               <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <MessageSquare className="w-7 h-7 text-purple-600" />
@@ -2779,7 +2799,7 @@ const LandingPage = () => {
 
           <div className="space-y-4">
             {faqs.map((faq, idx) => (
-              <div 
+              <div
                 key={idx}
                 className="bg-white rounded-xl overflow-hidden shadow-sm"
               >
@@ -2812,13 +2832,13 @@ const LandingPage = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Button 
+            <Button
               onClick={scrollToPricing}
               className="bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white rounded-full px-10 py-7 text-lg font-semibold border-0 flex items-center gap-2 shadow-lg shadow-purple-500/25"
             >
               View Plans
             </Button>
-            <Button 
+            <Button
               onClick={() => window.open(CALENDLY_LINK, '_blank')}
               variant="outline"
               className="border-white/30 text-white hover:bg-white/10 rounded-full px-8 py-6 font-medium flex items-center gap-2 bg-transparent"
@@ -2843,11 +2863,11 @@ const LandingPage = () => {
           <p className="text-gray-400 mb-8 max-w-2xl mx-auto">
             Questions about IntentBrain? Want to see a live demo? Our team is ready to help you get started.
           </p>
-          
+
           <div className="grid md:grid-cols-3 gap-6">
             {/* Email Support */}
-            <a 
-              href="mailto:support@intentbrain.ai" 
+            <a
+              href="mailto:support@intentbrain.ai"
               className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group"
             >
               <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -2856,10 +2876,10 @@ const LandingPage = () => {
               <h3 className="text-white font-semibold mb-2">Email Us</h3>
               <p className="text-cyan-400 group-hover:text-cyan-300 transition-colors">support@intentbrain.ai</p>
             </a>
-            
+
             {/* Phone */}
-            <a 
-              href="tel:+18885131913" 
+            <a
+              href="tel:+18885131913"
               className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group"
             >
               <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -2868,9 +2888,9 @@ const LandingPage = () => {
               <h3 className="text-white font-semibold mb-2">Call Us</h3>
               <p className="text-cyan-400 group-hover:text-cyan-300 transition-colors">(888) 513-1913</p>
             </a>
-            
+
             {/* Book a Demo */}
-            <button 
+            <button
               onClick={goToCalendly}
               className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer text-left"
             >

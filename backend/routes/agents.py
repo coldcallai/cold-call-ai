@@ -198,7 +198,7 @@ async def clone_voice(
             file_tuples.append((file.filename, content))
         
         # Clone voice using ElevenLabs IVC
-        voice = _eleven_client.clone(
+        voice = _eleven_client.voices.ivc.create(
             name=f"{voice_name}_{current_user['user_id'][:8]}",
             description=description or f"Cloned voice for {current_user['email']}",
             files=file_tuples

@@ -22,8 +22,13 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const Campaigns = () => {
   const [campaigns, setCampaigns] = useState([]);
+  const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
+  const [campaignLeadCount, setCampaignLeadCount] = useState(null);
+  const [importingLeads, setImportingLeads] = useState(false);
   const [showFollowUpSettings, setShowFollowUpSettings] = useState(null); // campaign for settings modal
   const [followUpSettings, setFollowUpSettings] = useState({
     enabled: true,
@@ -59,6 +64,15 @@ const Campaigns = () => {
     ab_split_percentage: 50
   });
 
+  const fetchAgents = async () => {
+    try {
+      const response = await axios.get(`${API}/agents`);
+      setAgents(response.data || []);
+    } catch (error) {
+      console.error("Failed to load agents", error);
+    }
+  };
+
   const fetchCampaigns = async () => {
     try {
       const response = await axios.get(`${API}/campaigns`);
@@ -72,7 +86,40 @@ const Campaigns = () => {
 
   useEffect(() => {
     fetchCampaigns();
+    fetchAgents();
   }, []);
+
+  const importCampaignCsv = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !editing?.id) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setImportingLeads(true);
+    try {
+      const response = await axios.post(
+        `${API}/campaigns/${editing.id}/import-leads`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      setCampaignLeadCount(response.data.campaign_leads ?? null);
+
+      toast.success(
+        `Imported ${response.data.inserted || 0} leads` +
+        (response.data.updated ? `, updated ${response.data.updated}` : "")
+      );
+    } catch (error) {
+      toast.error(
+        error.response?.data?.detail ||
+        "Failed to import campaign leads"
+      );
+    } finally {
+      setImportingLeads(false);
+      event.target.value = "";
+    }
+  };
 
   const createCampaign = async () => {
     if (!newCampaign.name || !newCampaign.ai_script) {
@@ -91,8 +138,99 @@ const Campaigns = () => {
     }
   };
 
+  const openEditCampaign = async (campaign) => {
+    try {
+      const response = await axios.get(
+        `${API}/campaigns/${campaign.id}?_=${Date.now()}`,
+        { headers: { "Cache-Control": "no-cache" } }
+      );
+      const fresh = response.data;
+
+      const vmStatus = await axios.get(
+        `${API}/campaigns/${campaign.id}/voicemail-status?_=${Date.now()}`
+      );
+
+      fresh.voicemail_audio_url = vmStatus.data.voicemail_audio_url || "";
+      fresh.agent_id = vmStatus.data.agent_id || fresh.agent_id || "";
+
+      try {
+        const leadCount = await axios.get(
+          `${API}/campaigns/${campaign.id}/leads/count?_=${Date.now()}`
+        );
+        setCampaignLeadCount(leadCount.data.count ?? 0);
+      } catch (countError) {
+        console.error("Failed to load campaign lead count", countError);
+        setCampaignLeadCount(null);
+      }
+
+      setEditing(fresh);
+      setEditDraft({
+        calls_per_day: fresh.calls_per_day ?? 100,
+        calls_per_hour: fresh.calls_per_hour ?? 0,
+        calling_hours_start: fresh.calling_hours_start ?? "09:00",
+        calling_hours_end: fresh.calling_hours_end ?? "17:00",
+        calling_days: fresh.calling_days ?? ["mon","tue","wed","thu","fri"],
+        company_name: fresh.company_name ?? "",
+        callback_number: fresh.callback_number ?? "",
+        voicemail_enabled: fresh.voicemail_enabled ?? true,
+        voicemail_message: fresh.voicemail_message ?? "",
+        agent_id: fresh.agent_id ?? "",
+        voicemail_audio_url: fresh.voicemail_audio_url ?? ""
+      });
+    } catch (error) {
+      toast.error("Failed to load campaign settings");
+    }
+  };
+
+  const saveEditCampaign = async () => {
+    if (!editing || !editDraft) return;
+
+    if (editDraft.voicemail_enabled && !editDraft.callback_number) {
+      toast.error("Add a callback number before enabling voicemail drops.");
+      return;
+    }
+
+    try {
+      const response = await axios.put(`${API}/campaigns/${editing.id}`, {
+        calls_per_day: editDraft.calls_per_day,
+        calls_per_hour: editDraft.calls_per_hour,
+        calling_hours_start: editDraft.calling_hours_start,
+        calling_hours_end: editDraft.calling_hours_end,
+        calling_days: editDraft.calling_days,
+        company_name: editDraft.company_name,
+        callback_number: editDraft.callback_number,
+        voicemail_enabled: editDraft.voicemail_enabled,
+        voicemail_message: editDraft.voicemail_message,
+        agent_id: editDraft.agent_id
+      });
+
+      const updated = response.data;
+      setEditing(updated);
+      setEditDraft({
+        ...editDraft,
+        agent_id: updated.agent_id ?? editDraft.agent_id,
+        callback_number: updated.callback_number ?? editDraft.callback_number,
+        voicemail_audio_url: updated.voicemail_audio_url ?? ""
+      });
+      toast.success(updated.voicemail_audio_url ? "Campaign updated — voicemail ready" : "Campaign updated");
+      fetchCampaigns();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Failed to update campaign");
+    }
+  };
+
   const toggleCampaign = async (campaign) => {
     const endpoint = campaign.status === 'active' ? 'pause' : 'start';
+    const linkedAgent = agents.find(a => a.id === campaign.agent_id);
+    if (
+      endpoint === 'start' &&
+      campaign.voicemail_enabled &&
+      linkedAgent?.voice_type === 'cloned' &&
+      !campaign.voicemail_audio_url
+    ) {
+      toast.error("Cloned voicemail is not ready. Edit the campaign, save it, and preview the voicemail first.");
+      return;
+    }
     try {
       await axios.post(`${API}/campaigns/${campaign.id}/${endpoint}`);
       toast.success(`Campaign ${endpoint === 'start' ? 'started' : 'paused'}`);
@@ -207,6 +345,16 @@ const Campaigns = () => {
                       title="Follow-up Settings"
                     >
                       <RefreshCw className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`edit-campaign-${campaign.id}`}
+                      onClick={() => openEditCampaign(campaign)}
+                      className="text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                      title="Edit Campaign"
+                    >
+                      <Settings className="w-4 h-4" />
                     </Button>
                     <Button
                       size="sm"
@@ -971,6 +1119,135 @@ const Campaigns = () => {
             >
               Save Settings
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editing} onOpenChange={(o)=>{if(!o){setEditing(null);setEditDraft(null)}}}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Campaign</DialogTitle>
+            <DialogDescription>Update schedule and voicemail settings. Saving does not start the campaign.</DialogDescription>
+          </DialogHeader>
+          {editDraft && <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Calls Per Day</Label><Input type="number" value={editDraft.calls_per_day} onChange={e=>setEditDraft({...editDraft,calls_per_day:+e.target.value})}/></div>
+              <div><Label>Calls Per Hour</Label><Input type="number" value={editDraft.calls_per_hour} onChange={e=>setEditDraft({...editDraft,calls_per_hour:+e.target.value})}/></div>
+              <div><Label>Start Time</Label><Input type="time" value={editDraft.calling_hours_start} onChange={e=>setEditDraft({...editDraft,calling_hours_start:e.target.value})}/></div>
+              <div><Label>End Time</Label><Input type="time" value={editDraft.calling_hours_end} onChange={e=>setEditDraft({...editDraft,calling_hours_end:e.target.value})}/></div>
+            </div>
+
+            <div>
+              <Label>Calling Days</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {[["mon","Mon"],["tue","Tue"],["wed","Wed"],["thu","Thu"],["fri","Fri"],["sat","Sat"],["sun","Sun"]].map(([k,l])=>
+                  <button key={k} type="button" onClick={()=>{let x=editDraft.calling_days||[];setEditDraft({...editDraft,calling_days:x.includes(k)?x.filter(v=>v!==k):[...x,k]})}}
+                    className={`px-3 py-1 rounded border ${editDraft.calling_days?.includes(k)?"bg-blue-600 text-white":"bg-white"}`}>{l}</button>
+                )}
+              </div>
+            </div>
+
+            <div><Label>Company Name</Label><Input value={editDraft.company_name} onChange={e=>setEditDraft({...editDraft,company_name:e.target.value})}/></div>
+            <div><Label>Callback Number</Label><Input value={editDraft.callback_number} onChange={e=>setEditDraft({...editDraft,callback_number:e.target.value})}/></div>
+
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-blue-900">Campaign Leads</Label>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Import a CSV directly into this campaign.
+                  </p>
+                </div>
+                <Badge variant="secondary">
+                  {campaignLeadCount === null ? "—" : `${campaignLeadCount} leads`}
+                </Badge>
+              </div>
+
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={importingLeads}
+                onChange={importCampaignCsv}
+                className="block w-full text-sm border rounded-md p-2 bg-white cursor-pointer"
+              />
+
+              <p className="text-xs text-gray-600">
+                CSV must include Business Name and Phone columns.
+                Existing phone numbers will be updated instead of duplicated.
+              </p>
+
+              {importingLeads && (
+                <p className="text-sm font-medium text-blue-700">
+                  Importing leads...
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-between">
+              <Label>Voicemail Enabled</Label>
+              <input type="checkbox" checked={!!editDraft.voicemail_enabled} onChange={e=>setEditDraft({...editDraft,voicemail_enabled:e.target.checked})}/>
+            </div>
+
+            <div><Label>Voicemail Script</Label><Textarea className="min-h-[120px]" value={editDraft.voicemail_message} onChange={e=>setEditDraft({...editDraft,voicemail_message:e.target.value})}/></div>
+            <div>
+              <Label>Voice Agent</Label>
+              <Select
+                value={editDraft.agent_id || ""}
+                onValueChange={(id) => {
+                  const agent = agents.find(a => a.id === id);
+                  setEditDraft({
+                    ...editDraft,
+                    agent_id: id,
+                    callback_number: agent?.phone || editDraft.callback_number,
+                    voicemail_audio_url: ""
+                  });
+                }}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Choose an agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.filter(a => a.is_active !== false).map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}{a.voice_type === "cloned" && a.cloned_voice_name ? ` — ${a.cloned_voice_name}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {editDraft.voicemail_enabled && (
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Voicemail Audio</Label>
+                  <Badge variant={editDraft.voicemail_audio_url ? "default" : "secondary"}>
+                    {editDraft.voicemail_audio_url ? "Ready" : "Save to Generate"}
+                  </Badge>
+                </div>
+
+                {editDraft.voicemail_audio_url ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const audio = new Audio(editDraft.voicemail_audio_url);
+                      audio.play().catch(() => toast.error("Unable to play voicemail preview"));
+                    }}
+                  >
+                    Preview Voicemail
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Save the campaign to generate the cloned voicemail audio before launch.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>}
+          <DialogFooter>
+            <Button variant="outline" onClick={()=>{setEditing(null);setEditDraft(null)}}>Cancel</Button>
+            <Button onClick={saveEditCampaign}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

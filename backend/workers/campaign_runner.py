@@ -1050,20 +1050,291 @@ async def run_live_canary_once() -> None:
     print("LIVE CANARY RESULT:", result)
 
 
+# Final mode selector moved to bottom.
+
+
+async def process_live_campaign(
+    db,
+    eleven_client,
+    campaign: Dict[str, Any],
+) -> str:
+
+    if campaign.get("status") != "active":
+        return "inactive"
+
+    if not campaign.get("voicemail_enabled"):
+        return "not_voicemail_campaign"
+
+    if twilio_outbound.is_outbound_disabled():
+        return "outbound_disabled"
+
+    ok, reason, _ = local_window(campaign)
+
+    if not ok:
+        return reason
+
+    ok, reason = await quota_and_pace_ok(
+        db,
+        campaign,
+    )
+
+    if not ok:
+        return reason
+
+    # Canary phase stays isolated.
+    if int(campaign.get("canary_phase") or 0) == 1:
+        return await process_live_canary(
+            db,
+            eleven_client,
+            campaign,
+        )
+
+    campaign_id = campaign["id"]
+    user_id = campaign["user_id"]
+
+    claimed = await claim_next_lead(
+        campaign_id,
+        user_id,
+        WORKER_ID,
+        claim_ttl_seconds=CLAIM_TTL_SECONDS,
+    )
+
+    if not claimed:
+        return "no_eligible_lead"
+
+    call_id = None
+
+    try:
+        audio_url = await get_live_audio(
+            db,
+            eleven_client,
+            campaign,
+            claimed,
+        )
+
+        if not audio_url:
+            await release_claim(
+                claimed["id"],
+                WORKER_ID,
+                "no_vm_audio",
+            )
+            return "no_vm_audio"
+
+        call_id = await create_call_record(
+            user_id,
+            campaign_id,
+            claimed["id"],
+            campaign.get("agent_id"),
+            WORKER_ID,
+        )
+
+        fresh = await db.campaigns.find_one(
+            {"id": campaign_id, "user_id": user_id},
+            {"_id": 0, "status": 1},
+        )
+
+        if not fresh or fresh.get("status") != "active":
+            await mark_call_failed(
+                call_id,
+                "paused_cancelled",
+            )
+            await release_claim(
+                claimed["id"],
+                WORKER_ID,
+                "paused_cancelled",
+            )
+            return "paused_cancelled"
+
+        if twilio_outbound.is_outbound_disabled():
+            await mark_call_failed(
+                call_id,
+                "outbound_disabled",
+            )
+            await release_claim(
+                claimed["id"],
+                WORKER_ID,
+                "outbound_disabled",
+            )
+            return "outbound_disabled"
+
+        result = await twilio_outbound.place_voicemail_call(
+            to_number=claimed["phone"],
+            lead_id=claimed["id"],
+            campaign_id=campaign_id,
+            call_id=call_id,
+            voicemail_audio_url=audio_url,
+            business_name=claimed.get("business_name"),
+        )
+
+        if not result.get("ok"):
+            error = (
+                result.get("error")
+                or result.get("blocked")
+                or result.get("skipped")
+                or "place_failed"
+            )
+
+            await mark_call_failed(
+                call_id,
+                error,
+            )
+
+            await release_claim(
+                claimed["id"],
+                WORKER_ID,
+                error,
+            )
+
+            return error
+
+        await mark_call_placed(
+            call_id,
+            result["session_id"],
+            result["call_sid"],
+        )
+
+        await mark_lead_attempted(
+            claimed["id"],
+            campaign_id,
+            WORKER_ID,
+        )
+
+        await db.campaigns.update_one(
+            {"id": campaign_id, "user_id": user_id},
+            {"$inc": {"total_calls": 1}},
+        )
+
+        return "placed"
+
+    except Exception as exc:
+        log.exception(
+            "LIVE campaign=%s lead=%s error",
+            campaign_id,
+            claimed.get("id"),
+        )
+
+        if call_id:
+            await mark_call_failed(
+                call_id,
+                "runner_error:" + type(exc).__name__,
+            )
+
+        await release_claim(
+            claimed["id"],
+            WORKER_ID,
+            "runner_error",
+        )
+
+        return "runner_error"
+
+
+async def run_live_campaign_loop() -> None:
+
+    db = get_db()
+
+    eleven_client = await initialize_live_outbound(
+        db
+    )
+
+    await ensure_runner_indexes()
+
+    recovered = await recover_stale_claims()
+
+    log.info(
+        "PRODUCTION CAMPAIGN RUNNER STARTED "
+        "worker=%s recovered=%s",
+        WORKER_ID,
+        recovered,
+    )
+
+    while True:
+
+        try:
+            if twilio_outbound.is_outbound_disabled():
+
+                log.warning(
+                    "PRODUCTION RUNNER IDLE: "
+                    "OUTBOUND_DISABLED"
+                )
+
+            else:
+
+                campaigns = await db.campaigns.find(
+                    {
+                        "status": "active",
+                        "voicemail_enabled": True,
+                    },
+                    {
+                        "_id": 0,
+                    },
+                ).to_list(100)
+
+                for campaign in campaigns:
+
+                    result = await process_live_campaign(
+                        db,
+                        eleven_client,
+                        campaign,
+                    )
+
+                    if result not in (
+                        "paced_wait",
+                        "outside_calling_hours",
+                        "outside_calling_day",
+                    ):
+                        log.info(
+                            "campaign=%s result=%s",
+                            campaign.get("id"),
+                            result,
+                        )
+
+        except Exception:
+
+            log.exception(
+                "PRODUCTION CAMPAIGN LOOP ERROR"
+            )
+
+        await asyncio.sleep(
+            POLL_SECONDS
+        )
+
+
 if __name__ == "__main__":
+
+    production = (
+        os.getenv("RUN_PRODUCTION_CAMPAIGN")
+        == "YES"
+    )
+
+    canary = (
+        os.getenv("RUN_LIVE_CANARY")
+        == "YES"
+    )
+
+    if production and canary:
+        raise RuntimeError(
+            "BLOCKED: production and canary "
+            "cannot both be enabled"
+        )
 
     if DRY_RUN:
         asyncio.run(
             run_dry_run_loop()
         )
 
-    else:
-        if os.getenv("RUN_LIVE_CANARY") != "YES":
-            raise RuntimeError(
-                "LIVE MODE BLOCKED. "
-                "Set RUN_LIVE_CANARY=YES explicitly."
-            )
+    elif production:
+        asyncio.run(
+            run_live_campaign_loop()
+        )
 
+    elif canary:
         asyncio.run(
             run_live_canary_once()
+        )
+
+    else:
+        raise RuntimeError(
+            "LIVE MODE BLOCKED. "
+            "Choose RUN_LIVE_CANARY=YES "
+            "or RUN_PRODUCTION_CAMPAIGN=YES."
         )

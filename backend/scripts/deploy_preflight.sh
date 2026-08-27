@@ -50,7 +50,7 @@ cd "$BACKEND_DIR"
 # Run with PYTHONPATH but NEVER echo env. Stdout/stderr stream to console;
 # the script itself avoids printing secrets.
 set +e
-PYTHONPATH="$BACKEND_DIR" python3 "$SELFTEST"
+PYTHONPATH="$BACKEND_DIR" "$BACKEND_DIR/venv/bin/python3" "$SELFTEST"
 SELFTEST_EXIT=$?
 set -e 2>/dev/null || true
 

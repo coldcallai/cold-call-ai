@@ -398,6 +398,15 @@ async def refresh_campaign_vm_audio(
         logger.warning(f"[vm_cloned] campaign {campaign_id} not found for user {user_id}")
         return None
 
+    if campaign.get("voicemail_audio_locked"):
+        locked_url = campaign.get("voicemail_audio_url")
+        locked_key = campaign.get("voicemail_audio_key")
+        if locked_url and locked_key:
+            logger.info(
+                f"[vm_cloned] campaign {campaign_id} audio is LOCKED; preserving existing asset"
+            )
+            return locked_url
+
     old_key = campaign.get("voicemail_audio_key")
 
     def _clear_ref_and_delete_old() -> None:
@@ -454,6 +463,17 @@ async def refresh_campaign_vm_audio(
         agent_name=agent_name,
         callback_number_spoken=callback_spoken,
     )
+
+    # Natural RankTrust voicemail opening.
+    baked = baked.replace(
+        "Hi, this is David with RankTrust.",
+        "Hi, this is David with Ranktrust."
+    )
+
+    baked = baked.replace(
+        "Rank Trust",
+        "Ranktrust"
+    )
     new_token = _mint_token()
     out_path = vm_audio_path_for(new_token)
 
@@ -461,11 +481,16 @@ async def refresh_campaign_vm_audio(
         f"[vm_cloned] SYNTH_CHECK campaign={campaign_id} voice_id={voice_id}"
     )
 
+    synthesis_text = baked
+
     ok = synthesize_to_disk(
         eleven_client=eleven_client,
-        text=baked,
+        text=synthesis_text,
         voice_id=voice_id,
         out_path=out_path,
+        model_id="eleven_v3",
+        stability=0.50,
+        similarity_boost=0.86,
     )
     if not ok:
         # Leave the campaign's old key untouched — the old audio (if any) still

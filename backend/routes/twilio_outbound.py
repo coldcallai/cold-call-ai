@@ -409,6 +409,141 @@ async def place_outbound_call(
     }
 
 
+
+# ==================== RANKTRUST_VM_DROP_V1_CALLER ====================
+async def place_voicemail_call(
+    *,
+    to_number: str,
+    lead_id: str,
+    campaign_id: str,
+    call_id: str,
+    voicemail_audio_url: str,
+    business_name: Optional[str] = None,
+) -> Dict[str, Any]:
+
+    if _state.db is None or _state.twilio_client is None:
+        raise RuntimeError(
+            "Outbound router not initialized"
+        )
+
+    if is_outbound_disabled():
+        return {
+            "ok": False,
+            "blocked": "outbound_disabled",
+        }
+
+    if (
+        not voicemail_audio_url
+        or not str(voicemail_audio_url).startswith(
+            ("https://", "http://")
+        )
+    ):
+        return {
+            "ok": False,
+            "error": "no_vm_audio",
+        }
+
+    if await is_on_dnc(
+        _state.db,
+        to_number,
+    ):
+        logger.info(
+            f"[vm_outbound] skipping {to_number} — DNC"
+        )
+        return {
+            "ok": False,
+            "skipped": "dnc",
+        }
+
+    session_id = uuid.uuid4().hex
+
+    answer_url = (
+        f"{_state.backend_url}"
+        f"/api/twilio/outbound/vm-answer"
+        f"?session_id={session_id}"
+    )
+
+    status_url = (
+        f"{_state.backend_url}"
+        f"/api/twilio/outbound/vm-status"
+        f"?session_id={session_id}"
+    )
+
+    # Final safety check immediately before Twilio spend.
+    if is_outbound_disabled():
+        return {
+            "ok": False,
+            "blocked": "outbound_disabled",
+        }
+
+    try:
+        call = _state.twilio_client.calls.create(
+            to=to_number,
+            from_=_state.from_number,
+            url=answer_url,
+            method="POST",
+            machine_detection="Enable",
+            machine_detection_timeout=10,
+            async_amd="false",
+            status_callback=status_url,
+            status_callback_event=[
+                "initiated",
+                "ringing",
+                "answered",
+                "completed",
+            ],
+            status_callback_method="POST",
+            record=True,
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "[vm_outbound] Twilio calls.create failed"
+        )
+
+        return {
+            "ok": False,
+            "error": "twilio_create_failed",
+            "detail": str(exc)[:160],
+        }
+
+    call_sid = getattr(
+        call,
+        "sid",
+        None,
+    )
+
+    if not call_sid:
+        return {
+            "ok": False,
+            "error": "missing_call_sid",
+        }
+
+    await _state.db.outbound_sessions.insert_one({
+        "session_id": session_id,
+        "call_sid": call_sid,
+        "call_id": call_id,
+        "lead_id": lead_id,
+        "phone": to_number,
+        "business_name": business_name,
+        "campaign_id": campaign_id,
+        "voicemail_mode": True,
+        "voicemail_audio_url": voicemail_audio_url,
+        "voicemail_played": False,
+        "disposition": "PENDING",
+        "started_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+    })
+
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "call_sid": call_sid,
+    }
+# ================== END RANKTRUST_VM_DROP_V1_CALLER ==================
+
+
 async def _set_disposition(call_sid: str, session_id: str, disposition: str, **extra: Any) -> None:
     update: Dict[str, Any] = {"disposition": disposition,
                               "last_event_at": datetime.now(timezone.utc).isoformat()}
@@ -569,6 +704,181 @@ async def outbound_respond(request: Request, session_id: str) -> Response:
     # Opener already played → straight handoff to legacy inbound respond.
     response.redirect("/api/twilio/inbound/respond", method="POST")
     return _twiml(response)
+
+
+
+# ==================== RANKTRUST_VM_DROP_V1_ANSWER ====================
+@router.post("/vm-answer")
+async def outbound_vm_answer(
+    request: Request,
+    session_id: str,
+) -> Response:
+
+    form = await request.form()
+
+    answered_by = (
+        form.get("AnsweredBy")
+        or "unknown"
+    ).lower()
+
+    sess = await _state.db.outbound_sessions.find_one({
+        "session_id": session_id
+    })
+
+    response = VoiceResponse()
+
+    if (
+        not sess
+        or not sess.get("voicemail_mode")
+    ):
+        response.hangup()
+        return _twiml(response)
+
+    audio_url = sess.get(
+        "voicemail_audio_url"
+    )
+
+    if not audio_url:
+
+        await _state.db.outbound_sessions.update_one(
+            {"session_id": session_id},
+            {"$set": {
+                "disposition": "VM_AUDIO_MISSING",
+                "answered_by": answered_by,
+            }},
+        )
+
+        response.hangup()
+        return _twiml(response)
+
+    if (
+        answered_by.startswith("machine")
+        or answered_by == "fax"
+    ):
+        disposition = "VOICEMAIL"
+    else:
+        disposition = "HUMAN_VM_PLAYED"
+
+    response.play(audio_url)
+    response.hangup()
+
+    await _state.db.outbound_sessions.update_one(
+        {"session_id": session_id},
+        {"$set": {
+            "answered_by": answered_by,
+            "answered_at": datetime.now(
+                timezone.utc
+            ).isoformat(),
+            "voicemail_played": True,
+            "disposition": disposition,
+        }},
+    )
+
+    return _twiml(response)
+# ================== END RANKTRUST_VM_DROP_V1_ANSWER ==================
+
+
+
+# ==================== RANKTRUST_VM_DROP_V1_STATUS ====================
+@router.post("/vm-status")
+async def outbound_vm_status(
+    request: Request,
+    session_id: Optional[str] = None,
+) -> Response:
+
+    form = await request.form()
+
+    call_sid = form.get("CallSid", "") or ""
+    call_status = form.get("CallStatus", "") or ""
+    answered_by = (
+        form.get("AnsweredBy")
+        or ""
+    ).lower()
+
+    duration = int(
+        form.get("CallDuration", "0")
+        or 0
+    )
+
+    q = (
+        {"session_id": session_id}
+        if session_id
+        else {"call_sid": call_sid}
+    )
+
+    sess = await _state.db.outbound_sessions.find_one(q)
+
+    if not sess:
+        return Response(
+            content="<Response/>",
+            media_type="application/xml",
+        )
+
+    update = {
+        "final_call_status": call_status,
+        "duration_seconds": duration,
+        "ended_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+    }
+
+    if answered_by:
+        update["answered_by"] = answered_by
+
+    await _state.db.outbound_sessions.update_one(
+        q,
+        {"$set": update},
+    )
+
+    call_id = sess.get("call_id")
+
+    if call_id:
+
+        if call_status == "completed":
+            final_status = "completed"
+
+        elif call_status == "busy":
+            final_status = "busy"
+
+        elif call_status in (
+            "no-answer",
+            "canceled",
+        ):
+            final_status = "no_answer"
+
+        else:
+            final_status = "failed"
+
+        await _state.db.calls.update_one(
+            {"id": call_id},
+            {"$set": {
+                "status": final_status,
+                "duration_seconds": duration,
+                "ended_at": datetime.now(
+                    timezone.utc
+                ).isoformat(),
+                "answered_by": (
+                    answered_by
+                    or sess.get("answered_by")
+                ),
+                "amd_status": (
+                    answered_by
+                    or sess.get("answered_by")
+                ),
+                "voicemail_dropped": bool(
+                    sess.get("voicemail_played")
+                ),
+                "qualification_result.disposition":
+                    sess.get("disposition")
+                    or "PENDING",
+            }},
+        )
+
+    return Response(
+        content="<Response/>",
+        media_type="application/xml",
+    )
+# ================== END RANKTRUST_VM_DROP_V1_STATUS ==================
 
 
 @router.post("/status")

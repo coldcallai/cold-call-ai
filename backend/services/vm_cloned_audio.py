@@ -210,6 +210,7 @@ def synthesize_to_disk(
     model_id: str = "eleven_v3",
     stability: float = 0.50,
     similarity_boost: float = 0.75,
+    style: float = 0.0,
 ) -> bool:
     """Synchronous ElevenLabs synth → MP3 on disk. Returns True on success."""
     if not eleven_client:
@@ -226,6 +227,9 @@ def synthesize_to_disk(
             model_id=model_id,
             voice_settings=VoiceSettings(
                 stability=stability,
+                similarity_boost=similarity_boost,
+                style=style,
+                use_speaker_boost=True,
             ),
         )
         buf = b""
@@ -481,7 +485,9 @@ async def refresh_campaign_vm_audio(
         f"[vm_cloned] SYNTH_CHECK campaign={campaign_id} voice_id={voice_id}"
     )
 
-    synthesis_text = baked
+    # Eleven v3 delivery cue, scoped to campaign-level MP3s only.
+    # Keep the approved voicemail script stored in the campaign unchanged.
+    synthesis_text = "[confident] " + baked
 
     ok = synthesize_to_disk(
         eleven_client=eleven_client,
@@ -491,6 +497,7 @@ async def refresh_campaign_vm_audio(
         model_id="eleven_v3",
         stability=0.50,
         similarity_boost=0.86,
+        style=0.20,
     )
     if not ok:
         # Leave the campaign's old key untouched — the old audio (if any) still

@@ -28,6 +28,8 @@ const Campaigns = () => {
   const [editing, setEditing] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [campaignLeadCount, setCampaignLeadCount] = useState(null);
+  const [uploadingVoicemail, setUploadingVoicemail] = useState(false);
+  const [generatingVoicemail, setGeneratingVoicemail] = useState(false);
   const [importingLeads, setImportingLeads] = useState(false);
   const [showFollowUpSettings, setShowFollowUpSettings] = useState(null); // campaign for settings modal
   const [followUpSettings, setFollowUpSettings] = useState({
@@ -151,6 +153,8 @@ const Campaigns = () => {
       );
 
       fresh.voicemail_audio_url = vmStatus.data.voicemail_audio_url || "";
+      fresh.voicemail_audio_source = vmStatus.data.voicemail_audio_source || "voice_agent";
+      fresh.voicemail_audio_locked = !!vmStatus.data.voicemail_audio_locked;
       fresh.agent_id = vmStatus.data.agent_id || fresh.agent_id || "";
 
       try {
@@ -175,10 +179,73 @@ const Campaigns = () => {
         voicemail_enabled: fresh.voicemail_enabled ?? true,
         voicemail_message: fresh.voicemail_message ?? "",
         agent_id: fresh.agent_id ?? "",
-        voicemail_audio_url: fresh.voicemail_audio_url ?? ""
+        voicemail_audio_url: fresh.voicemail_audio_url ?? "",
+        voicemail_audio_source: fresh.voicemail_audio_source ?? "voice_agent",
+        voicemail_audio_locked: !!fresh.voicemail_audio_locked
       });
     } catch (error) {
       toast.error("Failed to load campaign settings");
+    }
+  };
+
+  const uploadCampaignVoicemail = async (event) => {
+    const file = event.target.files?.[0];
+    // Permit selecting the same file again after a failed attempt.
+    event.target.value = "";
+    if (!file || !editing) return;
+    if (!file.name.toLowerCase().endsWith(".mp3") || file.size > 12 * 1024 * 1024) {
+      toast.error("Choose an MP3 file smaller than 12 MB.");
+      return;
+    }
+    if (editing.status === "active") {
+      toast.error("Pause the campaign before replacing voicemail audio.");
+      return;
+    }
+    setUploadingVoicemail(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const { data } = await axios.post(
+        `${API}/campaigns/${editing.id}/voicemail-audio`,
+        form
+      );
+      setEditDraft(prev => prev ? ({
+        ...prev, voicemail_audio_url: data.voicemail_audio_url,
+        voicemail_audio_source: "uploaded", voicemail_audio_locked: true
+      }) : prev);
+      toast.success("Uploaded MP3 is ready. Preview it before starting your campaign.");
+      fetchCampaigns();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Unable to upload MP3.");
+    } finally {
+      setUploadingVoicemail(false);
+    }
+  };
+
+  const generateCampaignVoicemail = async () => {
+    if (!editing) return;
+    if (editing.status === "active") {
+      toast.error("Pause the campaign before generating voicemail audio.");
+      return;
+    }
+    if (!window.confirm("Replace the current recording with audio generated using your saved Voice Agent and voicemail script?")) {
+      return;
+    }
+    setGeneratingVoicemail(true);
+    try {
+      const { data } = await axios.post(
+        `${API}/campaigns/${editing.id}/generate-voicemail`
+      );
+      setEditDraft(prev => prev ? ({
+        ...prev, voicemail_audio_url: data.voicemail_audio_url,
+        voicemail_audio_source: "voice_agent", voicemail_audio_locked: false
+      }) : prev);
+      toast.success("Voice Agent recording generated. Preview before starting.");
+      fetchCampaigns();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Voice Agent audio generation failed.");
+    } finally {
+      setGeneratingVoicemail(false);
     }
   };
 
@@ -210,7 +277,9 @@ const Campaigns = () => {
         ...editDraft,
         agent_id: updated.agent_id ?? editDraft.agent_id,
         callback_number: updated.callback_number ?? editDraft.callback_number,
-        voicemail_audio_url: updated.voicemail_audio_url ?? ""
+        voicemail_audio_url: updated.voicemail_audio_url ?? "",
+        voicemail_audio_source: updated.voicemail_audio_source ?? "voice_agent",
+        voicemail_audio_locked: !!updated.voicemail_audio_locked
       });
       toast.success(updated.voicemail_audio_url ? "Campaign updated — voicemail ready" : "Campaign updated");
       fetchCampaigns();
@@ -221,14 +290,12 @@ const Campaigns = () => {
 
   const toggleCampaign = async (campaign) => {
     const endpoint = campaign.status === 'active' ? 'pause' : 'start';
-    const linkedAgent = agents.find(a => a.id === campaign.agent_id);
     if (
       endpoint === 'start' &&
       campaign.voicemail_enabled &&
-      linkedAgent?.voice_type === 'cloned' &&
       !campaign.voicemail_audio_url
     ) {
-      toast.error("Cloned voicemail is not ready. Edit the campaign, save it, and preview the voicemail first.");
+      toast.error("Voicemail audio is not ready. Upload an MP3 or generate it using a Voice Agent, then preview.");
       return;
     }
     try {
@@ -1198,8 +1265,7 @@ const Campaigns = () => {
                   setEditDraft({
                     ...editDraft,
                     agent_id: id,
-                    callback_number: agent?.phone || editDraft.callback_number,
-                    voicemail_audio_url: ""
+                    callback_number: agent?.phone || editDraft.callback_number
                   });
                 }}
               >
@@ -1221,7 +1287,9 @@ const Campaigns = () => {
                 <div className="flex items-center justify-between">
                   <Label>Voicemail Audio</Label>
                   <Badge variant={editDraft.voicemail_audio_url ? "default" : "secondary"}>
-                    {editDraft.voicemail_audio_url ? "Ready" : "Save to Generate"}
+                    {editDraft.voicemail_audio_url
+                      ? (editDraft.voicemail_audio_source === "uploaded" ? "Uploaded MP3 Ready" : "Voice Agent Audio Ready")
+                      : "No Audio"}
                   </Badge>
                 </div>
 
@@ -1239,9 +1307,40 @@ const Campaigns = () => {
                   </Button>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Save the campaign to generate the cloned voicemail audio before launch.
+                    Upload your approved MP3 or generate a recording with the selected Voice Agent.
                   </p>
                 )}
+                <div className="space-y-2 pt-2">
+                  <Label htmlFor="campaign-voicemail-upload">Upload MP3 (use exact recording)</Label>
+                  <Input
+                    id="campaign-voicemail-upload"
+                    type="file"
+                    accept=".mp3,audio/mpeg"
+                    disabled={uploadingVoicemail || generatingVoicemail || editing.status === "active"}
+                    onChange={uploadCampaignVoicemail}
+                  />
+                  {uploadingVoicemail && <p className="text-xs">Uploading voicemail MP3...</p>}
+                  <p className="text-xs text-muted-foreground">
+                    Uploaded MP3s are preserved when you save other campaign settings or change the live-call Voice Agent.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingVoicemail || generatingVoicemail || editing.status === "active"}
+                    onClick={generateCampaignVoicemail}
+                  >
+                    {generatingVoicemail ? "Generating..." : "Generate Using Voice Agent"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Generation uses your saved script and selected Voice Agent. Save script edits first; generating explicitly replaces any uploaded recording.
+                  </p>
+                  {editing.status === "active" && (
+                    <p className="text-xs text-muted-foreground">
+                      Pause this campaign to replace or generate voicemail audio.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>}

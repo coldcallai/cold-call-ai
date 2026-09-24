@@ -60,7 +60,16 @@ async def upload_voicemail_audio(
     token = _mint_token()
     path = vm_audio_path_for(token)
     tmp_path = path.with_suffix(".uploading")
+    blob_saved = False
     try:
+        # Render's local filesystem may be ephemeral; keep the original MP3 in
+        # MongoDB as well so the public playback URL survives a deployment.
+        await db.vm_audio_blobs.insert_one({
+            "token": token,
+            "data": data,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        blob_saved = True
         tmp_path.write_bytes(data)
         tmp_path.replace(path)
         served_url = f"{public_url}/api/vm-audio/{token}"
@@ -79,11 +88,15 @@ async def upload_voicemail_audio(
     except Exception:
         tmp_path.unlink(missing_ok=True)
         path.unlink(missing_ok=True)
+        if blob_saved:
+            await db.vm_audio_blobs.delete_one({"token": token})
         raise
 
     old_token = campaign.get("voicemail_audio_key")
     if old_token != token:
         _delete_by_token(old_token)
+        if old_token:
+            await db.vm_audio_blobs.delete_one({"token": old_token})
     return {"ready": True, "voicemail_audio_url": served_url, "voicemail_audio_source": "uploaded"}
 
 
@@ -109,10 +122,13 @@ async def generate_voicemail_using_agent(
     public_url = (os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or "").rstrip("/")
     if not public_url or not public_url.startswith("https://"):
         raise HTTPException(status_code=503, detail="Secure public audio URL is not configured.")
+    old_token = campaign.get("voicemail_audio_key")
     url = await refresh_campaign_vm_audio(
         db=db, eleven_client=eleven_client, backend_public_url=public_url,
         campaign_id=campaign_id, user_id=current_user["user_id"], force=True,
     )
     if not url:
         raise HTTPException(status_code=502, detail="Voice Agent audio generation failed; existing audio was preserved.")
+    if old_token:
+        await db.vm_audio_blobs.delete_one({"token": old_token})
     return {"ready": True, "voicemail_audio_url": url, "voicemail_audio_source": "voice_agent"}

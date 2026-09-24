@@ -506,6 +506,8 @@ class Campaign(BaseModel):
     voicemail_message: Optional[str] = None  # Custom voicemail message (uses default if None)
     voicemail_audio_url: Optional[str] = None  # ElevenLabs cloned-voice MP3 URL (auto-generated on save)
     voicemail_audio_key: Optional[str] = None  # Opaque token backing voicemail_audio_url; regenerated on every audio refresh
+    voicemail_audio_source: str = "voice_agent"
+    voicemail_audio_locked: bool = False
     callback_number: Optional[str] = None  # Callback number spoken in voicemails; falls back to user.phone_number then TWILIO_PHONE_NUMBER
     agent_id: Optional[str] = None  # Exact agent/voice bound to this campaign
     # AI conversation settings
@@ -6984,7 +6986,7 @@ async def get_campaigns(current_user: Dict = Depends(get_current_user)):
 async def get_campaign_voicemail_status(campaign_id: str, current_user: Dict = Depends(get_current_user)):
     campaign = await db.campaigns.find_one(
         {"id": campaign_id, "user_id": current_user["user_id"]},
-        {"_id": 0, "voicemail_audio_url": 1, "voicemail_audio_key": 1, "agent_id": 1}
+        {"_id": 0, "voicemail_audio_url": 1, "voicemail_audio_key": 1, "agent_id": 1, "voicemail_audio_source": 1, "voicemail_audio_locked": 1}
     )
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -6998,6 +7000,8 @@ async def get_campaign_voicemail_status(campaign_id: str, current_user: Dict = D
         "ready": bool(campaign.get("voicemail_audio_url")),
         "voicemail_audio_url": campaign.get("voicemail_audio_url"),
         "voicemail_audio_key": campaign.get("voicemail_audio_key"),
+        "voicemail_audio_source": campaign.get("voicemail_audio_source") or "voice_agent",
+        "voicemail_audio_locked": bool(campaign.get("voicemail_audio_locked")),
         "agent_id": campaign.get("agent_id"),
     }
 
@@ -7230,6 +7234,11 @@ async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends
 @api_router.put("/campaigns/{campaign_id}", response_model=Campaign)
 async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
     """Update a campaign (must belong to current user)"""
+    # Audio source and URL are server-owned. Upload/explicit generation endpoints
+    # are the only supported way to replace a voicemail recording.
+    for key in ("voicemail_audio_url", "voicemail_audio_key",
+                "voicemail_audio_locked", "voicemail_audio_source"):
+        updates.pop(key, None)
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     # SAFETY: if the update leaves voicemail enabled, the effective campaign
@@ -7246,7 +7255,11 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_use
         "voicemail_message", "voicemail_enabled", "agent_id",
         "company_name", "callback_number",
     }
-    if any(k in updates for k in _vm_inputs):
+    changed_vm_inputs = any(
+        k in updates and updates[k] != existing.get(k)
+        for k in _vm_inputs
+    )
+    if changed_vm_inputs and not existing.get("voicemail_audio_locked"):
         updates["voicemail_audio_url"] = None
         updates["voicemail_audio_key"] = None
 
@@ -7272,7 +7285,7 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_use
         "voicemail_message", "voicemail_enabled", "agent_id",
         "company_name", "callback_number",
     )
-    if any(k in updates for k in _regen_keys):
+    if changed_vm_inputs and not existing.get("voicemail_audio_locked"):
         try:
             from services.vm_cloned_audio import refresh_campaign_vm_audio
             _backend_url = os.environ.get("BACKEND_PUBLIC_URL") or os.environ.get("REACT_APP_BACKEND_URL") or ""
@@ -11181,8 +11194,15 @@ async def vm_audio_stream(token: str):
     Returns 404 if the file is absent → generate_voicemail_twiml falls back
     to Polly automatically.
     """
-    from services.vm_cloned_audio import read_vm_audio_bytes
+    from services.vm_cloned_audio import read_vm_audio_bytes, _TOKEN_RE
+    if not _TOKEN_RE.fullmatch(token):
+        raise HTTPException(status_code=404, detail="vm audio not found")
     data = read_vm_audio_bytes(token)
+    if not data:
+        # Exact uploaded recordings live in Mongo as well, so playback still
+        # works when a Render deploy or restart clears the local audio cache.
+        blob = await db.vm_audio_blobs.find_one({"token": token}, {"_id": 0, "data": 1})
+        data = blob.get("data") if blob else None
     if not data:
         raise HTTPException(status_code=404, detail="vm audio not found")
     return Response(
@@ -11313,7 +11333,8 @@ async def initiate_real_call(
             or os.environ.get("REACT_APP_BACKEND_URL")
             or ""
         )
-        if _backend_url and campaign.get("voicemail_enabled", True):
+        if (_backend_url and campaign.get("voicemail_enabled", True)
+                and not campaign.get("voicemail_audio_locked")):
             await ensure_lead_vm_audio(
                 db=db,
                 eleven_client=eleven_client,
@@ -12847,7 +12868,8 @@ async def twilio_amd_callback(call_id: str, request: Request):
                 },
                 {"_id": 0, "voicemail_audio_url": 1},
             )
-            if _lead_vm and _lead_vm.get("voicemail_audio_url"):
+            if (not _campaign_hydrated.get("voicemail_audio_locked")
+                    and _lead_vm and _lead_vm.get("voicemail_audio_url")):
                 _campaign_hydrated["_lead_voicemail_audio_url"] = (
                     _lead_vm["voicemail_audio_url"]
                 )
@@ -14207,6 +14229,11 @@ if USE_NEW_BILLING_ROUTES:
     logger.info("Using NEW modular billing routes (USE_NEW_BILLING_ROUTES=true)")
 else:
     logger.info("Using LEGACY inline billing routes (USE_NEW_BILLING_ROUTES=false)")
+
+# The authenticated MP3 upload and explicit Voice Agent regeneration routes
+# are available regardless of which campaign CRUD router is enabled.
+from routes.voicemail_upload import router as voicemail_upload_router
+app.include_router(voicemail_upload_router, prefix="/api")
 
 # Include main api_router (legacy routes)
 app.include_router(api_router)

@@ -11326,7 +11326,8 @@ async def initiate_real_call(
             or os.environ.get("REACT_APP_BACKEND_URL")
             or ""
         )
-        if _backend_url and campaign.get("voicemail_enabled", True):
+        if (_backend_url and campaign.get("voicemail_enabled", True)
+                and not campaign.get("voicemail_audio_locked")):
             await ensure_lead_vm_audio(
                 db=db,
                 eleven_client=eleven_client,
@@ -12860,7 +12861,8 @@ async def twilio_amd_callback(call_id: str, request: Request):
                 },
                 {"_id": 0, "voicemail_audio_url": 1},
             )
-            if _lead_vm and _lead_vm.get("voicemail_audio_url"):
+            if (not _campaign_hydrated.get("voicemail_audio_locked")
+                    and _lead_vm and _lead_vm.get("voicemail_audio_url")):
                 _campaign_hydrated["_lead_voicemail_audio_url"] = (
                     _lead_vm["voicemail_audio_url"]
                 )

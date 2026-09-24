@@ -125,20 +125,22 @@ async def resolve_cloned_voice_id(
     user_id: str,
     campaign: Dict[str, Any],
 ) -> Optional[str]:
-    """Return the ElevenLabs voice_id to use, or None.
+    """Return the ElevenLabs voice ID for the campaign's chosen Voice Agent.
 
-    Preference order:
-      1. Agent linked to the campaign has voice_type=='cloned' + cloned_voice_id
-      2. First cloned voice owned by the user
+    Supports both preset ElevenLabs voices and account-owned cloned voices.
+    Never falls back to an arbitrary account voice.
     """
     agent_id = campaign.get("agent_id")
     if agent_id:
         agent = await db.agents.find_one({"id": agent_id, "user_id": user_id})
-        if agent and agent.get("voice_type") == "cloned" and agent.get("cloned_voice_id"):
-            return agent["cloned_voice_id"]
+        if agent:
+            if agent.get("voice_type") == "cloned" and agent.get("cloned_voice_id"):
+                return agent["cloned_voice_id"]
+            if agent.get("voice_type", "preset") == "preset" and agent.get("preset_voice_id"):
+                return agent["preset_voice_id"]
 
         logger.warning(
-            f"[vm_cloned] linked agent {agent_id} has no usable cloned voice"
+            f"[vm_audio] linked Voice Agent {agent_id} has no usable ElevenLabs voice"
         )
         return None
 
@@ -386,6 +388,7 @@ async def refresh_campaign_vm_audio(
     backend_public_url: str,
     campaign_id: str,
     user_id: str,
+    force: bool = False,
 ) -> Optional[str]:
     """Re-synthesize a campaign's VM audio and persist under a FRESH token.
 
@@ -398,7 +401,7 @@ async def refresh_campaign_vm_audio(
         logger.warning(f"[vm_cloned] campaign {campaign_id} not found for user {user_id}")
         return None
 
-    if campaign.get("voicemail_audio_locked"):
+    if campaign.get("voicemail_audio_locked") and not force:
         locked_url = campaign.get("voicemail_audio_url")
         locked_key = campaign.get("voicemail_audio_key")
         if locked_url and locked_key:
@@ -501,7 +504,9 @@ async def refresh_campaign_vm_audio(
     await db.campaigns.update_one(
         {"id": campaign_id, "user_id": user_id},
         {"$set": {"voicemail_audio_url": served_url,
-                  "voicemail_audio_key": new_token}},
+                  "voicemail_audio_key": new_token,
+                  "voicemail_audio_locked": False,
+                  "voicemail_audio_source": "voice_agent"}},
     )
     # Per-campaign retention: delete previous file AFTER the row points at the new one.
     _delete_by_token(old_key)

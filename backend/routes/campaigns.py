@@ -69,6 +69,8 @@ class Campaign(BaseModel):
     voicemail_message: Optional[str] = None
     voicemail_audio_url: Optional[str] = None
     voicemail_audio_key: Optional[str] = None
+    voicemail_audio_source: str = "voice_agent"
+    voicemail_audio_locked: bool = False
     callback_number: Optional[str] = None
     agent_id: Optional[str] = None
     response_wait_seconds: int = 4
@@ -179,6 +181,9 @@ async def create_campaign(campaign: CampaignCreate, current_user: Dict = Depends
 async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_user: Dict = Depends(get_current_user)):
     """Update a campaign (must belong to current user)"""
     db = get_db()
+    for key in ("voicemail_audio_url", "voicemail_audio_key",
+                "voicemail_audio_locked", "voicemail_audio_source"):
+        updates.pop(key, None)
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     existing = await db.campaigns.find_one(
@@ -207,10 +212,15 @@ async def update_campaign(campaign_id: str, updates: Dict[str, Any], current_use
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Regenerate cloned-voice VM audio if any input that affects the baked MP3 changed.
+    # Uploaded recordings are immutable until the user explicitly replaces
+    # them. Unchanged settings must not trigger voice regeneration.
     _regen_keys = ("voicemail_message", "voicemail_enabled", "agent_id",
                    "company_name", "callback_number")
-    if any(k in updates for k in _regen_keys):
+    changed_vm_inputs = any(
+        k in updates and updates[k] != existing.get(k)
+        for k in _regen_keys
+    )
+    if changed_vm_inputs and not existing.get("voicemail_audio_locked"):
         try:
             from server import eleven_client
             from services.vm_cloned_audio import refresh_campaign_vm_audio

@@ -11194,8 +11194,15 @@ async def vm_audio_stream(token: str):
     Returns 404 if the file is absent → generate_voicemail_twiml falls back
     to Polly automatically.
     """
-    from services.vm_cloned_audio import read_vm_audio_bytes
+    from services.vm_cloned_audio import read_vm_audio_bytes, _TOKEN_RE
+    if not _TOKEN_RE.fullmatch(token):
+        raise HTTPException(status_code=404, detail="vm audio not found")
     data = read_vm_audio_bytes(token)
+    if not data:
+        # Exact uploaded recordings live in Mongo as well, so playback still
+        # works when a Render deploy or restart clears the local audio cache.
+        blob = await db.vm_audio_blobs.find_one({"token": token}, {"_id": 0, "data": 1})
+        data = blob.get("data") if blob else None
     if not data:
         raise HTTPException(status_code=404, detail="vm audio not found")
     return Response(

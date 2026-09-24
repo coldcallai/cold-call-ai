@@ -550,6 +550,18 @@ async def sweep_orphaned_vm_audio(db: Any) -> Dict[str, int]:
         if isinstance(key, str) and _TOKEN_RE.match(key):
             live_tokens.add(key)
 
+    # Approved uploaded MP3s remain referenced until explicitly replaced.
+    # The 30-day TTL only applies to synthesized cache entries.
+    uploaded_keys: Set[str] = set()
+    upload_cursor = db.campaigns.find(
+        {"voicemail_audio_locked": True, "voicemail_audio_key": {"$ne": None}},
+        {"voicemail_audio_key": 1, "_id": 0},
+    )
+    async for row in upload_cursor:
+        key = row.get("voicemail_audio_key")
+        if isinstance(key, str) and _TOKEN_RE.match(key):
+            uploaded_keys.add(key)
+
     lead_cursor = db.lead_vm_audio.find(
         {"voicemail_audio_key": {"$ne": None}},
         {"voicemail_audio_key": 1, "_id": 0},
@@ -573,7 +585,7 @@ async def sweep_orphaned_vm_audio(db: Any) -> Dict[str, int]:
         except OSError:
             continue
 
-        if age > _MAX_AGE_SECONDS:
+        if age > _MAX_AGE_SECONDS and token not in uploaded_keys:
             try:
                 entry.unlink()
                 stats["deleted_expired"] += 1
